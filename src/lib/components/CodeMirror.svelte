@@ -4,6 +4,8 @@
   import { EditorView, keymap } from "@codemirror/view";
   import { defaultKeymap } from "@codemirror/commands";
   import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
+  import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+  import { typst } from "$lib/typst-language";
 
   let {
     source = "",
@@ -47,6 +49,8 @@
           keymap.of(defaultKeymap),
           updateListener,
           autocompletion({ override: [wikilinkCompletions] }),
+          typst,
+          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           EditorView.lineWrapping,
           EditorView.theme({
             "&": {

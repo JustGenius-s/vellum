@@ -20,7 +20,7 @@ fn expand_wikilinks(source: &str) -> String {
 }
 
 #[tauri::command]
-fn compile_typst(source: String, out_path: String) -> Result<String, String> {
+fn compile_typst_pdf(source: String) -> Result<Vec<u8>, String> {
     let expanded = expand_wikilinks(&source);
     let world = world::TypstWorld::new(expanded);
     let document = typst::compile::<typst_layout::PagedDocument>(&world)
@@ -28,8 +28,7 @@ fn compile_typst(source: String, out_path: String) -> Result<String, String> {
         .map_err(|e| format!("{:?}", e))?;
     let pdf = typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
         .map_err(|e| format!("{:?}", e))?;
-    std::fs::write(&out_path, pdf).map_err(|e| e.to_string())?;
-    Ok(out_path)
+    Ok(pdf)
 }
 
 #[tauri::command]
@@ -345,8 +344,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
-            compile_typst,
+            compile_typst_pdf,
             compile_typst_svg,
             list_vault,
             list_vault_tree,
