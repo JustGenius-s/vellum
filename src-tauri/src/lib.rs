@@ -47,8 +47,54 @@ fn compile_typst_svg(source: String) -> Result<String, String> {
     Ok(svg)
 }
 
+#[derive(serde::Serialize, Clone)]
+struct TreeNode {
+    name: String,
+    path: String,
+    is_dir: bool,
+    children: Vec<TreeNode>,
+}
+
+fn build_tree(path: &Path) -> Vec<TreeNode> {
+    let mut nodes = Vec::new();
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return nodes,
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        let entry_path = entry.path();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let children = if is_dir {
+            build_tree(&entry_path)
+        } else {
+            Vec::new()
+        };
+        nodes.push(TreeNode {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            is_dir,
+            children,
+        });
+    }
+    nodes.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
+    nodes
+}
+
 #[tauri::command]
-fn list_vault(path: String) -> Result<Vec<FileEntry>, String> {
+fn list_vault_tree(path: String) -> Result<Vec<TreeNode>, String> {
+    Ok(build_tree(Path::new(&path)))
+}
+
+#[tauri::command]
+fn list_vault(path: String) -> Result<Vec<FlatEntry>, String> {
     let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for entry in entries {
@@ -58,7 +104,7 @@ fn list_vault(path: String) -> Result<Vec<FileEntry>, String> {
         if name.starts_with('.') {
             continue;
         }
-        result.push(FileEntry {
+        result.push(FlatEntry {
             name,
             path: entry.path().to_string_lossy().to_string(),
             is_dir,
@@ -66,6 +112,33 @@ fn list_vault(path: String) -> Result<Vec<FileEntry>, String> {
     }
     result.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
     Ok(result)
+}
+
+#[tauri::command]
+fn create_file(path: String, is_dir: bool) -> Result<(), String> {
+    if is_dir {
+        std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+    } else {
+        if !path.ends_with(".typ") {
+            return Err("Only .typ files allowed".into());
+        }
+        std::fs::write(&path, "").map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn rename_path(old_path: String, new_path: String) -> Result<(), String> {
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_path(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if p.is_dir() {
+        std::fs::remove_dir_all(p).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(p).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -209,7 +282,7 @@ fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
 }
 
 #[derive(serde::Serialize)]
-struct FileEntry {
+struct FlatEntry {
     name: String,
     path: String,
     is_dir: bool,
@@ -276,8 +349,12 @@ pub fn run() {
             compile_typst,
             compile_typst_svg,
             list_vault,
+            list_vault_tree,
             read_file,
             write_file,
+            create_file,
+            rename_path,
+            delete_path,
             index_backlinks,
             zotero_status,
             zotero_search,
