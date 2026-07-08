@@ -11,14 +11,17 @@
     source = "",
     onchange = () => {},
     fileNames = [],
+    onViewCreated = (_v: EditorView) => {},
   }: {
     source: string;
     onchange: (newValue: string) => void;
     fileNames: string[];
+    onViewCreated: (v: EditorView) => void;
   } = $props();
 
   let view: EditorView | null = null;
   let host: HTMLDivElement;
+  let isProgrammaticChange = false;
 
   function wikilinkCompletions(context: CompletionContext) {
     const word = context.matchBefore(/\[\[[^\]|]*/);
@@ -37,7 +40,7 @@
 
   onMount(() => {
     const updateListener = EditorView.updateListener.of((u) => {
-      if (u.docChanged) {
+      if (u.docChanged && !isProgrammaticChange) {
         onchange(u.state.doc.toString());
       }
     });
@@ -70,6 +73,7 @@
       }),
       parent: host,
     });
+    onViewCreated(view);
   });
 
   onDestroy(() => {
@@ -78,9 +82,11 @@
 
   $effect(() => {
     if (view && source !== undefined && source !== view.state.doc.toString()) {
+      isProgrammaticChange = true;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: source },
       });
+      isProgrammaticChange = false;
     }
   });
 </script>
