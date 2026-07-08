@@ -2,7 +2,10 @@
   import CodeMirror from "$lib/components/CodeMirror.svelte";
   import { X, ChevronUp, ChevronDown, Replace } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
-  import { vault, ui } from "$lib/stores.svelte";
+  import { getVault, getUI } from "$lib/stores.svelte";
+
+  const vault = getVault();
+  const ui = getUI();
 
   let findOpen = $state(false);
   let findQuery = $state("");

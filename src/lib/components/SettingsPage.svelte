@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ArrowLeft } from "lucide-svelte";
-  import { theme, ui } from "$lib/stores.svelte";
+  import { getTheme, getUI } from "$lib/stores.svelte";
+
+  const theme = getTheme();
+  const ui = getUI();
 </script>
 
 <div class="flex flex-col h-full overflow-hidden">

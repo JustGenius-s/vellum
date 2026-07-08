@@ -1,7 +1,9 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { FolderOpen, FileText, ChevronRight, ChevronDown, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-svelte";
-  import { vault, type TreeNode } from "$lib/stores.svelte";
+  import { getVault, type TreeNode } from "$lib/stores.svelte";
+
+  const vault = getVault();
 
   let expanded = $state<Set<string>>(new Set());
   let contextMenu = $state<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -171,8 +173,8 @@
   </div>
 {/snippet}
 
+<!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
 {#if contextMenu}
-  <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
   <div
     class="fixed z-50 min-w-40 rounded-lg border border-base-300 bg-base-100 shadow-lg py-1"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px"

@@ -5,7 +5,11 @@
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PreviewPanel from "$lib/components/PreviewPanel.svelte";
   import GraphView from "$lib/components/GraphView.svelte";
-  import { vault, ui, registry } from "$lib/stores.svelte";
+  import { getVault, getUI, getRegistry } from "$lib/stores.svelte";
+
+  const vault = getVault();
+  const ui = getUI();
+  const registry = getRegistry();
 
   let mobileTab = $state<"editor" | "preview">("editor");
   let drawerRef = $state<HTMLInputElement>();
@@ -53,7 +57,7 @@
           <Menu size={18} />
         </label>
         <span class="flex-1 truncate text-sm font-medium">{vault.activeTabName}</span>
-        <button class="btn btn-ghost btn-sm btn-square" onclick={() => registry.executeCommand("export-pdf")} title="Export PDF">
+        <button class="btn btn-ghost btn-sm btn-square" onclick={() => registry.executeCommand("file.export-pdf")} title="Export PDF">
           <Download size={16} />
         </button>
       </div>
@@ -78,7 +82,7 @@
             </div>
           {/each}
           <div class="flex-1"></div>
-          <button class="btn btn-ghost btn-sm gap-1 mr-2" onclick={() => registry.executeCommand("export-pdf")} title="Export PDF">
+          <button class="btn btn-ghost btn-sm gap-1 mr-2" onclick={() => registry.executeCommand("file.export-pdf")} title="Export PDF">
             <Download size={14} />
             PDF
           </button>

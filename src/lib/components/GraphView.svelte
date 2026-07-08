@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { ArrowLeft } from "lucide-svelte";
-  import { vault, ui } from "$lib/stores.svelte";
+  import { getVault, getUI } from "$lib/stores.svelte";
+
+  const vault = getVault();
+  const ui = getUI();
 
   let container = $state<HTMLDivElement>();
   let svgEl = $state<SVGSVGElement>();

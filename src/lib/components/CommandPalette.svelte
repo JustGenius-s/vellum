@@ -1,7 +1,12 @@
 <script lang="ts">
   import { Search, FileText, CornerDownLeft } from "lucide-svelte";
   import type { Component } from "svelte";
-  import { vault, registry, keybindings, ui } from "$lib/stores.svelte";
+  import { getVault, getRegistry, getKeybindings, getUI } from "$lib/stores.svelte";
+
+  const vault = getVault();
+  const registry = getRegistry();
+  const keybindings = getKeybindings();
+  const ui = getUI();
 
   interface FileItem {
     type: "file";
@@ -53,12 +58,7 @@
   });
 
   let items = $derived([...fileItems, ...commandItems] as Item[]);
-
-  $effect(() => {
-    if (selectedIndex >= items.length) {
-      selectedIndex = Math.max(0, items.length - 1);
-    }
-  });
+  let safeIndex = $derived(Math.min(selectedIndex, Math.max(0, items.length - 1)));
 
   $effect(() => {
     if (ui.paletteOpen) {
@@ -86,7 +86,7 @@
       selectedIndex = Math.max(selectedIndex - 1, 0);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (items[selectedIndex]) selectItem(items[selectedIndex]);
+      if (items[safeIndex]) selectItem(items[safeIndex]);
     } else if (e.key === "Escape") {
       ui.paletteOpen = false;
     }
@@ -114,7 +114,7 @@
         <div class="max-h-72 overflow-auto p-1">
           {#each items as item, idx}
             <button
-              class="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-left transition-colors {idx === selectedIndex ? 'bg-base-200' : 'hover:bg-base-200'}"
+              class="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-left transition-colors {idx === safeIndex ? 'bg-base-200' : 'hover:bg-base-200'}"
               onmouseenter={() => (selectedIndex = idx)}
               onclick={() => selectItem(item)}
             >

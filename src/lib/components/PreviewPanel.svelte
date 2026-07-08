@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { vault } from "$lib/stores.svelte";
+  import { getVault } from "$lib/stores.svelte";
+  const vault = getVault();
 </script>
 
 <div class="flex flex-col h-full overflow-hidden">
