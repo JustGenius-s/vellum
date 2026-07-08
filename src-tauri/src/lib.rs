@@ -3,6 +3,7 @@ mod world;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
+use tauri::Manager;
 use walkdir::WalkDir;
 
 static WIKILINK_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
@@ -20,9 +21,9 @@ fn expand_wikilinks(source: &str) -> String {
 }
 
 #[tauri::command]
-fn compile_typst_pdf(source: String) -> Result<Vec<u8>, String> {
+fn compile_typst_pdf(source: String, vault_path: String, main_file: String) -> Result<Vec<u8>, String> {
     let expanded = expand_wikilinks(&source);
-    let world = world::TypstWorld::new(expanded);
+    let world = world::TypstWorld::new(expanded, vault_path, main_file);
     let document = typst::compile::<typst_layout::PagedDocument>(&world)
         .output
         .map_err(|e| format!("{:?}", e))?;
@@ -32,9 +33,9 @@ fn compile_typst_pdf(source: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-fn compile_typst_svg(source: String) -> Result<String, String> {
+fn compile_typst_svg(source: String, vault_path: String, main_file: String) -> Result<String, String> {
     let expanded = expand_wikilinks(&source);
-    let world = world::TypstWorld::new(expanded);
+    let world = world::TypstWorld::new(expanded, vault_path, main_file);
     let document = typst::compile::<typst_layout::PagedDocument>(&world)
         .output
         .map_err(|e| format!("{:?}", e))?;
@@ -339,6 +340,34 @@ fn search_vault(vault_path: String, query: String) -> Result<Vec<SearchResult>, 
     Ok(results)
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct SavedState {
+    vault_path: Option<String>,
+    open_tabs: Vec<String>,
+    active_tab_path: Option<String>,
+    theme: Option<String>,
+}
+
+#[tauri::command]
+fn load_state(app: tauri::AppHandle) -> Result<SavedState, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let config_path = data_dir.join("config.json");
+    match std::fs::read_to_string(&config_path) {
+        Ok(contents) => serde_json::from_str(&contents).map_err(|e| e.to_string()),
+        Err(_) => Ok(SavedState::default()),
+    }
+}
+
+#[tauri::command]
+fn save_state(app: tauri::AppHandle, state: SavedState) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let config_path = data_dir.join("config.json");
+    let json = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, json).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -359,6 +388,8 @@ pub fn run() {
             zotero_status,
             zotero_search,
             search_vault,
+            load_state,
+            save_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Link2, Search } from "lucide-svelte";
+  import { Search } from "lucide-svelte";
 
   let {
     backlinks = [],
@@ -19,10 +19,6 @@
 </script>
 
 <div class="flex flex-col h-full bg-base-200 overflow-hidden">
-  <div class="flex items-center gap-1.5 border-b border-base-300 bg-base-200/50 px-3 py-2">
-    <Link2 size={14} />
-    <span class="text-sm font-medium">Backlinks</span>
-  </div>
   <div class="flex-1 overflow-y-auto p-1">
     {#if backlinks.length === 0}
       <p class="text-xs text-base-content/40 text-center py-4">No backlinks</p>

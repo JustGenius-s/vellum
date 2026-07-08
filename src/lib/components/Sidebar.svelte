@@ -119,17 +119,6 @@
       <FolderOpen size={16} />
       Open Vault
     </button>
-    {#if vaultPath}
-      <div class="flex items-center gap-1 mt-2">
-        <p class="text-xs text-base-content/60 flex-1 break-all">{vaultPath}</p>
-        <button class="btn btn-ghost btn-xs" title="New file" onclick={() => startCreate(vaultPath, false)}>
-          <FilePlus size={12} />
-        </button>
-        <button class="btn btn-ghost btn-xs" title="New folder" onclick={() => startCreate(vaultPath, true)}>
-          <FolderPlus size={12} />
-        </button>
-      </div>
-    {/if}
   </div>
 
   <div class="flex-1 overflow-y-auto p-1">

@@ -2,9 +2,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { writeFile } from "@tauri-apps/plugin-fs";
-  import { Menu, FileText, Eye, Link2, Download, X, Circle } from "lucide-svelte";
 
-  import Sidebar from "$lib/components/Sidebar.svelte";
+  import Platform from "$lib/components/Platform.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PreviewPanel from "$lib/components/PreviewPanel.svelte";
   import BacklinksPanel from "$lib/components/BacklinksPanel.svelte";
@@ -14,6 +13,7 @@
   interface ZoteroEntry { citekey: string; title: string; authors: string; year: string; }
   interface SearchResult { path: string; stem: string; line: number; snippet: string; }
   interface Tab { path: string; name: string; content: string; dirty: boolean; }
+  interface SavedState { vault_path: string | null; open_tabs: string[]; active_tab_path: string | null; }
 
   let vaultPath = $state("");
   let files = $state<TreeNode[]>([]);
@@ -26,21 +26,66 @@
   let backlinkIndex = $state<Record<string, string[]>>({});
   let searchQuery = $state("");
   let searchResults = $state<SearchResult[]>([]);
-  let zoteroOnline = $state(false);
-  let zoteroQuery = $state("");
-  let zoteroResults = $state<ZoteroEntry[]>([]);
-  let zoteroPanelOpen = $state(false);
-  let mobileTab = $state<"editor" | "preview" | "links">("editor");
   let fileNames = $state<string[]>([]);
 
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
-  let zoteroTimer: ReturnType<typeof setTimeout> | null = null;
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
+  let skipSave = $state(true);
 
   let source = $derived(tabs.find((t) => t.path === activeTabPath)?.content ?? "");
   let currentFile = $derived(activeTabPath);
   let activeTab = $derived(tabs.find((t) => t.path === activeTabPath));
+  let activeTabName = $derived(activeTab?.name || "Vellum");
+  let appState = $derived({ vaultPath, openTabs: tabs.map((t) => t.path), activeTabPath });
+
+  async function loadSavedState() {
+    const saved = await invoke<SavedState>("load_state");
+    if (!saved.vault_path) {
+      skipSave = false;
+      return;
+    }
+    vaultPath = saved.vault_path;
+    await refreshFiles();
+    await refreshBacklinkIndex();
+
+    if (saved.open_tabs && saved.open_tabs.length > 0) {
+      const active = saved.active_tab_path || saved.open_tabs[0];
+      for (const path of saved.open_tabs) {
+        if (path !== active) {
+          await openFileSilent(path);
+        }
+      }
+      await openFile(active);
+    }
+    skipSave = false;
+  }
+
+  async function openFileSilent(path: string) {
+    const existing = tabs.find((t) => t.path === path);
+    if (existing) return;
+    try {
+      const content = await invoke<string>("read_file", { path });
+      const name = path.split("/").pop() || path;
+      tabs = [...tabs, { path, name, content, dirty: false }];
+    } catch (_) {
+      // file may have been deleted since last session
+    }
+  }
+
+  $effect(() => {
+    loadSavedState();
+  });
+
+  $effect(() => {
+    const state = appState;
+    if (skipSave) return;
+    if (saveStateTimer) clearTimeout(saveStateTimer);
+    saveStateTimer = setTimeout(() => {
+      invoke("save_state", { state });
+    }, 1500);
+  });
 
   function fileStem(path: string): string {
     return (path.split("/").pop() || path).replace(/\.typ$/, "");
@@ -68,8 +113,6 @@
       vaultPath = selected as string;
       await refreshFiles();
       await refreshBacklinkIndex();
-      const drawer = document.getElementById("mobile-drawer") as HTMLInputElement | null;
-      if (drawer) drawer.checked = false;
     }
   }
 
@@ -96,8 +139,6 @@
       currentStem = fileStem(path);
       updateCurrentBacklinks();
       await compilePreview();
-      const drawer = document.getElementById("mobile-drawer") as HTMLInputElement | null;
-      if (drawer) drawer.checked = false;
       return;
     }
     const content = await invoke<string>("read_file", { path });
@@ -107,8 +148,6 @@
     currentStem = fileStem(path);
     updateCurrentBacklinks();
     await compilePreview();
-    const drawer = document.getElementById("mobile-drawer") as HTMLInputElement | null;
-    if (drawer) drawer.checked = false;
   }
 
   async function openByStem(stem: string) {
@@ -168,10 +207,6 @@
     await refreshBacklinkIndex();
   }
 
-  async function saveCurrent() {
-    if (activeTabPath) await saveFile(activeTabPath);
-  }
-
   function onSourceChange(newValue: string) {
     const tab = tabs.find((t) => t.path === activeTabPath);
     if (!tab) return;
@@ -197,7 +232,7 @@
       return;
     }
     try {
-      svg = await invoke("compile_typst_svg", { source });
+      svg = await invoke("compile_typst_svg", { source, vaultPath, mainFile: currentFile });
       status = "OK";
     } catch (e) {
       status = `Error: ${e}`;
@@ -207,7 +242,7 @@
   async function exportPDF() {
     if (!source) return;
     try {
-      const pdfBytes: number[] = await invoke("compile_typst_pdf", { source });
+      const pdfBytes: number[] = await invoke("compile_typst_pdf", { source, vaultPath, mainFile: currentFile });
       const defaultName = currentStem ? `${currentStem}.pdf` : "output.pdf";
       const filePath = await save({
         defaultPath: defaultName,
@@ -231,139 +266,36 @@
     if (!vaultPath || !searchQuery.trim()) { searchResults = []; return; }
     searchResults = await invoke("search_vault", { vaultPath, query: searchQuery });
   }
-
-  async function toggleZotero() {
-    zoteroOnline = await invoke("zotero_status");
-    zoteroPanelOpen = !zoteroPanelOpen;
-  }
-
-  function onZoteroInput() {
-    if (zoteroTimer) clearTimeout(zoteroTimer);
-    zoteroTimer = setTimeout(doZoteroSearch, 300);
-  }
-
-  async function doZoteroSearch() {
-    if (!zoteroOnline) return;
-    zoteroResults = await invoke("zotero_search", { query: zoteroQuery });
-  }
-
-  function insertCitekey(citekey: string) {
-    const tab = tabs.find((t) => t.path === activeTabPath);
-    if (!tab) return;
-    tab.content = tab.content + `@${citekey}`;
-    tab.dirty = true;
-    tabs = [...tabs];
-    zoteroPanelOpen = false;
-    if (compileTimer) clearTimeout(compileTimer);
-    compileTimer = setTimeout(compilePreview, 500);
-  }
 </script>
 
-<div class="drawer lg:drawer-open h-screen w-screen bg-base-100 text-base-content">
-  <input id="mobile-drawer" type="checkbox" class="drawer-toggle" />
-
-  <div class="drawer-side z-40">
-    <label for="mobile-drawer" class="drawer-overlay"></label>
-    <div class="w-72 lg:w-56 h-full border-r border-base-300">
-      <Sidebar {files} {vaultPath} onOpenVault={openVault} onOpenFile={openFile} onVaultChanged={refreshFiles} />
+<Platform
+  {files}
+  {vaultPath}
+  {tabs}
+  {activeTabPath}
+  {activeTabName}
+  onOpenVault={openVault}
+  onOpenFile={openFile}
+  onVaultChanged={refreshFiles}
+  onSwitchTab={switchTab}
+  onCloseTab={closeTab}
+  onExportPDF={exportPDF}
+>
+  {#snippet editorSlot()}
+    {#if activeTab}
+    <EditorPanel {source} {fileNames} onSourceChange={onSourceChange} />
+  {:else}
+    <div class="flex items-center justify-center h-full text-base-content/40 text-sm">
+      Open a file to start editing
     </div>
-  </div>
+  {/if}
+{/snippet}
 
-  <div class="drawer-content flex flex-col overflow-hidden">
-    <!-- Mobile top bar -->
-    <div class="lg:hidden flex items-center gap-2 border-b border-base-300 px-2 py-2 shrink-0">
-      <label for="mobile-drawer" class="btn btn-ghost btn-sm btn-square">
-        <Menu size={18} />
-      </label>
-      <span class="flex-1 truncate text-sm font-medium">{activeTab?.name || "Vellum"}</span>
-      <button class="btn btn-ghost btn-sm btn-square" onclick={exportPDF} title="Export PDF">
-        <Download size={16} />
-      </button>
-    </div>
+{#snippet previewSlot()}
+  <PreviewPanel {svg} />
+  {/snippet}
 
-    <!-- Tab bar (desktop) -->
-    {#if tabs.length > 0}
-      <div class="hidden lg:flex items-center border-b border-base-300 bg-base-200 shrink-0 overflow-x-auto">
-        {#each tabs as tab}
-          <div
-            class="flex items-center gap-1.5 px-3 py-1.5 text-sm border-r border-base-300 transition-colors cursor-pointer {tab.path === activeTabPath ? 'bg-base-100' : 'hover:bg-base-300'}"
-            role="tab"
-            tabindex="0"
-            onclick={() => switchTab(tab.path)}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') switchTab(tab.path); }}
-          >
-            {#if tab.dirty}
-              <Circle size={8} class="fill-current text-warning" />
-            {/if}
-            <span class="truncate max-w-32">{tab.name}</span>
-            <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick={(e) => closeTab(tab.path, e)} aria-label="Close tab">
-              <X size={12} />
-            </button>
-          </div>
-        {/each}
-        <div class="flex-1"></div>
-        <button class="btn btn-ghost btn-sm gap-1 mr-2" onclick={exportPDF} title="Export PDF">
-          <Download size={14} />
-          PDF
-        </button>
-      </div>
-    {/if}
-
-    <!-- Desktop: 3-column grid -->
-    <div class="hidden lg:grid flex-1 grid-cols-[1fr_1fr_220px] overflow-hidden">
-      <section class="border-r border-base-300 overflow-hidden">
-        {#if activeTab}
-          <EditorPanel
-            {source} {currentFile} {status} {zoteroOnline} {zoteroPanelOpen} {zoteroQuery} {zoteroResults} {fileNames}
-            onSourceChange={onSourceChange} onSave={saveCurrent} onToggleZotero={toggleZotero}
-            onZoteroInput={onZoteroInput} onInsertCitekey={insertCitekey}
-          />
-        {:else}
-          <div class="flex items-center justify-center h-full text-base-content/40 text-sm">
-            Open a file to start editing
-          </div>
-        {/if}
-      </section>
-      <section class="overflow-hidden">
-        <PreviewPanel {svg} />
-      </section>
-      <aside class="border-l border-base-300 overflow-hidden">
-        <BacklinksPanel {backlinks} {searchQuery} {searchResults} onOpenByStem={openByStem} onOpenFile={openFile} onSearchInput={onSearchInput} />
-      </aside>
-    </div>
-
-    <!-- Mobile: tabs -->
-    <div class="lg:hidden flex flex-col flex-1 overflow-hidden">
-      <div role="tablist" class="tabs tabs-boxed mx-2 mt-2 shrink-0">
-        <button role="tab" class="tab {mobileTab === 'editor' ? 'tab-active' : ''}" onclick={() => (mobileTab = 'editor')}>
-          <span class="flex items-center gap-1"><FileText size={14} /> Editor</span>
-        </button>
-        <button role="tab" class="tab {mobileTab === 'preview' ? 'tab-active' : ''}" onclick={() => (mobileTab = 'preview')}>
-          <span class="flex items-center gap-1"><Eye size={14} /> Preview</span>
-        </button>
-        <button role="tab" class="tab {mobileTab === 'links' ? 'tab-active' : ''}" onclick={() => (mobileTab = 'links')}>
-          <span class="flex items-center gap-1"><Link2 size={14} /> Links</span>
-        </button>
-      </div>
-      <div class="flex-1 overflow-hidden mt-2">
-        {#if mobileTab === 'editor'}
-          {#if activeTab}
-            <EditorPanel
-              {source} {currentFile} {status} {zoteroOnline} {zoteroPanelOpen} {zoteroQuery} {zoteroResults} {fileNames}
-              onSourceChange={onSourceChange} onSave={saveCurrent} onToggleZotero={toggleZotero}
-              onZoteroInput={onZoteroInput} onInsertCitekey={insertCitekey}
-            />
-          {:else}
-            <div class="flex items-center justify-center h-full text-base-content/40 text-sm">
-              Open a file to start editing
-            </div>
-          {/if}
-        {:else if mobileTab === 'preview'}
-          <PreviewPanel {svg} />
-        {:else}
-          <BacklinksPanel {backlinks} {searchQuery} {searchResults} onOpenByStem={openByStem} onOpenFile={openFile} onSearchInput={onSearchInput} />
-        {/if}
-      </div>
-    </div>
-  </div>
-</div>
+  {#snippet backlinksSlot()}
+    <BacklinksPanel {backlinks} {searchQuery} {searchResults} onOpenByStem={openByStem} onOpenFile={openFile} onSearchInput={onSearchInput} />
+  {/snippet}
+</Platform>
