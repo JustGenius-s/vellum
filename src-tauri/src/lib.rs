@@ -15,7 +15,9 @@ fn expand_wikilinks(source: &str) -> String {
         .replace_all(source, |caps: &regex::Captures| {
             let target = caps.get(1).map(|m| m.as_str()).unwrap_or("");
             let label = caps.get(2).map(|m| m.as_str()).unwrap_or(target);
-            format!("#link(\"{}.typ\")[{}]", target, label)
+            let escaped_target = target.replace('\\', "\\\\").replace('"', "\\\"");
+            let escaped_label = label.replace('\\', "\\\\").replace('"', "\\\"");
+            format!("#link(\"{}.typ\")[{}]", escaped_target, escaped_label)
         })
         .to_string()
 }
@@ -93,62 +95,80 @@ fn list_vault_tree(path: String) -> Result<Vec<TreeNode>, String> {
     Ok(build_tree(Path::new(&path)))
 }
 
-#[tauri::command]
-fn list_vault(path: String) -> Result<Vec<FlatEntry>, String> {
-    let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
-    let mut result = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        if name.starts_with('.') {
-            continue;
-        }
-        result.push(FlatEntry {
-            name,
-            path: entry.path().to_string_lossy().to_string(),
-            is_dir,
-        });
+fn ensure_within_vault(path: &str, vault_path: &str) -> Result<std::path::PathBuf, String> {
+    let vault = std::path::Path::new(vault_path)
+        .canonicalize()
+        .map_err(|e| format!("Invalid vault path: {e}"))?;
+    let resolved = if std::path::Path::new(path).is_absolute() {
+        std::path::Path::new(path).to_path_buf()
+    } else {
+        vault.join(path)
+    };
+    let canonical = resolved
+        .canonicalize()
+        .map_err(|e| format!("Invalid path: {e}"))?;
+    if !canonical.starts_with(&vault) {
+        return Err("Path is outside the vault".into());
     }
-    result.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
-    Ok(result)
+    Ok(canonical)
 }
 
 #[tauri::command]
-fn create_file(path: String, is_dir: bool) -> Result<(), String> {
+fn create_file(path: String, vault_path: String, is_dir: bool) -> Result<(), String> {
+    let resolved = ensure_within_vault(&path, &vault_path)?;
     if is_dir {
-        std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+        std::fs::create_dir_all(&resolved).map_err(|e| e.to_string())
     } else {
         if !path.ends_with(".typ") {
             return Err("Only .typ files allowed".into());
         }
-        std::fs::write(&path, "").map_err(|e| e.to_string())
+        std::fs::write(&resolved, "").map_err(|e| e.to_string())
     }
 }
 
 #[tauri::command]
-fn rename_path(old_path: String, new_path: String) -> Result<(), String> {
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn delete_path(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    if p.is_dir() {
-        std::fs::remove_dir_all(p).map_err(|e| e.to_string())
+fn rename_path(old_path: String, new_path: String, vault_path: String) -> Result<(), String> {
+    let old_resolved = ensure_within_vault(&old_path, &vault_path)?;
+    let vault = std::path::Path::new(&vault_path)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let new_resolved = if std::path::Path::new(&new_path).is_absolute() {
+        std::path::Path::new(&new_path).to_path_buf()
     } else {
-        std::fs::remove_file(p).map_err(|e| e.to_string())
+        vault.join(&new_path)
+    };
+    if !new_resolved.starts_with(&vault) {
+        return Err("Destination path is outside the vault".into());
+    }
+    std::fs::rename(&old_resolved, &new_resolved).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_path(path: String, vault_path: String) -> Result<(), String> {
+    let resolved = ensure_within_vault(&path, &vault_path)?;
+    let vault = std::path::Path::new(&vault_path)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    if resolved == vault {
+        return Err("Cannot delete the vault root".into());
+    }
+    if resolved.is_dir() {
+        std::fs::remove_dir_all(&resolved).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(&resolved).map_err(|e| e.to_string())
     }
 }
 
 #[tauri::command]
-fn read_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+fn read_file(path: String, vault_path: String) -> Result<String, String> {
+    let resolved = ensure_within_vault(&path, &vault_path)?;
+    std::fs::read_to_string(&resolved).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn write_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+fn write_file(path: String, content: String, vault_path: String) -> Result<(), String> {
+    let resolved = ensure_within_vault(&path, &vault_path)?;
+    std::fs::write(&resolved, content).map_err(|e| e.to_string())
 }
 
 fn file_stem(path: &str) -> String {
@@ -156,95 +176,6 @@ fn file_stem(path: &str) -> String {
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default()
-}
-
-#[derive(serde::Serialize, Clone)]
-struct ZoteroEntry {
-    citekey: String,
-    title: String,
-    authors: String,
-    year: String,
-}
-
-#[tauri::command]
-fn zotero_status() -> Result<bool, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let resp = client
-        .get("http://localhost:23119/better-bibtex/cayw?probe=true")
-        .send();
-    Ok(resp.map(|r| r.status().is_success()).unwrap_or(false))
-}
-
-#[tauri::command]
-fn zotero_search(query: String) -> Result<Vec<ZoteroEntry>, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let resp = client
-        .get("http://localhost:23119/better-bibtex/bibliography.json")
-        .send()
-        .map_err(|e| e.to_string())?;
-    let items: Vec<serde_json::Value> = resp.json().map_err(|e| e.to_string())?;
-
-    let q = query.to_lowercase();
-    let mut result = Vec::new();
-    for item in items {
-        let citekey = item
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let title = item
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let authors = item
-            .get("author")
-            .and_then(|a| a.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|a| {
-                        let last = a.get("family").and_then(|v| v.as_str()).unwrap_or("");
-                        let first = a.get("given").and_then(|v| v.as_str()).unwrap_or("");
-                        if last.is_empty() {
-                            None
-                        } else {
-                            Some(format!("{} {}", first, last))
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            })
-            .unwrap_or_default();
-
-        let year = item
-            .get("issued")
-            .and_then(|i| i.get("date-parts"))
-            .and_then(|d| d.as_array())
-            .and_then(|d| d.first())
-            .and_then(|d| d.as_array())
-            .and_then(|d| d.first())
-            .and_then(|y| y.as_i64())
-            .map(|y| y.to_string())
-            .unwrap_or_default();
-
-        let hay = format!("{} {} {} {}", citekey, title, authors, year).to_lowercase();
-        if q.is_empty() || hay.contains(&q) {
-            result.push(ZoteroEntry {
-                citekey,
-                title,
-                authors,
-                year,
-            });
-        }
-    }
-    Ok(result)
 }
 
 #[tauri::command]
@@ -274,70 +205,14 @@ fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
                 .or_default()
                 .push(stem.clone());
         }
-
-        let _ = stem;
     }
 
     Ok(BacklinkIndex { links })
 }
 
 #[derive(serde::Serialize)]
-struct FlatEntry {
-    name: String,
-    path: String,
-    is_dir: bool,
-}
-
-#[derive(serde::Serialize)]
 struct BacklinkIndex {
     links: HashMap<String, Vec<String>>,
-}
-
-#[derive(serde::Serialize)]
-struct SearchResult {
-    path: String,
-    stem: String,
-    line: usize,
-    snippet: String,
-}
-
-#[tauri::command]
-fn search_vault(vault_path: String, query: String) -> Result<Vec<SearchResult>, String> {
-    let q = query.to_lowercase();
-    if q.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut results = Vec::new();
-    for entry in WalkDir::new(&vault_path).max_depth(3) {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("typ") {
-            continue;
-        }
-        let content = match std::fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let path_str = path.to_string_lossy().to_string();
-        let stem = file_stem(&path_str);
-        for (i, line) in content.lines().enumerate() {
-            if line.to_lowercase().contains(&q) {
-                let snippet = if line.len() > 120 {
-                    format!("{}...", &line[..120])
-                } else {
-                    line.to_string()
-                };
-                results.push(SearchResult {
-                    path: path_str.clone(),
-                    stem: stem.clone(),
-                    line: i + 1,
-                    snippet,
-                });
-            }
-        }
-    }
-    results.sort_by(|a, b| a.path.cmp(&b.path).then(a.line.cmp(&b.line)));
-    Ok(results)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -377,7 +252,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             compile_typst_pdf,
             compile_typst_svg,
-            list_vault,
             list_vault_tree,
             read_file,
             write_file,
@@ -385,9 +259,6 @@ pub fn run() {
             rename_path,
             delete_path,
             index_backlinks,
-            zotero_status,
-            zotero_search,
-            search_vault,
             load_state,
             save_state,
         ])

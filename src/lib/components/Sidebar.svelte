@@ -1,27 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { FolderOpen, FileText, ChevronRight, ChevronDown, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-svelte";
-
-  interface TreeNode {
-    name: string;
-    path: string;
-    is_dir: boolean;
-    children: TreeNode[];
-  }
-
-  let {
-    files = [],
-    vaultPath = "",
-    onOpenVault = () => {},
-    onOpenFile = () => {},
-    onVaultChanged = () => {},
-  }: {
-    files: TreeNode[];
-    vaultPath: string;
-    onOpenVault: () => void;
-    onOpenFile: (path: string) => void;
-    onVaultChanged: () => void;
-  } = $props();
+  import { vault, type TreeNode } from "$lib/stores.svelte";
 
   let expanded = $state<Set<string>>(new Set());
   let contextMenu = $state<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -62,8 +42,8 @@
     const newPath = parent + "/" + renameValue.trim();
     if (oldPath !== newPath) {
       try {
-        await invoke("rename_path", { oldPath, newPath });
-        onVaultChanged();
+        await invoke("rename_path", { oldPath, newPath, vaultPath: vault.vaultPath });
+        vault.refreshFiles();
       } catch (e) {
         console.error(e);
       }
@@ -75,8 +55,8 @@
     contextMenu = null;
     if (!confirm(`Delete "${node.name}"?`)) return;
     try {
-      await invoke("delete_path", { path: node.path });
-      onVaultChanged();
+      await invoke("delete_path", { path: node.path, vaultPath: vault.vaultPath });
+      vault.refreshFiles();
     } catch (e) {
       console.error(e);
     }
@@ -102,8 +82,8 @@
       ? creating.parent + "/" + name
       : creating.parent + "/" + (name.endsWith(".typ") ? name : name + ".typ");
     try {
-      await invoke("create_file", { path: fullPath, isDir: creating.isDir });
-      onVaultChanged();
+      await invoke("create_file", { path: fullPath, vaultPath: vault.vaultPath, isDir: creating.isDir });
+      vault.refreshFiles();
     } catch (e) {
       console.error(e);
     }
@@ -111,18 +91,18 @@
   }
 </script>
 
-<svelte:window onclick={closeContextMenu} />
+<svelte:window onclick={() => { if (contextMenu) closeContextMenu(); }} />
 
 <div class="flex flex-col h-full bg-base-200" role="tree" tabindex="0" oncontextmenu={(e) => onContextMenu(e, null)}>
   <div class="p-2 border-b border-base-300">
-    <button class="btn btn-outline btn-sm w-full" onclick={onOpenVault}>
+    <button class="btn btn-outline btn-sm w-full" onclick={() => vault.openVault()}>
       <FolderOpen size={16} />
       Open Vault
     </button>
   </div>
 
   <div class="flex-1 overflow-y-auto p-1">
-    {#each files as node}
+    {#each vault.files as node}
       {@render renderNode(node, 0)}
     {/each}
   </div>
@@ -180,7 +160,7 @@
     {:else}
       <button
         class="flex w-full items-center gap-1 rounded px-2 py-1 text-sm text-left hover:bg-base-300 transition-colors"
-        onclick={() => onOpenFile(node.path)}
+        onclick={() => vault.openFile(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
       >
         <span class="w-3.5 shrink-0"></span>
@@ -192,9 +172,12 @@
 {/snippet}
 
 {#if contextMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
   <div
     class="fixed z-50 min-w-40 rounded-lg border border-base-300 bg-base-100 shadow-lg py-1"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px"
+    onclick={(e) => e.stopPropagation()}
+    oncontextmenu={(e) => e.preventDefault()}
   >
     {#if contextMenu.node?.is_dir}
       <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(contextMenu!.node!.path, false)}>
@@ -213,10 +196,10 @@
         <Trash2 size={14} /> Delete
       </button>
     {:else}
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vaultPath, false)}>
+      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vault.vaultPath, false)}>
         <FilePlus size={14} /> New File
       </button>
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vaultPath, true)}>
+      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vault.vaultPath, true)}>
         <FolderPlus size={14} /> New Folder
       </button>
     {/if}

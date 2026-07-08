@@ -2,30 +2,10 @@
   import { Menu, FileText, Eye, Download, X, Circle, Settings, GitGraph } from "lucide-svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SettingsPage from "$lib/components/SettingsPage.svelte";
-  import type { Snippet } from "svelte";
-  import type { CommandRegistry } from "$lib/commands/registry";
-  import type { Vault } from "$lib/vault.svelte";
-  import type { Theme } from "$lib/theme.svelte";
-
-  let {
-    vault,
-    registry,
-    currentView = "editor" as "editor" | "settings" | "graph",
-    onNavigate = (_view: "editor" | "settings" | "graph") => {},
-    theme,
-    editorSlot,
-    previewSlot,
-    graphSlot,
-  }: {
-    vault: Vault;
-    registry: CommandRegistry;
-    currentView: "editor" | "settings" | "graph";
-    onNavigate: (view: "editor" | "settings" | "graph") => void;
-    theme: Theme;
-    editorSlot: Snippet;
-    previewSlot: Snippet;
-    graphSlot: Snippet;
-  } = $props();
+  import EditorPanel from "$lib/components/EditorPanel.svelte";
+  import PreviewPanel from "$lib/components/PreviewPanel.svelte";
+  import GraphView from "$lib/components/GraphView.svelte";
+  import { vault, ui, registry } from "$lib/stores.svelte";
 
   let mobileTab = $state<"editor" | "preview">("editor");
   let drawerRef = $state<HTMLInputElement>();
@@ -42,24 +22,18 @@
   <div class="drawer-side z-40">
     <label for="mobile-drawer" class="drawer-overlay"></label>
     <div class="w-72 lg:w-56 h-full border-r border-base-300 flex flex-col">
-      <Sidebar
-        files={vault.files}
-        vaultPath={vault.vaultPath}
-        onOpenVault={() => vault.openVault()}
-        onOpenFile={(p) => vault.openFile(p)}
-        onVaultChanged={() => vault.refreshFiles()}
-      />
+      <Sidebar />
       <div class="border-t border-base-300 p-2 flex flex-col gap-1">
         <button
-          class="btn btn-ghost btn-sm w-full justify-start gap-2 {currentView === 'graph' ? 'btn-active' : ''}"
-          onclick={() => onNavigate("graph")}
+          class="btn btn-ghost btn-sm w-full justify-start gap-2 {ui.currentView === 'graph' ? 'btn-active' : ''}"
+          onclick={() => (ui.currentView = "graph")}
         >
           <GitGraph size={16} />
           Graph
         </button>
         <button
-          class="btn btn-ghost btn-sm w-full justify-start gap-2 {currentView === 'settings' ? 'btn-active' : ''}"
-          onclick={() => onNavigate("settings")}
+          class="btn btn-ghost btn-sm w-full justify-start gap-2 {ui.currentView === 'settings' ? 'btn-active' : ''}"
+          onclick={() => (ui.currentView = "settings")}
         >
           <Settings size={16} />
           Settings
@@ -69,14 +43,10 @@
   </div>
 
   <div class="drawer-content flex flex-col overflow-hidden">
-    {#if currentView === "settings"}
-      <SettingsPage
-        theme={theme.theme}
-        onThemeChange={(t) => theme.applyTheme(t)}
-        onBack={() => onNavigate("editor")}
-      />
-    {:else if currentView === "graph"}
-      {@render graphSlot()}
+    {#if ui.currentView === "settings"}
+      <SettingsPage />
+    {:else if ui.currentView === "graph"}
+      <GraphView />
     {:else}
       <div class="lg:hidden flex items-center gap-2 border-b border-base-300 px-2 py-2 shrink-0">
         <label for="mobile-drawer" class="btn btn-ghost btn-sm btn-square">
@@ -102,7 +72,7 @@
                 <Circle size={8} class="fill-current text-warning" />
               {/if}
               <span class="truncate max-w-32">{tab.name}</span>
-              <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick={(e) => vault.closeTab(tab.path, e)} aria-label="Close tab">
+              <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick={(e) => { e.stopPropagation(); vault.closeTab(tab.path); }} aria-label="Close tab">
                 <X size={12} />
               </button>
             </div>
@@ -117,10 +87,16 @@
 
       <div class="hidden lg:grid flex-1 grid-cols-[1fr_1fr] overflow-hidden">
         <section class="border-r border-base-300 overflow-hidden">
-          {@render editorSlot()}
+          {#if vault.activeTabPath}
+            <EditorPanel />
+          {:else}
+            <div class="flex items-center justify-center h-full text-base-content/40 text-sm">
+              Open a file to start editing
+            </div>
+          {/if}
         </section>
         <section class="overflow-hidden">
-          {@render previewSlot()}
+          <PreviewPanel />
         </section>
       </div>
 
@@ -135,9 +111,15 @@
         </div>
         <div class="flex-1 overflow-hidden mt-2">
           {#if mobileTab === 'editor'}
-            {@render editorSlot()}
+            {#if vault.activeTabPath}
+              <EditorPanel />
+            {:else}
+              <div class="flex items-center justify-center h-full text-base-content/40 text-sm">
+                Open a file to start editing
+              </div>
+            {/if}
           {:else}
-            {@render previewSlot()}
+            <PreviewPanel />
           {/if}
         </div>
       </div>

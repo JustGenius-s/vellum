@@ -2,20 +2,7 @@
   import CodeMirror from "$lib/components/CodeMirror.svelte";
   import { X, ChevronUp, ChevronDown, Replace } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
-
-  let {
-    source = "",
-    fileNames = [],
-    onSourceChange = () => {},
-    findPanelOpen = false,
-    onFindPanelClose = () => {},
-  }: {
-    source: string;
-    fileNames: string[];
-    onSourceChange: (v: string) => void;
-    findPanelOpen: boolean;
-    onFindPanelClose: () => void;
-  } = $props();
+  import { vault, ui } from "$lib/stores.svelte";
 
   let findOpen = $state(false);
   let findQuery = $state("");
@@ -27,7 +14,7 @@
   let findInput = $state<HTMLInputElement>();
 
   $effect(() => {
-    if (findPanelOpen) {
+    if (ui.findPanelOpen) {
       openFind();
     }
   });
@@ -83,7 +70,7 @@
     if (!view || matchPositions.length === 0) return;
     const pos = matchPositions[currentMatchIdx];
     const newText = view.state.doc.toString().slice(0, pos) + replaceQuery + view.state.doc.toString().slice(pos + findQuery.length);
-    onSourceChange(newText);
+    vault.onSourceChange(newText);
     setTimeout(() => {
       findQuery = findQuery;
       doFind();
@@ -93,7 +80,7 @@
   function replaceAll() {
     if (!view || !findQuery) return;
     const newText = view.state.doc.toString().split(findQuery).join(replaceQuery);
-    onSourceChange(newText);
+    vault.onSourceChange(newText);
     closeFind();
   }
 
@@ -109,7 +96,7 @@
     findQuery = "";
     replaceQuery = "";
     matchPositions = [];
-    onFindPanelClose();
+    ui.findPanelOpen = false;
   }
 
   function toggleReplace() {
@@ -129,7 +116,7 @@
 
 <div class="flex flex-col h-full overflow-hidden">
   <div class="flex-1 overflow-hidden">
-    <CodeMirror {source} {fileNames} onchange={onSourceChange} {onViewCreated} />
+    <CodeMirror source={vault.source} fileNames={vault.fileNames} onchange={(v) => vault.onSourceChange(v)} {onViewCreated} />
   </div>
 
   {#if findOpen}

@@ -11,6 +11,10 @@ export function createTheme() {
     const saved = localStorage.getItem("vellum-theme");
     if (saved === "light" || saved === "dark") {
       applyTheme(saved);
+    } else if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      applyTheme("dark");
+    } else {
+      applyTheme("light");
     }
   }
 

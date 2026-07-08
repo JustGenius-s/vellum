@@ -1,9 +1,7 @@
 <script lang="ts">
   import { Search, FileText, CornerDownLeft } from "lucide-svelte";
   import type { Component } from "svelte";
-  import type { CommandRegistry } from "$lib/commands/registry";
-  import type { KeybindingManager } from "$lib/commands/keybinding";
-  import type { Vault } from "$lib/vault.svelte";
+  import { vault, registry, keybindings, ui } from "$lib/stores.svelte";
 
   interface FileItem {
     type: "file";
@@ -19,20 +17,6 @@
   }
 
   type Item = FileItem | CommandItem;
-
-  let {
-    open = false,
-    onClose = () => {},
-    vault,
-    registry,
-    keybindings,
-  }: {
-    open: boolean;
-    onClose: () => void;
-    vault: Vault;
-    registry: CommandRegistry;
-    keybindings: KeybindingManager;
-  } = $props();
 
   let query = $state("");
   let selectedIndex = $state(0);
@@ -71,7 +55,13 @@
   let items = $derived([...fileItems, ...commandItems] as Item[]);
 
   $effect(() => {
-    if (open) {
+    if (selectedIndex >= items.length) {
+      selectedIndex = Math.max(0, items.length - 1);
+    }
+  });
+
+  $effect(() => {
+    if (ui.paletteOpen) {
       query = "";
       selectedIndex = 0;
       setTimeout(() => inputEl?.focus(), 50);
@@ -84,7 +74,7 @@
     } else {
       registry.executeCommand(item.id);
     }
-    onClose();
+    ui.paletteOpen = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -98,14 +88,14 @@
       e.preventDefault();
       if (items[selectedIndex]) selectItem(items[selectedIndex]);
     } else if (e.key === "Escape") {
-      onClose();
+      ui.paletteOpen = false;
     }
   }
 </script>
 
-{#if open}
+{#if ui.paletteOpen}
   <div class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" role="dialog" aria-modal="true">
-    <button class="fixed inset-0 bg-black/30" onclick={onClose} aria-label="Close"></button>
+    <button class="fixed inset-0 bg-black/30" onclick={() => (ui.paletteOpen = false)} aria-label="Close"></button>
 
     <div class="relative z-10 w-[520px] max-w-[95vw] rounded-xl border border-base-300 bg-base-100 shadow-2xl overflow-hidden">
       <div class="flex items-center gap-2 border-b border-base-300 px-4 py-3">

@@ -1,4 +1,3 @@
-use std::path::Path;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
@@ -44,11 +43,22 @@ impl TypstWorld {
     }
 
     fn resolve_to_disk(&self, id: FileId) -> Result<std::path::PathBuf, typst::diag::FileError> {
-        if id == self.main {
-            return Ok(Path::new(&self.vault_path).join(self.main_vpath.get_without_slash()));
+        let rel = if id == self.main {
+            std::path::Path::new(self.main_vpath.get_without_slash())
+        } else {
+            std::path::Path::new(id.vpath().get_without_slash())
+        };
+        let resolved = std::path::Path::new(&self.vault_path).join(rel);
+        let canonical = resolved
+            .canonicalize()
+            .map_err(|_| typst::diag::FileError::NotFound(resolved.clone()))?;
+        let vault_canonical = std::path::Path::new(&self.vault_path)
+            .canonicalize()
+            .map_err(|_| typst::diag::FileError::NotFound(std::path::PathBuf::from(&self.vault_path)))?;
+        if !canonical.starts_with(&vault_canonical) {
+            return Err(typst::diag::FileError::NotFound(resolved));
         }
-        let rel = id.vpath().get_without_slash();
-        Ok(Path::new(&self.vault_path).join(rel))
+        Ok(canonical)
     }
 }
 

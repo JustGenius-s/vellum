@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
-interface TreeNode { name: string; path: string; is_dir: boolean; children: TreeNode[]; }
+export interface TreeNode { name: string; path: string; is_dir: boolean; children: TreeNode[]; }
 interface BacklinkIndex { links: Record<string, string[]>; }
 
 export interface Tab {
@@ -24,21 +24,22 @@ export function createVault() {
   let files = $state<TreeNode[]>([]);
   let tabs = $state<Tab[]>([]);
   let activeTabPath = $state("");
-  let currentStem = $state("");
   let svg = $state("");
   let status = $state("");
   let backlinkIndex = $state<Record<string, string[]>>({});
-  let fileNames = $state<string[]>([]);
 
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
   let skipSave = $state(true);
+  let compileToken = 0;
 
   let source = $derived(tabs.find((t) => t.path === activeTabPath)?.content ?? "");
   let currentFile = $derived(activeTabPath);
   let activeTab = $derived(tabs.find((t) => t.path === activeTabPath));
   let activeTabName = $derived(activeTab?.name || "Vellum");
+  let currentStem = $derived(fileStem(activeTabPath));
+  let fileNames = $derived(flattenTree(files));
 
   function fileStem(path: string): string {
     return (path.split("/").pop() || path).replace(/\.typ$/, "");
@@ -56,10 +57,6 @@ export function createVault() {
     return names;
   }
 
-  $effect(() => {
-    fileNames = flattenTree(files);
-  });
-
   function getAppState() {
     return { vaultPath, openTabs: tabs.map((t) => t.path), activeTabPath };
   }
@@ -74,34 +71,42 @@ export function createVault() {
   });
 
   async function loadSavedState(): Promise<string | null> {
-    const saved = await invoke<SavedState>("load_state");
-    if (!saved.vault_path) {
+    try {
+      const saved = await invoke<SavedState>("load_state");
+      if (!saved.vault_path) {
+        skipSave = false;
+        return saved.theme;
+      }
+      vaultPath = saved.vault_path;
+      await refreshFiles();
+      await refreshBacklinkIndex();
+
+      if (saved.open_tabs && saved.open_tabs.length > 0) {
+        const active = saved.active_tab_path || saved.open_tabs[0];
+        for (const p of saved.open_tabs) {
+          if (p !== active) await openFileSilent(p);
+        }
+        await openFile(active);
+      }
       skipSave = false;
       return saved.theme;
+    } catch (e) {
+      console.error("loadSavedState failed:", e);
+      skipSave = false;
+      return null;
     }
-    vaultPath = saved.vault_path;
-    await refreshFiles();
-    await refreshBacklinkIndex();
-
-    if (saved.open_tabs && saved.open_tabs.length > 0) {
-      const active = saved.active_tab_path || saved.open_tabs[0];
-      for (const p of saved.open_tabs) {
-        if (p !== active) await openFileSilent(p);
-      }
-      await openFile(active);
-    }
-    skipSave = false;
-    return saved.theme;
   }
 
   async function openFileSilent(path: string) {
     const existing = tabs.find((t) => t.path === path);
     if (existing) return;
     try {
-      const content = await invoke<string>("read_file", { path });
+      const content = await invoke<string>("read_file", { path, vaultPath });
       const name = path.split("/").pop() || path;
       tabs = [...tabs, { path, name, content, dirty: false }];
-    } catch (_) {}
+    } catch (e) {
+      console.error("openFileSilent failed:", path, e);
+    }
   }
 
   async function openVault() {
@@ -115,29 +120,39 @@ export function createVault() {
 
   async function refreshFiles() {
     if (!vaultPath) return;
-    files = await invoke("list_vault_tree", { path: vaultPath });
+    try {
+      files = await invoke("list_vault_tree", { path: vaultPath });
+    } catch (e) {
+      console.error("refreshFiles failed:", e);
+    }
   }
 
   async function refreshBacklinkIndex() {
     if (!vaultPath) return;
-    const idx: BacklinkIndex = await invoke("index_backlinks", { vaultPath });
-    backlinkIndex = idx.links;
+    try {
+      const idx: BacklinkIndex = await invoke("index_backlinks", { vaultPath });
+      backlinkIndex = idx.links;
+    } catch (e) {
+      console.error("refreshBacklinkIndex failed:", e);
+    }
   }
 
   async function openFile(path: string) {
     const existing = tabs.find((t) => t.path === path);
     if (existing) {
       activeTabPath = path;
-      currentStem = fileStem(path);
       await compilePreview();
       return;
     }
-    const content = await invoke<string>("read_file", { path });
-    const name = path.split("/").pop() || path;
-    tabs = [...tabs, { path, name, content, dirty: false }];
-    activeTabPath = path;
-    currentStem = fileStem(path);
-    await compilePreview();
+    try {
+      const content = await invoke<string>("read_file", { path, vaultPath });
+      const name = path.split("/").pop() || path;
+      tabs = [...tabs, { path, name, content, dirty: false }];
+      activeTabPath = path;
+      await compilePreview();
+    } catch (e) {
+      status = `Error: ${e}`;
+    }
   }
 
   async function openByStem(stem: string) {
@@ -157,8 +172,7 @@ export function createVault() {
     return null;
   }
 
-  function closeTab(path: string, e: MouseEvent) {
-    e.stopPropagation();
+  function closeTab(path: string) {
     const tab = tabs.find((t) => t.path === path);
     if (tab?.dirty) {
       if (!confirm(`"${tab.name}" has unsaved changes. Close anyway?`)) return;
@@ -168,12 +182,10 @@ export function createVault() {
     if (activeTabPath === path) {
       if (tabs.length === 0) {
         activeTabPath = "";
-        currentStem = "";
         svg = "";
       } else {
         const newIdx = Math.max(0, idx - 1);
         activeTabPath = tabs[newIdx].path;
-        currentStem = fileStem(activeTabPath);
       }
       compilePreview();
     }
@@ -181,18 +193,21 @@ export function createVault() {
 
   function switchTab(path: string) {
     activeTabPath = path;
-    currentStem = fileStem(path);
     compilePreview();
   }
 
   async function saveFile(path: string) {
     const tab = tabs.find((t) => t.path === path);
     if (!tab) return;
-    await invoke("write_file", { path, content: tab.content });
-    tab.dirty = false;
-    tabs = [...tabs];
-    status = "Saved";
-    await refreshBacklinkIndex();
+    try {
+      await invoke("write_file", { path, content: tab.content, vaultPath });
+      tab.dirty = false;
+      tabs = [...tabs];
+      status = "Saved";
+      await refreshBacklinkIndex();
+    } catch (e) {
+      status = `Save error: ${e}`;
+    }
   }
 
   function onSourceChange(newValue: string) {
@@ -206,9 +221,10 @@ export function createVault() {
     if (compileTimer) clearTimeout(compileTimer);
     compileTimer = setTimeout(compilePreview, 500);
 
+    const pathToSave = activeTabPath;
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(async () => {
-      if (activeTabPath) await saveFile(activeTabPath);
+      if (pathToSave) await saveFile(pathToSave);
     }, 2000);
   }
 
@@ -217,10 +233,17 @@ export function createVault() {
       svg = "";
       return;
     }
+    const token = ++compileToken;
+    const src = source;
+    const mainFile = currentFile;
+    const vp = vaultPath;
     try {
-      svg = await invoke("compile_typst_svg", { source, vaultPath, mainFile: currentFile });
+      const result = await invoke<string>("compile_typst_svg", { source: src, vaultPath: vp, mainFile });
+      if (token !== compileToken) return;
+      svg = result;
       status = "OK";
     } catch (e) {
+      if (token !== compileToken) return;
       status = `Error: ${e}`;
     }
   }

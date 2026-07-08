@@ -1,3 +1,2 @@
 export { createCommandRegistry, type Command, type CommandRegistry } from "$lib/commands/registry";
 export { createKeybindingManager, type Keybinding, type KeybindingManager, type KeyEvent, ResolveResultKind, type ResolveResult } from "$lib/commands/keybinding";
-export { createCommandService, type CommandService } from "$lib/commands/service";

@@ -39,7 +39,7 @@ function normalizeKey(event: KeyEvent): string | null {
   if (event.shiftKey && !MODIFIER_KEY.has(event.key)) parts.push("Shift");
 
   const key = event.key;
-  if (MODIFIER_KEY.has(key)) return parts.length > 0 ? null : null;
+  if (MODIFIER_KEY.has(key)) return null;
 
   let normalizedKey = key;
   if (key.length === 1) {
@@ -59,7 +59,8 @@ function normalizeChords(keys: string): string[] {
       .map((p) => {
         const t = p.trim();
         if (t === "Cmd" || t === "Ctrl" || t === "Alt" || t === "Shift") return t;
-        return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+        if (t.length === 1) return t.toUpperCase();
+        return t.charAt(0).toUpperCase() + t.slice(1);
       })
       .join("+");
   });

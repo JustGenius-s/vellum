@@ -1,20 +1,11 @@
 <script lang="ts">
   import { ArrowLeft } from "lucide-svelte";
-
-  let {
-    theme = "light" as "light" | "dark",
-    onThemeChange = (_t: "light" | "dark") => {},
-    onBack = () => {},
-  }: {
-    theme: "light" | "dark";
-    onThemeChange: (t: "light" | "dark") => void;
-    onBack: () => void;
-  } = $props();
+  import { theme, ui } from "$lib/stores.svelte";
 </script>
 
 <div class="flex flex-col h-full overflow-hidden">
   <div class="flex items-center gap-3 border-b border-base-300 bg-base-200/50 px-4 py-2 shrink-0">
-    <button class="btn btn-ghost btn-sm btn-square" onclick={onBack} title="Back">
+    <button class="btn btn-ghost btn-sm btn-square" onclick={() => (ui.currentView = "editor")} title="Back">
       <ArrowLeft size={18} />
     </button>
     <h1 class="text-lg font-semibold">Settings</h1>
@@ -25,14 +16,14 @@
       <legend class="text-sm font-medium mb-2">Appearance</legend>
       <div class="flex gap-2">
         <button
-          class="btn btn-sm flex-1 {theme === 'light' ? 'btn-primary' : 'btn-outline'}"
-          onclick={() => onThemeChange("light")}
+          class="btn btn-sm flex-1 {theme.theme === 'light' ? 'btn-primary' : 'btn-outline'}"
+          onclick={() => theme.applyTheme("light")}
         >
           Light
         </button>
         <button
-          class="btn btn-sm flex-1 {theme === 'dark' ? 'btn-primary' : 'btn-outline'}"
-          onclick={() => onThemeChange("dark")}
+          class="btn btn-sm flex-1 {theme.theme === 'dark' ? 'btn-primary' : 'btn-outline'}"
+          onclick={() => theme.applyTheme("dark")}
         >
           Dark
         </button>
