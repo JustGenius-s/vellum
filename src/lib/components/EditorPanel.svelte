@@ -1,5 +1,7 @@
 <script lang="ts">
   import CodeMirror from "$lib/components/CodeMirror.svelte";
+  import OutlinePanel from "$lib/components/OutlinePanel.svelte";
+  import DiagnosticsPanel from "$lib/components/DiagnosticsPanel.svelte";
   import { X, ChevronUp, ChevronDown, Replace } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import { getVault, getUI } from "$lib/stores.svelte";
@@ -15,6 +17,13 @@
   let currentMatchIdx = $state(0);
   let view = $state<EditorView | null>(null);
   let findInput = $state<HTMLInputElement>();
+
+  // Re-show diagnostics when problems clear then reappear
+  $effect(() => {
+    if (vault.diagnostics.length === 0) {
+      ui.diagnosticsDismissed = false;
+    }
+  });
 
   $effect(() => {
     if (ui.findPanelOpen) {
@@ -118,7 +127,9 @@
 </script>
 
 <div class="flex flex-col h-full overflow-hidden">
-  <div class="flex-1 overflow-hidden">
+  <OutlinePanel />
+
+  <div class="flex-1 overflow-hidden min-h-0">
     <CodeMirror source={vault.source} fileNames={vault.fileNames} onchange={(v) => vault.onSourceChange(v)} {onViewCreated} />
   </div>
 
@@ -169,4 +180,6 @@
       {/if}
     </div>
   {/if}
+
+  <DiagnosticsPanel />
 </div>

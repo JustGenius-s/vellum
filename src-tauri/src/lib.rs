@@ -4,6 +4,8 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
 use tauri::Manager;
+use typst::diag::{Severity, SourceDiagnostic};
+use typst::{World, WorldExt};
 use walkdir::WalkDir;
 
 static WIKILINK_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
@@ -22,31 +24,119 @@ fn expand_wikilinks(source: &str) -> String {
         .to_string()
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CompileDiagnostic {
+    severity: String,
+    message: String,
+    line: Option<u32>,
+    column: Option<u32>,
+    path: Option<String>,
+    hints: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompileSvgResult {
+    svg: Option<String>,
+    diagnostics: Vec<CompileDiagnostic>,
+}
+
+fn format_diagnostic(
+    world: &world::TypstWorld,
+    diag: &SourceDiagnostic,
+) -> CompileDiagnostic {
+    let severity = match diag.severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+    }
+    .to_string();
+
+    let mut line = None;
+    let mut column = None;
+    let mut path = None;
+
+    if let Some(id) = diag.span.id() {
+        path = Some(id.vpath().get_without_slash().to_string());
+        if let Some(range) = world.range(diag.span) {
+            if let Ok(source) = world.source(id) {
+                if let Some((l, c)) = source.lines().byte_to_line_column(range.start) {
+                    line = Some((l + 1) as u32);
+                    column = Some((c + 1) as u32);
+                }
+            }
+        }
+    }
+
+    let hints = diag
+        .hints
+        .iter()
+        .map(|h| h.v.to_string())
+        .collect();
+
+    CompileDiagnostic {
+        severity,
+        message: diag.message.to_string(),
+        line,
+        column,
+        path,
+        hints,
+    }
+}
+
 #[tauri::command]
 fn compile_typst_pdf(source: String, vault_path: String, main_file: String) -> Result<Vec<u8>, String> {
     let expanded = expand_wikilinks(&source);
     let world = world::TypstWorld::new(expanded, vault_path, main_file);
-    let document = typst::compile::<typst_layout::PagedDocument>(&world)
-        .output
-        .map_err(|e| format!("{:?}", e))?;
+    let warned = typst::compile::<typst_layout::PagedDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        errors
+            .iter()
+            .map(|e| e.message.to_string())
+            .collect::<Vec<_>>()
+            .join("; ")
+    })?;
     let pdf = typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
         .map_err(|e| format!("{:?}", e))?;
     Ok(pdf)
 }
 
 #[tauri::command]
-fn compile_typst_svg(source: String, vault_path: String, main_file: String) -> Result<String, String> {
+fn compile_typst_svg(
+    source: String,
+    vault_path: String,
+    main_file: String,
+) -> Result<CompileSvgResult, String> {
     let expanded = expand_wikilinks(&source);
     let world = world::TypstWorld::new(expanded, vault_path, main_file);
-    let document = typst::compile::<typst_layout::PagedDocument>(&world)
-        .output
-        .map_err(|e| format!("{:?}", e))?;
-    let svg = typst_svg::svg_merged(
-        &document,
-        &typst_svg::SvgOptions::default(),
-        typst::layout::Abs::zero(),
-    );
-    Ok(svg)
+    let warned = typst::compile::<typst_layout::PagedDocument>(&world);
+
+    let mut diagnostics: Vec<CompileDiagnostic> = warned
+        .warnings
+        .iter()
+        .map(|d| format_diagnostic(&world, d))
+        .collect();
+
+    match warned.output {
+        Ok(document) => {
+            let svg = typst_svg::svg_merged(
+                &document,
+                &typst_svg::SvgOptions::default(),
+                typst::layout::Abs::zero(),
+            );
+            Ok(CompileSvgResult {
+                svg: Some(svg),
+                diagnostics,
+            })
+        }
+        Err(errors) => {
+            diagnostics.extend(errors.iter().map(|d| format_diagnostic(&world, d)));
+            Ok(CompileSvgResult {
+                svg: None,
+                diagnostics,
+            })
+        }
+    }
 }
 
 #[derive(serde::Serialize, Clone)]

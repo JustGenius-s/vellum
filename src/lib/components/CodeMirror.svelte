@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { EditorState } from "@codemirror/state";
-  import { EditorView, keymap } from "@codemirror/view";
+  import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
   import { defaultKeymap } from "@codemirror/commands";
   import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
   import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
   import { typst } from "$lib/typst-language";
+  import { getUI } from "$lib/stores.svelte";
 
   let {
     source = "",
@@ -19,9 +20,12 @@
     onViewCreated: (v: EditorView) => void;
   } = $props();
 
+  const ui = getUI();
+
   let view: EditorView | null = null;
   let host: HTMLDivElement;
   let isProgrammaticChange = false;
+  let applyingScroll = false;
 
   function wikilinkCompletions(context: CompletionContext) {
     const word = context.matchBefore(/\[\[[^\]|]*/);
@@ -38,6 +42,15 @@
     };
   }
 
+  function reportScroll() {
+    if (!view || applyingScroll) return;
+    const scroller = view.scrollDOM;
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    const ratio = max > 0 ? scroller.scrollTop / max : 0;
+    ui.scrollSource = "editor";
+    ui.scrollRatio = ratio;
+  }
+
   onMount(() => {
     const updateListener = EditorView.updateListener.of((u) => {
       if (u.docChanged && !isProgrammaticChange) {
@@ -45,10 +58,14 @@
       }
     });
 
+    const scrollHandler = () => reportScroll();
+
     view = new EditorView({
       state: EditorState.create({
         doc: source,
         extensions: [
+          lineNumbers(),
+          highlightActiveLineGutter(),
           keymap.of(defaultKeymap),
           updateListener,
           autocompletion({ override: [wikilinkCompletions] }),
@@ -64,6 +81,15 @@
               overflow: "auto",
               fontFamily: "'SF Mono', Menlo, monospace",
             },
+            ".cm-gutters": {
+              backgroundColor: "transparent",
+              border: "none",
+              color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)",
+            },
+            ".cm-activeLineGutter": {
+              backgroundColor: "transparent",
+              color: "var(--color-base-content)",
+            },
             ".cm-tooltip-autocomplete": {
               fontFamily: "inherit",
               borderRadius: "6px",
@@ -73,7 +99,12 @@
       }),
       parent: host,
     });
+    view.scrollDOM.addEventListener("scroll", scrollHandler, { passive: true });
     onViewCreated(view);
+
+    return () => {
+      view?.scrollDOM.removeEventListener("scroll", scrollHandler);
+    };
   });
 
   onDestroy(() => {
@@ -88,6 +119,34 @@
       });
       isProgrammaticChange = false;
     }
+  });
+
+  // Jump to line from outline / diagnostics
+  $effect(() => {
+    const line = ui.gotoLine;
+    if (line == null || !view) return;
+    const doc = view.state.doc;
+    const target = Math.min(Math.max(1, line), doc.lines);
+    const lineObj = doc.line(target);
+    view.dispatch({
+      selection: { anchor: lineObj.from },
+      effects: EditorView.scrollIntoView(lineObj.from, { y: "center" }),
+    });
+    ui.gotoLine = null;
+  });
+
+  // Sync scroll from preview
+  $effect(() => {
+    const ratio = ui.scrollRatio;
+    const sourceSide = ui.scrollSource;
+    if (!view || sourceSide !== "preview") return;
+    applyingScroll = true;
+    const scroller = view.scrollDOM;
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    scroller.scrollTop = max > 0 ? ratio * max : 0;
+    requestAnimationFrame(() => {
+      applyingScroll = false;
+    });
   });
 </script>
 

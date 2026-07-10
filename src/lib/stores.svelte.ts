@@ -14,6 +14,14 @@ export type UIState = {
   currentView: View;
   paletteOpen: boolean;
   findPanelOpen: boolean;
+  /** When set, editor scrolls to this 1-based line then clears. */
+  gotoLine: number | null;
+  /** User dismissed the diagnostics panel until next compile error. */
+  diagnosticsDismissed: boolean;
+  /** Scroll ratio 0–1 for editor ↔ preview sync. */
+  scrollRatio: number;
+  /** Which side last drove scroll sync. */
+  scrollSource: "editor" | "preview" | null;
 };
 
 export function getVault(): Vault { return getContext<Vault>("vault"); }

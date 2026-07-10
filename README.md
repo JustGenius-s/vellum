@@ -39,10 +39,13 @@
 - [x] Typst 编译 → PDF / SVG 实时预览
 - [x] 文件树 + vault 打开
 - [x] `[[wikilink]]` 语法 + 反向链接面板
-- [x] Zotero 引用搜索（需装 Better BibTeX 插件）
-- [x] 全文搜索
+- [x] 编译诊断面板（可关闭）
+- [x] 文档大纲（`=` 标题跳转）
+- [x] 编辑器 ↔ 预览滚动联动
+- [ ] Zotero 引用搜索（需装 Better BibTeX 插件）
+- [ ] Vault 全文搜索（Tantivy 待接入）
 - [ ] LSP 集成（Tinymist）
-- [ ] 知识图谱
+- [ ] 知识图谱打磨
 - [ ] 插件系统
 
 ## 开发

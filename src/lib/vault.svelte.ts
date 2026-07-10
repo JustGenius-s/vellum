@@ -5,6 +5,20 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 export interface TreeNode { name: string; path: string; is_dir: boolean; children: TreeNode[]; }
 interface BacklinkIndex { links: Record<string, string[]>; }
 
+export interface CompileDiagnostic {
+  severity: "error" | "warning" | string;
+  message: string;
+  line: number | null;
+  column: number | null;
+  path: string | null;
+  hints: string[];
+}
+
+interface CompileSvgResult {
+  svg: string | null;
+  diagnostics: CompileDiagnostic[];
+}
+
 export interface Tab {
   path: string;
   name: string;
@@ -26,6 +40,7 @@ export function createVault() {
   let activeTabPath = $state("");
   let svg = $state("");
   let status = $state("");
+  let diagnostics = $state<CompileDiagnostic[]>([]);
   let backlinkIndex = $state<Record<string, string[]>>({});
 
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
@@ -183,6 +198,7 @@ export function createVault() {
       if (tabs.length === 0) {
         activeTabPath = "";
         svg = "";
+        diagnostics = [];
       } else {
         const newIdx = Math.max(0, idx - 1);
         activeTabPath = tabs[newIdx].path;
@@ -231,6 +247,7 @@ export function createVault() {
   async function compilePreview() {
     if (!source) {
       svg = "";
+      diagnostics = [];
       return;
     }
     const token = ++compileToken;
@@ -238,12 +255,34 @@ export function createVault() {
     const mainFile = currentFile;
     const vp = vaultPath;
     try {
-      const result = await invoke<string>("compile_typst_svg", { source: src, vaultPath: vp, mainFile });
+      const result = await invoke<CompileSvgResult>("compile_typst_svg", {
+        source: src,
+        vaultPath: vp,
+        mainFile,
+      });
       if (token !== compileToken) return;
-      svg = result;
-      status = "OK";
+      diagnostics = result.diagnostics ?? [];
+      if (result.svg) {
+        svg = result.svg;
+      }
+      const errors = diagnostics.filter((d) => d.severity === "error");
+      if (errors.length > 0) {
+        status = `${errors.length} error${errors.length > 1 ? "s" : ""}`;
+      } else if (diagnostics.length > 0) {
+        status = `${diagnostics.length} warning${diagnostics.length > 1 ? "s" : ""}`;
+      } else {
+        status = "OK";
+      }
     } catch (e) {
       if (token !== compileToken) return;
+      diagnostics = [{
+        severity: "error",
+        message: String(e),
+        line: null,
+        column: null,
+        path: null,
+        hints: [],
+      }];
       status = `Error: ${e}`;
     }
   }
@@ -274,6 +313,7 @@ export function createVault() {
     get activeTabName() { return activeTabName; },
     get svg() { return svg; },
     get status() { return status; },
+    get diagnostics() { return diagnostics; },
     get source() { return source; },
     get fileNames() { return fileNames; },
     get backlinkIndex() { return backlinkIndex; },

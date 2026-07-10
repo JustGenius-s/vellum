@@ -19,10 +19,18 @@
     currentView: View;
     paletteOpen: boolean;
     findPanelOpen: boolean;
+    gotoLine: number | null;
+    diagnosticsDismissed: boolean;
+    scrollRatio: number;
+    scrollSource: "editor" | "preview" | null;
   }>({
     currentView: "editor",
     paletteOpen: false,
     findPanelOpen: false,
+    gotoLine: null,
+    diagnosticsDismissed: false,
+    scrollRatio: 0,
+    scrollSource: null,
   });
 
   setContext("vault", vault);
