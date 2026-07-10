@@ -94,56 +94,61 @@
 </script>
 
 {#if ui.paletteOpen}
-  <div class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" role="dialog" aria-modal="true">
-    <button class="fixed inset-0 bg-black/30" onclick={() => (ui.paletteOpen = false)} aria-label="Close"></button>
-
-    <div class="relative z-10 w-[520px] max-w-[95vw] rounded-xl border border-base-300 bg-base-100 shadow-2xl overflow-hidden">
+  <div class="modal modal-open items-start pt-[15dvh]" role="dialog" aria-modal="true">
+    <div class="modal-box w-[min(32rem,calc(100vw-1.5rem))] max-w-none overflow-hidden border border-base-300 p-0">
       <div class="flex items-center gap-2 border-b border-base-300 px-4 py-3">
-        <Search size={16} class="text-base-content/40 shrink-0" />
+        <Search class="ui-icon text-base-content/40" />
         <input
           bind:this={inputEl}
           type="text"
           placeholder="Search files or commands..."
           bind:value={query}
           onkeydown={handleKeydown}
-          class="flex-1 bg-transparent outline-none text-sm placeholder-base-content/40"
+          class="input input-ghost input-sm min-w-0 flex-1 border-0 px-0 focus:outline-none"
         />
       </div>
 
       {#if items.length > 0}
-        <div class="max-h-72 overflow-auto p-1">
+        <ul class="menu menu-sm max-h-72 flex-nowrap overflow-auto p-1.5">
           {#each items as item, idx}
-            <button
-              class="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-left transition-colors {idx === safeIndex ? 'bg-base-200' : 'hover:bg-base-200'}"
-              onmouseenter={() => (selectedIndex = idx)}
-              onclick={() => selectItem(item)}
-            >
-              {#if item.type === "file"}
-                <FileText size={16} class="text-base-content/50 shrink-0" />
-                <span>{item.stem}.typ</span>
-              {:else}
-                {#if item.icon}
-                  <item.icon size={16} class="text-base-content/50 shrink-0" />
+            <li>
+              <button
+                class:menu-active={idx === safeIndex}
+                onmouseenter={() => (selectedIndex = idx)}
+                onclick={() => selectItem(item)}
+              >
+                {#if item.type === "file"}
+                  <FileText class="ui-icon text-base-content/50" />
+                  <span>{item.stem}.typ</span>
                 {:else}
-                  <FileText size={16} class="text-base-content/50 shrink-0" />
+                  {#if item.icon}
+                    <item.icon class="ui-icon text-base-content/50" />
+                  {:else}
+                    <FileText class="ui-icon text-base-content/50" />
+                  {/if}
+                  <span class="flex-1">{item.label}</span>
+                  {#if item.shortcut}
+                    <kbd class="kbd kbd-sm text-[10px]">{item.shortcut}</kbd>
+                  {/if}
                 {/if}
-                <span class="flex-1">{item.label}</span>
-                {#if item.shortcut}
-                  <kbd class="text-[11px] text-base-content/30">{item.shortcut}</kbd>
-                {/if}
-              {/if}
-            </button>
+              </button>
+            </li>
           {/each}
-        </div>
+        </ul>
       {:else if query}
         <div class="p-6 text-sm text-base-content/40 text-center">No results</div>
       {/if}
 
       <div class="border-t border-base-300 px-4 py-2 flex gap-4 text-[11px] text-base-content/40">
-        <span><CornerDownLeft size={12} class="inline mr-1" />select</span>
+        <span><CornerDownLeft class="ui-icon ui-icon--sm mr-1 inline" />select</span>
         <span>↑↓ navigate</span>
         <span>esc close</span>
       </div>
     </div>
+    <button
+      class="modal-backdrop bg-neutral/35 backdrop-blur-[2px]"
+      onclick={() => (ui.paletteOpen = false)}
+      aria-label="Close command palette"
+    ></button>
   </div>
 {/if}

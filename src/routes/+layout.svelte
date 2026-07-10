@@ -1,12 +1,19 @@
 <script lang="ts">
   import "../app.css";
   import { setContext, onMount } from "svelte";
-  import { Download, Sun, Moon, Settings, GitGraph } from "lucide-svelte";
+  import {
+    Download,
+    GitGraph,
+    Moon,
+    PanelLeftClose,
+    Settings,
+    Sun,
+  } from "lucide-svelte";
   import { createVault } from "$lib/vault.svelte";
   import { createTheme } from "$lib/theme.svelte";
   import { createCommandRegistry } from "$lib/commands/registry";
   import { createKeybindingManager, ResolveResultKind } from "$lib/commands/keybinding";
-  import type { View } from "$lib/stores.svelte";
+  import type { SidebarView, View } from "$lib/stores.svelte";
 
   let { children } = $props();
 
@@ -19,6 +26,8 @@
     currentView: View;
     paletteOpen: boolean;
     findPanelOpen: boolean;
+    sidebarCollapsed: boolean;
+    sidebarView: SidebarView;
     gotoLine: number | null;
     diagnosticsDismissed: boolean;
     scrollRatio: number;
@@ -27,6 +36,8 @@
     currentView: "editor",
     paletteOpen: false,
     findPanelOpen: false,
+    sidebarCollapsed: false,
+    sidebarView: "files",
     gotoLine: null,
     diagnosticsDismissed: false,
     scrollRatio: 0,
@@ -40,18 +51,15 @@
   setContext("ui", ui);
 
   onMount(() => {
-    vault.loadSavedState()
-      .then((savedTheme) => {
-        if (savedTheme === "light" || savedTheme === "dark") {
-          theme.applyTheme(savedTheme);
-        } else {
-          theme.init();
-        }
-      })
-      .catch((e) => {
-        console.error("Failed to load saved state:", e);
-        theme.init();
-      });
+    ui.sidebarCollapsed =
+      localStorage.getItem("vellum-sidebar-collapsed") === "true";
+    ui.sidebarView =
+      localStorage.getItem("vellum-sidebar-view") === "outline"
+        ? "outline"
+        : "files";
+
+    theme.init();
+    void vault.loadSavedState();
 
     const disposers: (() => void)[] = [];
 
@@ -89,6 +97,19 @@
     }));
 
     disposers.push(registry.registerCommand({
+      id: "view.toggle-sidebar",
+      label: "Toggle Explorer Sidebar",
+      icon: PanelLeftClose,
+      handler: () => {
+        ui.sidebarCollapsed = !ui.sidebarCollapsed;
+        localStorage.setItem(
+          "vellum-sidebar-collapsed",
+          String(ui.sidebarCollapsed),
+        );
+      },
+    }));
+
+    disposers.push(registry.registerCommand({
       id: "theme.toggle",
       get label() { return theme.theme === "dark" ? "Switch to Light" : "Switch to Dark"; },
       get icon() { return theme.theme === "dark" ? Sun : Moon; },
@@ -108,6 +129,10 @@
     disposers.push(keybindings.bind({ keys: "Cmd+S", command: "file.save" }));
     disposers.push(keybindings.bind({ keys: "Cmd+P", command: "palette.open" }));
     disposers.push(keybindings.bind({ keys: "Cmd+F", command: "editor.find" }));
+    disposers.push(keybindings.bind({
+      keys: "Cmd+B",
+      command: "view.toggle-sidebar",
+    }));
 
     return () => {
       for (const d of disposers) d();

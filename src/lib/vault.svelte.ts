@@ -27,10 +27,9 @@ export interface Tab {
 }
 
 interface SavedState {
-  vault_path: string | null;
-  open_tabs: string[];
-  active_tab_path: string | null;
-  theme: string | null;
+  vaultPath: string | null;
+  openTabs: string[];
+  activeTabPath: string | null;
 }
 
 export function createVault() {
@@ -56,8 +55,18 @@ export function createVault() {
   let currentStem = $derived(fileStem(activeTabPath));
   let fileNames = $derived(flattenTree(files));
 
+  function fileName(path: string): string {
+    return path.split(/[/\\]/).pop() || path;
+  }
+
   function fileStem(path: string): string {
-    return (path.split("/").pop() || path).replace(/\.typ$/, "");
+    return fileName(path).replace(/\.typ$/, "");
+  }
+
+  function isSameOrDescendant(path: string, parent: string): boolean {
+    return path === parent ||
+      path.startsWith(`${parent}/`) ||
+      path.startsWith(`${parent}\\`);
   }
 
   function flattenTree(nodes: TreeNode[]): string[] {
@@ -81,34 +90,32 @@ export function createVault() {
     if (skipSave) return;
     if (saveStateTimer) clearTimeout(saveStateTimer);
     saveStateTimer = setTimeout(() => {
-      invoke("save_state", { state });
+      void invoke("save_state", { state }).catch((error) => {
+        status = `Session save error: ${error}`;
+      });
     }, 1500);
   });
 
-  async function loadSavedState(): Promise<string | null> {
+  async function loadSavedState(): Promise<void> {
     try {
       const saved = await invoke<SavedState>("load_state");
-      if (!saved.vault_path) {
-        skipSave = false;
-        return saved.theme;
-      }
-      vaultPath = saved.vault_path;
+      if (!saved.vaultPath) return;
+      vaultPath = saved.vaultPath;
       await refreshFiles();
       await refreshBacklinkIndex();
 
-      if (saved.open_tabs && saved.open_tabs.length > 0) {
-        const active = saved.active_tab_path || saved.open_tabs[0];
-        for (const p of saved.open_tabs) {
+      if (saved.openTabs.length > 0) {
+        const active = saved.activeTabPath || saved.openTabs[0];
+        for (const p of saved.openTabs) {
           if (p !== active) await openFileSilent(p);
         }
         await openFile(active);
       }
-      skipSave = false;
-      return saved.theme;
     } catch (e) {
       console.error("loadSavedState failed:", e);
+      status = `Session restore error: ${e}`;
+    } finally {
       skipSave = false;
-      return null;
     }
   }
 
@@ -117,7 +124,7 @@ export function createVault() {
     if (existing) return;
     try {
       const content = await invoke<string>("read_file", { path, vaultPath });
-      const name = path.split("/").pop() || path;
+      const name = fileName(path);
       tabs = [...tabs, { path, name, content, dirty: false }];
     } catch (e) {
       console.error("openFileSilent failed:", path, e);
@@ -161,7 +168,7 @@ export function createVault() {
     }
     try {
       const content = await invoke<string>("read_file", { path, vaultPath });
-      const name = path.split("/").pop() || path;
+      const name = fileName(path);
       tabs = [...tabs, { path, name, content, dirty: false }];
       activeTabPath = path;
       await compilePreview();
@@ -210,6 +217,52 @@ export function createVault() {
   function switchTab(path: string) {
     activeTabPath = path;
     compilePreview();
+  }
+
+  async function renamePath(oldPath: string, newPath: string) {
+    const affectedTabs = tabs.filter((tab) =>
+      isSameOrDescendant(tab.path, oldPath)
+    );
+    for (const tab of affectedTabs) {
+      if (tab.dirty) await saveFile(tab.path);
+    }
+
+    await invoke("rename_path", { oldPath, newPath, vaultPath });
+
+    tabs = tabs.map((tab) => {
+      if (!isSameOrDescendant(tab.path, oldPath)) return tab;
+      const path = `${newPath}${tab.path.slice(oldPath.length)}`;
+      return { ...tab, path, name: fileName(path) };
+    });
+    if (isSameOrDescendant(activeTabPath, oldPath)) {
+      activeTabPath = `${newPath}${activeTabPath.slice(oldPath.length)}`;
+    }
+
+    await refreshFiles();
+    await refreshBacklinkIndex();
+    await compilePreview();
+    status = "Renamed";
+  }
+
+  async function deletePath(path: string) {
+    const activeIndex = tabs.findIndex((tab) => tab.path === activeTabPath);
+    await invoke("delete_path", { path, vaultPath });
+
+    tabs = tabs.filter((tab) => !isSameOrDescendant(tab.path, path));
+    if (isSameOrDescendant(activeTabPath, path)) {
+      const nextIndex = Math.min(Math.max(0, activeIndex - 1), tabs.length - 1);
+      activeTabPath = tabs[nextIndex]?.path ?? "";
+    }
+    if (!activeTabPath) {
+      svg = "";
+      diagnostics = [];
+    } else {
+      await compilePreview();
+    }
+
+    await refreshFiles();
+    await refreshBacklinkIndex();
+    status = "Deleted";
   }
 
   async function saveFile(path: string) {
@@ -325,6 +378,8 @@ export function createVault() {
     openByStem,
     closeTab,
     switchTab,
+    renamePath,
+    deletePath,
     saveFile,
     onSourceChange,
     compilePreview,

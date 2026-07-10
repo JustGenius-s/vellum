@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slide } from "svelte/transition";
   import { X, CircleAlert, TriangleAlert } from "lucide-svelte";
   import { getVault, getUI } from "$lib/stores.svelte";
 
@@ -17,17 +18,20 @@
 </script>
 
 {#if vault.diagnostics.length > 0 && !ui.diagnosticsDismissed}
-  <div class="border-t border-base-300 bg-base-200 flex flex-col shrink-0 max-h-40">
+  <div
+    class="border-t border-base-300 bg-base-200 flex flex-col shrink-0 max-h-40"
+    transition:slide={{ duration: 180 }}
+  >
     <div class="flex items-center gap-2 px-3 py-1.5 border-b border-base-300 shrink-0">
-      <CircleAlert size={14} class="text-error shrink-0" />
+      <CircleAlert class="ui-icon ui-icon--sm text-error" />
       <span class="text-xs font-medium flex-1">
         Problems
-        <span class="text-base-content/50 font-normal ml-1">
+        <span class="badge badge-sm badge-ghost ml-1 font-normal">
           {vault.diagnostics.length}
         </span>
       </span>
-      <button class="btn btn-ghost btn-xs btn-square" onclick={close} title="Close">
-        <X size={14} />
+      <button class="btn btn-ghost btn-xs btn-square" onclick={close} aria-label="Close problems">
+        <X class="ui-icon ui-icon--sm" />
       </button>
     </div>
     <div class="overflow-y-auto flex-1">
@@ -37,9 +41,9 @@
           onclick={() => onSelect(diag.line)}
         >
           {#if diag.severity === "error"}
-            <CircleAlert size={12} class="text-error shrink-0 mt-0.5" />
+            <CircleAlert class="ui-icon ui-icon--sm mt-0.5 text-error" />
           {:else}
-            <TriangleAlert size={12} class="text-warning shrink-0 mt-0.5" />
+            <TriangleAlert class="ui-icon ui-icon--sm mt-0.5 text-warning" />
           {/if}
           <span class="flex-1 min-w-0">
             <span class="wrap-break-word">{diag.message}</span>

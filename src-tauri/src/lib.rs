@@ -8,9 +8,8 @@ use typst::diag::{Severity, SourceDiagnostic};
 use typst::{World, WorldExt};
 use walkdir::WalkDir;
 
-static WIKILINK_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
-    Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap()
-});
+static WIKILINK_RE: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap());
 
 fn expand_wikilinks(source: &str) -> String {
     WIKILINK_RE
@@ -42,10 +41,7 @@ struct CompileSvgResult {
     diagnostics: Vec<CompileDiagnostic>,
 }
 
-fn format_diagnostic(
-    world: &world::TypstWorld,
-    diag: &SourceDiagnostic,
-) -> CompileDiagnostic {
+fn format_diagnostic(world: &world::TypstWorld, diag: &SourceDiagnostic) -> CompileDiagnostic {
     let severity = match diag.severity {
         Severity::Error => "error",
         Severity::Warning => "warning",
@@ -68,11 +64,7 @@ fn format_diagnostic(
         }
     }
 
-    let hints = diag
-        .hints
-        .iter()
-        .map(|h| h.v.to_string())
-        .collect();
+    let hints = diag.hints.iter().map(|h| h.v.to_string()).collect();
 
     CompileDiagnostic {
         severity,
@@ -85,7 +77,11 @@ fn format_diagnostic(
 }
 
 #[tauri::command]
-fn compile_typst_pdf(source: String, vault_path: String, main_file: String) -> Result<Vec<u8>, String> {
+fn compile_typst_pdf(
+    source: String,
+    vault_path: String,
+    main_file: String,
+) -> Result<Vec<u8>, String> {
     let expanded = expand_wikilinks(&source);
     let world = world::TypstWorld::new(expanded, vault_path, main_file);
     let warned = typst::compile::<typst_layout::PagedDocument>(&world);
@@ -203,32 +199,59 @@ fn ensure_within_vault(path: &str, vault_path: &str) -> Result<std::path::PathBu
     Ok(canonical)
 }
 
+fn ensure_new_path_within_vault(
+    path: &str,
+    vault_path: &str,
+) -> Result<std::path::PathBuf, String> {
+    let vault = std::path::Path::new(vault_path)
+        .canonicalize()
+        .map_err(|e| format!("Invalid vault path: {e}"))?;
+    let requested = if std::path::Path::new(path).is_absolute() {
+        std::path::Path::new(path).to_path_buf()
+    } else {
+        vault.join(path)
+    };
+    let file_name = requested
+        .file_name()
+        .ok_or_else(|| "Path must have a file name".to_string())?;
+    let parent = requested
+        .parent()
+        .ok_or_else(|| "Path must have a parent directory".to_string())?
+        .canonicalize()
+        .map_err(|e| format!("Invalid parent directory: {e}"))?;
+    if !parent.starts_with(&vault) {
+        return Err("Path is outside the vault".into());
+    }
+    Ok(parent.join(file_name))
+}
+
 #[tauri::command]
 fn create_file(path: String, vault_path: String, is_dir: bool) -> Result<(), String> {
-    let resolved = ensure_within_vault(&path, &vault_path)?;
+    let resolved = ensure_new_path_within_vault(&path, &vault_path)?;
+    if resolved.exists() {
+        return Err("A file or folder with that name already exists".into());
+    }
     if is_dir {
-        std::fs::create_dir_all(&resolved).map_err(|e| e.to_string())
+        std::fs::create_dir(&resolved).map_err(|e| e.to_string())
     } else {
         if !path.ends_with(".typ") {
             return Err("Only .typ files allowed".into());
         }
-        std::fs::write(&resolved, "").map_err(|e| e.to_string())
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&resolved)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 
 #[tauri::command]
 fn rename_path(old_path: String, new_path: String, vault_path: String) -> Result<(), String> {
     let old_resolved = ensure_within_vault(&old_path, &vault_path)?;
-    let vault = std::path::Path::new(&vault_path)
-        .canonicalize()
-        .map_err(|e| e.to_string())?;
-    let new_resolved = if std::path::Path::new(&new_path).is_absolute() {
-        std::path::Path::new(&new_path).to_path_buf()
-    } else {
-        vault.join(&new_path)
-    };
-    if !new_resolved.starts_with(&vault) {
-        return Err("Destination path is outside the vault".into());
+    let new_resolved = ensure_new_path_within_vault(&new_path, &vault_path)?;
+    if new_resolved.exists() {
+        return Err("A file or folder with that name already exists".into());
     }
     std::fs::rename(&old_resolved, &new_resolved).map_err(|e| e.to_string())
 }
@@ -306,11 +329,14 @@ struct BacklinkIndex {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 struct SavedState {
+    #[serde(alias = "vault_path")]
     vault_path: Option<String>,
+    #[serde(alias = "open_tabs")]
     open_tabs: Vec<String>,
+    #[serde(alias = "active_tab_path")]
     active_tab_path: Option<String>,
-    theme: Option<String>,
 }
 
 #[tauri::command]
@@ -354,4 +380,82 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_directory() -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be valid")
+            .as_nanos();
+        std::env::temp_dir().join(format!("vellum-test-{}-{unique}", std::process::id()))
+    }
+
+    #[test]
+    fn saved_state_uses_camel_case_keys() {
+        let state = SavedState {
+            vault_path: Some("/notes".into()),
+            open_tabs: vec!["/notes/main.typ".into()],
+            active_tab_path: Some("/notes/main.typ".into()),
+        };
+
+        let value = serde_json::to_value(state).expect("state should serialize");
+
+        assert_eq!(value["vaultPath"], "/notes");
+        assert_eq!(value["openTabs"][0], "/notes/main.typ");
+        assert_eq!(value["activeTabPath"], "/notes/main.typ");
+        assert!(value.get("vault_path").is_none());
+    }
+
+    #[test]
+    fn saved_state_accepts_legacy_snake_case_keys() {
+        let legacy = serde_json::json!({
+            "vault_path": "/notes",
+            "open_tabs": ["/notes/main.typ"],
+            "active_tab_path": "/notes/main.typ"
+        });
+
+        let state: SavedState =
+            serde_json::from_value(legacy).expect("legacy state should deserialize");
+
+        assert_eq!(state.vault_path.as_deref(), Some("/notes"));
+        assert_eq!(state.open_tabs, ["/notes/main.typ"]);
+        assert_eq!(state.active_tab_path.as_deref(), Some("/notes/main.typ"));
+    }
+
+    #[test]
+    fn new_paths_must_stay_inside_the_vault() {
+        let root = test_directory();
+        let vault = root.join("vault");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&vault).expect("vault should be created");
+        std::fs::create_dir_all(&outside).expect("outside directory should be created");
+
+        let inside = vault.join("note.typ");
+        let resolved = ensure_new_path_within_vault(
+            inside.to_string_lossy().as_ref(),
+            vault.to_string_lossy().as_ref(),
+        )
+        .expect("inside path should be accepted");
+        assert_eq!(
+            resolved,
+            vault
+                .canonicalize()
+                .expect("vault should canonicalize")
+                .join("note.typ")
+        );
+
+        let escaped = outside.join("note.typ");
+        assert!(ensure_new_path_within_vault(
+            escaped.to_string_lossy().as_ref(),
+            vault.to_string_lossy().as_ref(),
+        )
+        .is_err());
+
+        std::fs::remove_dir_all(root).expect("test directory should be removed");
+    }
 }

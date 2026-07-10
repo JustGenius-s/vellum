@@ -6,6 +6,7 @@ import { createKeybindingManager } from "$lib/commands/keybinding";
 
 export type { TreeNode };
 export type View = "editor" | "settings" | "graph";
+export type SidebarView = "files" | "outline";
 export type Vault = ReturnType<typeof createVault>;
 export type Theme = ReturnType<typeof createTheme>;
 export type Registry = ReturnType<typeof createCommandRegistry>;
@@ -14,6 +15,10 @@ export type UIState = {
   currentView: View;
   paletteOpen: boolean;
   findPanelOpen: boolean;
+  /** Whether the desktop explorer panel is hidden. */
+  sidebarCollapsed: boolean;
+  /** Active content in the primary sidebar. */
+  sidebarView: SidebarView;
   /** When set, editor scrolls to this 1-based line then clears. */
   gotoLine: number | null;
   /** User dismissed the diagnostics panel until next compile error. */

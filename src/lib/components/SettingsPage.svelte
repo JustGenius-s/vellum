@@ -9,7 +9,7 @@
 <div class="flex flex-col h-full overflow-hidden">
   <div class="flex items-center gap-3 border-b border-base-300 bg-base-200/50 px-4 py-2 shrink-0">
     <button class="btn btn-ghost btn-sm btn-square" onclick={() => (ui.currentView = "editor")} title="Back">
-      <ArrowLeft size={18} />
+      <ArrowLeft class="ui-icon ui-icon--lg" />
     </button>
     <h1 class="text-lg font-semibold">Settings</h1>
   </div>

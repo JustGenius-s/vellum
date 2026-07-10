@@ -1,6 +1,18 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { FolderOpen, FileText, ChevronRight, ChevronDown, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-svelte";
+  import { scale, slide } from "svelte/transition";
+  import {
+    ChevronDown,
+    ChevronRight,
+    CircleAlert,
+    FilePlus,
+    FileText,
+    FolderOpen,
+    FolderPlus,
+    Pencil,
+    Trash2,
+    X,
+  } from "lucide-svelte";
   import { getVault, type TreeNode } from "$lib/stores.svelte";
 
   const vault = getVault();
@@ -11,6 +23,30 @@
   let renameValue = $state("");
   let creating = $state<{ parent: string; isDir: boolean } | null>(null);
   let createValue = $state("");
+  let operationError = $state("");
+
+  let vaultName = $derived(
+    vault.vaultPath.split(/[/\\]/).filter(Boolean).at(-1) || "No vault",
+  );
+
+  function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  function parentPath(path: string) {
+    const separatorIndex = Math.max(
+      path.lastIndexOf("/"),
+      path.lastIndexOf("\\"),
+    );
+    return separatorIndex < 0 ? "" : path.slice(0, separatorIndex);
+  }
+
+  function joinPath(parent: string, name: string) {
+    const separator = parent.includes("\\") ? "\\" : "/";
+    return parent.endsWith(separator)
+      ? `${parent}${name}`
+      : `${parent}${separator}${name}`;
+  }
 
   function toggle(path: string) {
     if (expanded.has(path)) expanded.delete(path);
@@ -29,6 +65,7 @@
   }
 
   function startRename(node: TreeNode) {
+    operationError = "";
     renaming = node.path;
     renameValue = node.name;
     contextMenu = null;
@@ -40,14 +77,12 @@
       return;
     }
     const oldPath = renaming;
-    const parent = oldPath.split("/").slice(0, -1).join("/");
-    const newPath = parent + "/" + renameValue.trim();
+    const newPath = joinPath(parentPath(oldPath), renameValue.trim());
     if (oldPath !== newPath) {
       try {
-        await invoke("rename_path", { oldPath, newPath, vaultPath: vault.vaultPath });
-        vault.refreshFiles();
+        await vault.renamePath(oldPath, newPath);
       } catch (e) {
-        console.error(e);
+        operationError = errorMessage(e);
       }
     }
     renaming = null;
@@ -57,14 +92,14 @@
     contextMenu = null;
     if (!confirm(`Delete "${node.name}"?`)) return;
     try {
-      await invoke("delete_path", { path: node.path, vaultPath: vault.vaultPath });
-      vault.refreshFiles();
+      await vault.deletePath(node.path);
     } catch (e) {
-      console.error(e);
+      operationError = errorMessage(e);
     }
   }
 
   function startCreate(parent: string, isDir: boolean) {
+    operationError = "";
     creating = { parent, isDir };
     createValue = "";
     contextMenu = null;
@@ -80,14 +115,17 @@
       return;
     }
     const name = createValue.trim();
-    const fullPath = creating.isDir
-      ? creating.parent + "/" + name
-      : creating.parent + "/" + (name.endsWith(".typ") ? name : name + ".typ");
+    const entryName =
+      creating.isDir || name.endsWith(".typ") ? name : `${name}.typ`;
+    const fullPath = joinPath(creating.parent, entryName);
     try {
       await invoke("create_file", { path: fullPath, vaultPath: vault.vaultPath, isDir: creating.isDir });
-      vault.refreshFiles();
+      await vault.refreshFiles();
+      if (!creating.isDir) {
+        await vault.openFile(fullPath);
+      }
     } catch (e) {
-      console.error(e);
+      operationError = errorMessage(e);
     }
     creating = null;
   }
@@ -95,115 +133,216 @@
 
 <svelte:window onclick={() => { if (contextMenu) closeContextMenu(); }} />
 
-<div class="flex flex-col h-full bg-base-200" role="tree" tabindex="0" oncontextmenu={(e) => onContextMenu(e, null)}>
-  <div class="p-2 border-b border-base-300">
-    <button class="btn btn-outline btn-sm w-full" onclick={() => vault.openVault()}>
-      <FolderOpen size={16} />
-      Open Vault
+<div
+  class="flex h-full flex-col bg-base-200/35"
+  role="tree"
+  tabindex="0"
+  aria-label="Vault files"
+  oncontextmenu={(e) => onContextMenu(e, null)}
+>
+  <div class="ui-panel-header gap-1 px-2">
+    <button
+      class="btn btn-ghost h-8 min-h-8 min-w-0 flex-1 justify-start gap-2 px-2 text-xs"
+      onclick={() => vault.openVault()}
+      title={vault.vaultPath || "Open vault"}
+    >
+      <FolderOpen class="ui-icon text-primary" />
+      <span class="truncate text-xs font-medium">{vaultName}</span>
     </button>
+    {#if vault.vaultPath}
+      <button
+        class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive"
+        onclick={() => startCreate(vault.vaultPath, false)}
+        aria-label="New file"
+        title="New file"
+      >
+        <FilePlus class="ui-icon ui-icon--sm" />
+      </button>
+      <button
+        class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive"
+        onclick={() => startCreate(vault.vaultPath, true)}
+        aria-label="New folder"
+        title="New folder"
+      >
+        <FolderPlus class="ui-icon ui-icon--sm" />
+      </button>
+    {/if}
   </div>
 
-  <div class="flex-1 overflow-y-auto p-1">
-    {#each vault.files as node}
-      {@render renderNode(node, 0)}
-    {/each}
+  {#if operationError}
+    <div
+      class="alert alert-error alert-soft m-2 grid grid-cols-[auto_1fr_auto] items-start gap-2 p-2 text-[11px] leading-4"
+      transition:slide={{ duration: 160 }}
+    >
+      <CircleAlert class="ui-icon ui-icon--sm mt-px" />
+      <span class="min-w-0 flex-1 wrap-break-word">{operationError}</span>
+      <button
+        class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive shrink-0"
+        onclick={() => (operationError = "")}
+        aria-label="Dismiss error"
+      >
+        <X class="ui-icon ui-icon--sm" />
+      </button>
+    </div>
+  {/if}
+
+  <div class="min-h-0 flex-1 overflow-y-auto p-1.5">
+    {#if !vault.vaultPath}
+      <div class="px-3 py-8 text-center">
+        <p class="text-xs font-medium text-base-content/65">Open a vault</p>
+        <p class="mt-1 text-[11px] leading-4 text-base-content/40">
+          Choose a folder containing your Typst documents.
+        </p>
+        <button class="btn btn-primary btn-sm mt-3" onclick={() => vault.openVault()}>
+          Choose folder
+        </button>
+      </div>
+    {:else}
+      {#if creating?.parent === vault.vaultPath}
+        <div class="flex items-center gap-1.5 px-2 py-1">
+          {#if creating.isDir}
+            <FolderPlus class="ui-icon ui-icon--sm text-base-content/45" />
+          {:else}
+            <FilePlus class="ui-icon ui-icon--sm text-base-content/45" />
+          {/if}
+          <input
+            type="text"
+            bind:value={createValue}
+            class="input input-bordered input-xs min-w-0 flex-1"
+            placeholder={creating.isDir ? "folder name" : "note.typ"}
+            aria-label={creating.isDir ? "Folder name" : "File name"}
+            onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
+            onchange={confirmCreate}
+          />
+        </div>
+      {/if}
+      {#each vault.files as node}
+        {@render renderNode(node, 0)}
+      {:else}
+        <div class="px-3 py-8 text-center text-[11px] leading-4 text-base-content/40">
+          This vault is empty. Create a file to begin.
+        </div>
+      {/each}
+    {/if}
   </div>
 </div>
 
 {#snippet renderNode(node: TreeNode, depth: number)}
   <div style="padding-left: {depth * 12}px">
-    {#if node.is_dir}
-      <button
-        class="flex w-full items-center gap-1 rounded px-2 py-1 text-sm text-left hover:bg-base-300 transition-colors"
-        onclick={() => toggle(node.path)}
-        oncontextmenu={(e) => onContextMenu(e, node)}
-      >
-        {#if expanded.has(node.path)}
-          <ChevronDown size={14} class="shrink-0 text-base-content/50" />
+    {#if renaming === node.path}
+      <div class="flex items-center gap-1.5 px-2 py-0.5">
+        {#if node.is_dir}
+          <FolderOpen class="ui-icon ui-icon--sm text-base-content/45" />
         {:else}
-          <ChevronRight size={14} class="shrink-0 text-base-content/50" />
+          <FileText class="ui-icon ui-icon--sm text-base-content/45" />
         {/if}
-        <FolderOpen size={14} class="shrink-0 text-base-content/50" />
-        <span class="truncate font-medium">{node.name}</span>
-      </button>
-      {#if expanded.has(node.path)}
-        {#if creating?.parent === node.path}
-          <div class="flex items-center gap-1 px-2 py-0.5" style="padding-left: {(depth + 1) * 12}px">
-            {#if creating.isDir}
-              <FolderPlus size={12} class="text-base-content/50" />
-            {:else}
-              <FilePlus size={12} class="text-base-content/50" />
-            {/if}
-            <input
-              type="text"
-              bind:value={createValue}
-              class="input input-bordered input-xs flex-1"
-              placeholder={creating.isDir ? "folder name" : "note.typ"}
-              onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
-              onchange={confirmCreate}
-            />
-          </div>
-        {/if}
-        {#each node.children as child}
-          {@render renderNode(child, depth + 1)}
-        {/each}
-      {/if}
-    {:else if renaming === node.path}
-      <div class="flex items-center gap-1 px-2 py-0.5">
-        <FileText size={14} class="text-base-content/50 shrink-0" />
         <input
           type="text"
           bind:value={renameValue}
-          class="input input-bordered input-xs flex-1"
+          class="input input-bordered input-xs min-w-0 flex-1"
+          aria-label="New name"
           onkeydown={(e) => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') renaming = null; }}
           onchange={confirmRename}
         />
       </div>
+    {:else if node.is_dir}
+      <button
+        class="btn btn-ghost ui-interactive ui-touch-target h-auto min-h-7 w-full justify-start gap-1.5 px-2 py-1.5 text-xs font-medium"
+        onclick={() => toggle(node.path)}
+        oncontextmenu={(e) => onContextMenu(e, node)}
+        aria-expanded={expanded.has(node.path)}
+      >
+        {#if expanded.has(node.path)}
+          <ChevronDown class="ui-icon ui-icon--sm text-base-content/50" />
+        {:else}
+          <ChevronRight class="ui-icon ui-icon--sm text-base-content/50" />
+        {/if}
+        <FolderOpen class="ui-icon ui-icon--sm text-base-content/50" />
+        <span class="truncate">{node.name}</span>
+      </button>
+      {#if expanded.has(node.path)}
+        <div transition:slide={{ duration: 150 }}>
+          {#if creating?.parent === node.path}
+            <div class="flex items-center gap-1 px-2 py-0.5" style="padding-left: {(depth + 1) * 12}px">
+              {#if creating.isDir}
+                <FolderPlus class="ui-icon ui-icon--sm text-base-content/50" />
+              {:else}
+                <FilePlus class="ui-icon ui-icon--sm text-base-content/50" />
+              {/if}
+              <input
+                type="text"
+                bind:value={createValue}
+                class="input input-bordered input-xs flex-1"
+                placeholder={creating.isDir ? "folder name" : "note.typ"}
+                onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
+                onchange={confirmCreate}
+              />
+            </div>
+          {/if}
+          {#each node.children as child}
+            {@render renderNode(child, depth + 1)}
+          {/each}
+        </div>
+      {/if}
     {:else}
       <button
-        class="flex w-full items-center gap-1 rounded px-2 py-1 text-sm text-left hover:bg-base-300 transition-colors"
+        class="btn btn-ghost ui-interactive ui-touch-target h-auto min-h-7 w-full justify-start gap-1.5 px-2 py-1.5 text-xs {node.path === vault.activeTabPath ? 'btn-active text-primary' : ''}"
         onclick={() => vault.openFile(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
+        aria-current={node.path === vault.activeTabPath ? "page" : undefined}
       >
         <span class="w-3.5 shrink-0"></span>
-        <FileText size={14} class="shrink-0 text-base-content/50" />
+        <FileText class="ui-icon ui-icon--sm text-base-content/50" />
         <span class="truncate">{node.name}</span>
       </button>
     {/if}
   </div>
 {/snippet}
 
-<!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
 {#if contextMenu}
-  <div
-    class="fixed z-50 min-w-40 rounded-lg border border-base-300 bg-base-100 shadow-lg py-1"
-    style="left: {contextMenu.x}px; top: {contextMenu.y}px"
-    onclick={(e) => e.stopPropagation()}
+  <ul
+    class="menu menu-sm fixed z-50 min-w-40 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-xl"
+    style="left: min({contextMenu.x}px, calc(100vw - 11rem)); top: min({contextMenu.y}px, calc(100vh - 12rem))"
+    role="menu"
+    tabindex="-1"
     oncontextmenu={(e) => e.preventDefault()}
+    transition:scale={{ duration: 120, start: 0.96 }}
   >
     {#if contextMenu.node?.is_dir}
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(contextMenu!.node!.path, false)}>
-        <FilePlus size={14} /> New File
-      </button>
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(contextMenu!.node!.path, true)}>
-        <FolderPlus size={14} /> New Folder
-      </button>
-      <div class="divider my-0 h-px bg-base-300"></div>
+      <li>
+        <button role="menuitem" onclick={() => startCreate(contextMenu!.node!.path, false)}>
+          <FilePlus class="ui-icon ui-icon--sm" /> New File
+        </button>
+      </li>
+      <li>
+        <button role="menuitem" onclick={() => startCreate(contextMenu!.node!.path, true)}>
+          <FolderPlus class="ui-icon ui-icon--sm" /> New Folder
+        </button>
+      </li>
+      <li class="my-1 h-px bg-base-300"></li>
     {/if}
     {#if contextMenu.node}
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startRename(contextMenu!.node!)}>
-        <Pencil size={14} /> Rename
-      </button>
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200 text-error" onclick={() => confirmDelete(contextMenu!.node!)}>
-        <Trash2 size={14} /> Delete
-      </button>
+      <li>
+        <button role="menuitem" onclick={() => startRename(contextMenu!.node!)}>
+          <Pencil class="ui-icon ui-icon--sm" /> Rename
+        </button>
+      </li>
+      <li>
+        <button class="text-error" role="menuitem" onclick={() => confirmDelete(contextMenu!.node!)}>
+          <Trash2 class="ui-icon ui-icon--sm" /> Delete
+        </button>
+      </li>
     {:else}
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vault.vaultPath, false)}>
-        <FilePlus size={14} /> New File
-      </button>
-      <button class="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200" onclick={() => startCreate(vault.vaultPath, true)}>
-        <FolderPlus size={14} /> New Folder
-      </button>
+      <li>
+        <button role="menuitem" onclick={() => startCreate(vault.vaultPath, false)}>
+          <FilePlus class="ui-icon ui-icon--sm" /> New File
+        </button>
+      </li>
+      <li>
+        <button role="menuitem" onclick={() => startCreate(vault.vaultPath, true)}>
+          <FolderPlus class="ui-icon ui-icon--sm" /> New Folder
+        </button>
+      </li>
     {/if}
-  </div>
+  </ul>
 {/if}

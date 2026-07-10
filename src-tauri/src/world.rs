@@ -26,7 +26,7 @@ impl TypstWorld {
             .strip_prefix(&vault_path)
             .unwrap_or(&main_file)
             .trim_start_matches('/');
-        let main_vpath = VirtualPath::new(&format!("/{}", rel))
+        let main_vpath = VirtualPath::new(format!("/{}", rel))
             .unwrap_or_else(|_| VirtualPath::new("/main.typ").unwrap());
         let id = FileId::new(RootedPath::new(VirtualRoot::Project, main_vpath.clone()));
         let source = Source::new(id, source);
@@ -54,7 +54,9 @@ impl TypstWorld {
             .map_err(|_| typst::diag::FileError::NotFound(resolved.clone()))?;
         let vault_canonical = std::path::Path::new(&self.vault_path)
             .canonicalize()
-            .map_err(|_| typst::diag::FileError::NotFound(std::path::PathBuf::from(&self.vault_path)))?;
+            .map_err(|_| {
+                typst::diag::FileError::NotFound(std::path::PathBuf::from(&self.vault_path))
+            })?;
         if !canonical.starts_with(&vault_canonical) {
             return Err(typst::diag::FileError::NotFound(resolved));
         }
@@ -77,8 +79,8 @@ impl World for TypstWorld {
             return Ok(self.source.clone());
         }
         let path = self.resolve_to_disk(id)?;
-        let content = std::fs::read_to_string(&path)
-            .map_err(|_| typst::diag::FileError::NotFound(path))?;
+        let content =
+            std::fs::read_to_string(&path).map_err(|_| typst::diag::FileError::NotFound(path))?;
         Ok(Source::new(id, content))
     }
     fn file(&self, id: FileId) -> Result<Bytes, typst::diag::FileError> {

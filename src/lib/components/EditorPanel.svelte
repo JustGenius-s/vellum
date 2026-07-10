@@ -1,6 +1,5 @@
 <script lang="ts">
   import CodeMirror from "$lib/components/CodeMirror.svelte";
-  import OutlinePanel from "$lib/components/OutlinePanel.svelte";
   import DiagnosticsPanel from "$lib/components/DiagnosticsPanel.svelte";
   import { X, ChevronUp, ChevronDown, Replace } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
@@ -127,8 +126,6 @@
 </script>
 
 <div class="flex flex-col h-full overflow-hidden">
-  <OutlinePanel />
-
   <div class="flex-1 overflow-hidden min-h-0">
     <CodeMirror source={vault.source} fileNames={vault.fileNames} onchange={(v) => vault.onSourceChange(v)} {onViewCreated} />
   </div>
@@ -153,18 +150,18 @@
       </div>
 
       <button class="btn btn-ghost btn-xs btn-square" onclick={prevMatch} title="Previous match" disabled={matchPositions.length === 0}>
-        <ChevronUp size={14} />
+        <ChevronUp class="ui-icon ui-icon--sm" />
       </button>
       <button class="btn btn-ghost btn-xs btn-square" onclick={nextMatch} title="Next match" disabled={matchPositions.length === 0}>
-        <ChevronDown size={14} />
+        <ChevronDown class="ui-icon ui-icon--sm" />
       </button>
 
       <button class="btn btn-ghost btn-xs btn-square {replaceOpen ? 'btn-active' : ''}" onclick={toggleReplace} title="Toggle replace">
-        <Replace size={14} />
+        <Replace class="ui-icon ui-icon--sm" />
       </button>
 
       <button class="btn btn-ghost btn-xs btn-square" onclick={closeFind} title="Close find">
-        <X size={14} />
+        <X class="ui-icon ui-icon--sm" />
       </button>
 
       {#if replaceOpen}
