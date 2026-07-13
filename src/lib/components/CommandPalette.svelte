@@ -3,6 +3,9 @@
   import type { Component } from "svelte";
   import { getVault, getRegistry, getKeybindings, getUI } from "$lib/stores.svelte";
   import type { VaultFileEntry } from "$lib/vault.svelte";
+  import Dialog from "$lib/components/ui/Dialog.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import { staggerChildren } from "$lib/motion/actions";
 
   const vault = getVault();
   const registry = getRegistry();
@@ -184,110 +187,381 @@
       ui.paletteOpen = false;
     }
   }
+
+  function switchMode(nextMode: "files" | "commands" | "line") {
+    const value = searchText;
+    query = nextMode === "commands" ? `>${value}` : nextMode === "line" ? `:${value}` : value;
+    setTimeout(() => inputEl?.focus(), 0);
+  }
 </script>
 
-{#if ui.paletteOpen}
-  <div class="modal modal-open items-start pt-3 sm:pt-[12dvh]" role="dialog" aria-modal="true" aria-label="Quick open">
-    <div class="modal-box max-h-[min(34rem,calc(100dvh-1rem))] w-[min(35rem,calc(100vw-1rem))] max-w-none overflow-hidden border border-base-300 p-0">
-      <div class="flex h-12 items-center gap-3 border-b border-base-300 px-3">
-        {#if mode === "commands"}
-          <Command class="ui-icon text-base-content/40" />
-        {:else if mode === "line"}
-          <Hash class="ui-icon text-base-content/40" />
-        {:else}
-          <Search class="ui-icon text-base-content/40" />
-        {/if}
-        <input
-          bind:this={inputEl}
-          type="text"
-          {placeholder}
-          bind:value={query}
-          onkeydown={handleKeydown}
-          class="input input-ghost min-w-0 flex-1 border-0 px-0 text-sm focus:outline-none"
-        />
-        <span class="ui-caption shrink-0 font-semibold uppercase tracking-wider text-base-content/35">
-          {modeLabel}
-        </span>
-      </div>
+<Dialog
+  open={ui.paletteOpen}
+  label="Quick open"
+  onclose={() => (ui.paletteOpen = false)}
+>
+    <div class="command-island max-h-[min(40rem,calc(100dvh-1rem))] overflow-hidden">
+      <header class="island-header">
+        <div class="mb-3 flex items-center justify-between gap-4">
+          <span class="island-kicker">Command island</span>
+          <nav class="mode-track" aria-label="Palette mode">
+            <button
+              type="button"
+              class:active={mode === "files"}
+              onclick={() => switchMode("files")}
+              aria-pressed={mode === "files"}
+            >
+              <Search class="ui-icon ui-icon--sm" /> Files
+            </button>
+            <button
+              type="button"
+              class:active={mode === "commands"}
+              onclick={() => switchMode("commands")}
+              aria-pressed={mode === "commands"}
+            >
+              <Command class="ui-icon ui-icon--sm" /> Commands
+            </button>
+            <button
+              type="button"
+              class:active={mode === "line"}
+              onclick={() => switchMode("line")}
+              aria-pressed={mode === "line"}
+            >
+              <Hash class="ui-icon ui-icon--sm" /> Line
+            </button>
+          </nav>
+        </div>
+        <label class="command-input">
+          <span class="mode-glyph" aria-hidden="true">
+            {#if mode === "commands"}
+              <Command class="ui-icon ui-icon--lg" />
+            {:else if mode === "line"}
+              <Hash class="ui-icon ui-icon--lg" />
+            {:else}
+              <Search class="ui-icon ui-icon--lg" />
+            {/if}
+          </span>
+          <input
+            bind:this={inputEl}
+            type="text"
+            {placeholder}
+            bind:value={query}
+            onkeydown={handleKeydown}
+            class="min-w-0 flex-1 bg-transparent px-0 text-base outline-none"
+            aria-label={placeholder}
+            aria-controls="command-palette-results"
+            aria-activedescendant={items[safeIndex] ? `command-palette-item-${safeIndex}` : undefined}
+          />
+          <span class="mode-label">{modeLabel}</span>
+        </label>
+      </header>
 
       {#if items.length > 0}
         <div
-          class="max-h-[min(22rem,60dvh)] overflow-y-auto p-1.5"
+          use:staggerChildren
+          id="command-palette-results"
+          class="result-stack max-h-[min(26rem,60dvh)] overflow-y-auto px-2 py-3"
           role="listbox"
           aria-label={`${modeLabel} results`}
         >
           {#each items as item, idx}
             <button
+              data-motion-item
+              id={`command-palette-item-${idx}`}
               type="button"
-              class="ui-interactive flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left {idx === safeIndex ? 'bg-base-200 text-base-content' : 'text-base-content/70'}"
+              class="command-result ui-list-row ui-interactive gap-3"
+              style={`--item-index: ${idx}`}
               role="option"
               aria-selected={idx === safeIndex}
               onmouseenter={() => (selectedIndex = idx)}
               onclick={() => void selectItem(item)}
             >
               {#if item.type === "file"}
-                <FileText class="ui-icon text-base-content/45" />
+                <span class="result-icon"><FileText class="ui-icon" /></span>
                 <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-medium">{item.name}</span>
+                  <span class="block truncate text-sm font-semibold tracking-[-0.01em]">{item.name}</span>
                   {#if parentDirectory(item.relativePath)}
-                    <span class="ui-caption mt-0.5 block truncate text-base-content/40">
+                    <span class="ui-text-tertiary mt-1 block truncate text-xs">
                       {parentDirectory(item.relativePath)}
                     </span>
                   {/if}
                 </span>
               {:else if item.type === "command"}
                 {#if item.icon}
-                  <item.icon class="ui-icon text-base-content/45" />
+                  <span class="result-icon"><item.icon class="ui-icon" /></span>
                 {:else}
-                  <Command class="ui-icon text-base-content/45" />
+                  <span class="result-icon"><Command class="ui-icon" /></span>
                 {/if}
-                <span class="min-w-0 flex-1 truncate text-sm">{item.label}</span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium">{item.label}</span>
+                  <span class="ui-text-tertiary mt-1 block truncate text-xs">{item.id}</span>
+                </span>
                 {#if item.shortcut}
-                  <kbd class="kbd kbd-sm shrink-0 text-[10px]">{item.shortcut}</kbd>
+                  <kbd class="shortcut shrink-0">{item.shortcut}</kbd>
                 {/if}
               {:else}
-                <Hash class="ui-icon text-base-content/45" />
-                <span class="min-w-0 flex-1 truncate text-sm">
-                  Go to line {item.line}
+                <span class="result-icon"><Hash class="ui-icon" /></span>
+                <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                  Move cursor to line {item.line}
                 </span>
               {/if}
             </button>
           {/each}
         </div>
       {:else}
-        <div class="flex min-h-28 items-center justify-center px-8 text-center text-sm text-base-content/40">
-          {#if mode === "files" && !vault.vaultPath}
-            Open a vault to search files.
-          {:else if mode === "files" && !searchText}
-            Type to search all files in this vault.
-          {:else if mode === "line" && !vault.hasActiveFile}
-            Open a document before jumping to a line.
-          {:else if mode === "line"}
-            Enter a positive line number.
-          {:else}
-            No results.
-          {/if}
-        </div>
+        <EmptyState
+          title={mode === "commands" ? "No commands found" : "No results"}
+          description={mode === "files" && !vault.vaultPath
+            ? "Open a vault to search files."
+            : mode === "files" && !searchText
+              ? "Type to search all files in this vault."
+              : mode === "line" && !vault.hasActiveFile
+                ? "Open a document before jumping to a line."
+                : mode === "line"
+                  ? "Enter a positive line number."
+                  : "Try a different command name."}
+        />
       {/if}
 
-      <div class="flex h-8 items-center gap-3 border-t border-base-300 px-3 text-[11px] text-base-content/40">
+      <footer class="island-footer ui-text-tertiary">
         <span class="min-w-0 flex-1 truncate">
           {#if mode === "files"}
-            Type <kbd class="kbd kbd-xs">&gt;</kbd> for commands or
-            <kbd class="kbd kbd-xs">:</kbd> for a line
+            Prefix <kbd>&gt;</kbd> for commands or <kbd>:</kbd> for a line
           {:else}
-            <kbd class="kbd kbd-xs">Backspace</kbd> to return to files
+            Remove the prefix to return to files
           {/if}
         </span>
-        <span><CornerDownLeft class="ui-icon ui-icon--sm mr-1 inline" />select</span>
-        <span class="hidden sm:inline">↑↓ navigate</span>
-        <span class="hidden sm:inline">esc close</span>
-      </div>
+        <span class="footer-key"><CornerDownLeft class="ui-icon ui-icon--sm" /> select</span>
+        <span class="footer-key hidden sm:flex">↑↓ navigate</span>
+        <span class="footer-key hidden sm:flex">esc close</span>
+      </footer>
     </div>
-    <button
-      class="modal-backdrop bg-neutral/35 backdrop-blur-[2px]"
-      onclick={() => (ui.paletteOpen = false)}
-      aria-label="Close command palette"
-    ></button>
-  </div>
-{/if}
+</Dialog>
+
+<style>
+  .command-island {
+    border-radius: 1.5rem;
+    background:
+      radial-gradient(circle at 84% 0%, color-mix(in oklab, var(--color-primary) 7%, transparent), transparent 19rem),
+      color-mix(in oklab, var(--vellum-surface-overlay) 94%, transparent);
+    backdrop-filter: blur(22px) saturate(112%);
+    box-shadow:
+      var(--vellum-shadow-overlay),
+      inset 0 1px 0 color-mix(in oklab, white 5%, transparent);
+  }
+
+  .island-header {
+    padding: 1rem 1rem 0.75rem;
+  }
+
+  .island-kicker {
+    color: var(--color-primary);
+    font-size: 0.625rem;
+    font-weight: 750;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .mode-track {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .mode-track button {
+    display: flex;
+    min-height: 1.9rem;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding-inline: 0.55rem;
+    color: color-mix(in oklab, var(--color-base-content) 42%, transparent);
+    font-size: 0.625rem;
+    font-weight: 650;
+    transition:
+      transform var(--vellum-motion-fast) var(--vellum-ease-out),
+      opacity var(--vellum-motion-fast) var(--vellum-ease-out),
+      background-color var(--vellum-motion-fast) var(--vellum-ease-out);
+  }
+
+  .mode-track button:not(.active) {
+    opacity: 0.66;
+  }
+
+  .mode-track button:hover {
+    background: color-mix(in oklab, var(--color-base-content) 5%, transparent);
+    opacity: 1;
+  }
+
+  .mode-track button:active {
+    transform: scale(0.96);
+  }
+
+  .mode-track button.active {
+    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    color: var(--color-primary);
+    opacity: 1;
+    box-shadow: inset 0 1px 0 color-mix(in oklab, white 4%, transparent);
+  }
+
+  .command-input {
+    display: flex;
+    min-height: 4rem;
+    align-items: center;
+    gap: 0.875rem;
+    border-radius: 1rem;
+    background: color-mix(in oklab, var(--vellum-surface-canvas) 76%, transparent);
+    padding: 0.6rem 0.75rem;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 4%, transparent),
+      0 8px 24px color-mix(in oklab, var(--vellum-surface-app) 18%, transparent);
+    transition:
+      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
+      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
+  }
+
+  .command-input:focus-within {
+    background: color-mix(in oklab, var(--vellum-surface-canvas) 86%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 32%, transparent),
+      0 10px 28px color-mix(in oklab, var(--vellum-surface-app) 24%, transparent);
+  }
+
+  .mode-glyph {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    place-items: center;
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    color: var(--color-primary);
+  }
+
+  .mode-label {
+    flex: none;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-primary) 8%, transparent);
+    padding: 0.25rem 0.5rem;
+    color: var(--color-primary);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .result-stack {
+    scrollbar-gutter: stable;
+  }
+
+  .command-result {
+    min-height: 3.75rem;
+    margin-block: 0.2rem;
+    border-radius: 1rem;
+    padding: 0.6rem 0.75rem;
+    animation: result-enter 260ms var(--vellum-ease-out) both;
+    animation-delay: calc(var(--item-index) * 22ms);
+    transition:
+      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
+      transform var(--vellum-motion-fast) var(--vellum-ease-out),
+      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
+  }
+
+  .command-result:hover {
+    background: color-mix(in oklab, var(--color-base-content) 4%, transparent);
+    transform: translateX(2px);
+  }
+
+  .command-result[aria-selected="true"] {
+    background:
+      linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 12%, transparent), transparent 72%),
+      color-mix(in oklab, var(--color-base-content) 4%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in oklab, white 4%, transparent);
+  }
+
+  .result-icon {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    place-items: center;
+    border-radius: 0.7rem;
+    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
+    color: color-mix(in oklab, var(--color-base-content) 48%, transparent);
+  }
+
+  .command-result[aria-selected="true"] .result-icon {
+    background: color-mix(in oklab, var(--color-primary) 11%, transparent);
+    color: var(--color-primary);
+  }
+
+  .shortcut,
+  .island-footer kbd {
+    border-radius: 0.45rem;
+    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    padding: 0.2rem 0.4rem;
+    color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
+    font-family: var(--vellum-font-mono);
+    font-size: 0.625rem;
+  }
+
+  .island-footer {
+    display: flex;
+    min-height: 3rem;
+    align-items: center;
+    gap: 1rem;
+    background: color-mix(in oklab, var(--vellum-surface-canvas) 32%, transparent);
+    padding-inline: 1rem;
+    font-size: 0.6875rem;
+  }
+
+  .footer-key {
+    flex: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  @keyframes result-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .mode-track button {
+      width: 1.9rem;
+      justify-content: center;
+      overflow: hidden;
+      padding: 0;
+      color: transparent;
+      font-size: 0;
+    }
+
+    .mode-track button :global(svg) {
+      color: currentColor;
+    }
+
+    .mode-track button.active {
+      color: var(--color-primary);
+    }
+
+    .mode-label {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .command-result {
+      animation: none;
+      transition: none;
+    }
+
+    .command-result:hover {
+      transform: none;
+    }
+  }
+</style>

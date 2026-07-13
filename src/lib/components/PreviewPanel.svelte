@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { CircleAlert, FileText, LoaderCircle } from "lucide-svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import Spinner from "$lib/components/ui/Spinner.svelte";
   import { getVault, getUI } from "$lib/stores.svelte";
+  import { surfaceEnter } from "$lib/motion/actions";
 
   const vault = getVault();
   const ui = getUI();
@@ -29,41 +33,195 @@
   });
 </script>
 
-<div class="relative flex h-full flex-col overflow-hidden">
+<div class="preview-shell ui-surface-chrome relative flex h-full flex-col overflow-hidden">
   {#if vault.compilePhase !== "idle"}
     <div
-      class="absolute right-3 top-3 z-10 flex h-8 items-center gap-2 rounded-md border border-base-300 bg-base-100/95 px-3 text-xs shadow-sm"
+      use:surfaceEnter={{ y: -6, scale: 0.99 }}
+      class="compile-status ui-surface-overlay absolute right-4 top-4 z-10 flex h-8 items-center gap-2 rounded-full px-3 text-xs"
       role="status"
       aria-live="polite"
     >
-      <span class="loading loading-spinner loading-xs text-primary"></span>
+      <Spinner size="sm" label="Compiling" />
       {vault.compilePhase === "pending" ? "Updating preview" : "Compiling"}
     </div>
   {/if}
 
-  <div class="flex-1 overflow-auto" bind:this={scrollEl} onscroll={onScroll}>
-    <div class="flex flex-col items-center p-4 bg-base-100 min-h-full">
+  <div
+    class="min-h-0 flex-1 overflow-auto"
+    bind:this={scrollEl}
+    onscroll={onScroll}
+  >
+    <div class="preview-canvas relative flex min-h-full flex-col items-center p-5 sm:p-8">
       {#if vault.svg}
-        <div class="w-full max-w-2xl shadow-md rounded overflow-hidden bg-white preview-svg">
+        <div use:surfaceEnter={{ y: 8, scale: 0.998 }} class="ui-paper preview-svg relative w-full max-w-2xl overflow-hidden rounded-md">
           {@html vault.svg}
         </div>
       {:else if vault.compilePhase !== "idle"}
-        <div class="flex min-h-72 w-full max-w-2xl items-center justify-center rounded border border-base-300 bg-white">
-          <span class="loading loading-spinner loading-md text-primary"></span>
+        <div class="ui-paper preview-state w-full max-w-2xl rounded-md" aria-busy="true">
+          <EmptyState
+            title="Preparing preview"
+            description="Vellum is compiling the current document."
+          >
+            {#snippet icon()}
+              <LoaderCircle class="ui-icon ui-icon--lg animate-spin" />
+            {/snippet}
+          </EmptyState>
         </div>
       {:else if vault.diagnostics.some((d) => d.severity === "error")}
-        <p class="text-sm text-error/70 py-8">Preview unavailable — see problems below</p>
+        <div class="ui-paper preview-state w-full max-w-2xl rounded-md">
+          <EmptyState
+            title="Preview unavailable"
+            description="Resolve the compilation errors in Problems to render this document."
+          >
+            {#snippet icon()}
+              <CircleAlert class="ui-icon ui-icon--lg text-error" />
+            {/snippet}
+          </EmptyState>
+        </div>
       {:else}
-        <p class="text-sm text-base-content/40 py-8">No preview</p>
+        <div class="ui-paper preview-state w-full max-w-2xl rounded-md">
+          <EmptyState
+            title="Nothing to preview"
+            description="Open a Typst document to render its pages here."
+          >
+            {#snippet icon()}
+              <FileText class="ui-icon ui-icon--lg" />
+            {/snippet}
+          </EmptyState>
+        </div>
       {/if}
     </div>
   </div>
 </div>
 
 <style>
+  .preview-shell {
+    isolation: isolate;
+  }
+
+  .preview-canvas {
+    background:
+      radial-gradient(
+        circle at 50% 0%,
+        color-mix(in oklab, var(--color-primary) 3%, transparent),
+        transparent 32rem
+      ),
+      linear-gradient(
+        color-mix(in oklab, var(--vellum-surface-chrome) 52%, transparent),
+        transparent 11rem
+      ),
+      var(--vellum-surface-canvas);
+  }
+
+  .preview-canvas::before {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: min(28rem, 54%);
+    height: 8rem;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at top,
+      color-mix(in oklab, var(--color-primary) 5%, transparent),
+      transparent 68%
+    );
+    content: "";
+    transform: translateX(-50%);
+  }
+
+  .compile-status {
+    background: color-mix(in oklab, var(--vellum-surface-overlay) 86%, transparent);
+    backdrop-filter: blur(16px) saturate(110%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 5%, transparent),
+      0 8px 24px color-mix(in oklab, var(--vellum-surface-app) 20%, transparent);
+    animation: status-enter 180ms var(--vellum-ease-out) both;
+  }
+
+  .preview-state {
+    position: relative;
+    min-height: 18rem;
+    overflow: hidden;
+    background: color-mix(in oklab, var(--vellum-surface-paper) 96%, transparent);
+    box-shadow: var(--vellum-shadow-paper);
+  }
+
+  .preview-state[aria-busy="true"]::before {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 34%,
+      color-mix(in oklab, var(--color-primary) 5%, white 2%) 48%,
+      transparent 62%
+    );
+    content: "";
+    transform: translateX(-100%);
+    animation: preview-shimmer 1.8s var(--vellum-ease-out) infinite;
+  }
+
+  .preview-svg {
+    z-index: 1;
+    box-shadow: var(--vellum-shadow-paper);
+    transition:
+      transform var(--vellum-motion-normal) var(--vellum-ease-out),
+      box-shadow var(--vellum-motion-normal) var(--vellum-ease-out);
+  }
+
+  .preview-svg:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      var(--vellum-shadow-paper),
+      0 18px 42px color-mix(in oklab, var(--vellum-surface-app) 16%, transparent);
+  }
+
+  .preview-svg::before {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, white 3%, transparent),
+      transparent 22%
+    );
+    content: "";
+  }
+
   .preview-svg :global(svg) {
     width: 100%;
     height: auto;
     display: block;
+    background: var(--vellum-surface-paper);
+  }
+
+  @keyframes status-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+
+  @keyframes preview-shimmer {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .compile-status,
+    .preview-state[aria-busy="true"]::before {
+      animation: none;
+    }
+
+    .preview-svg {
+      transition: none;
+    }
+
+    .preview-svg:hover {
+      transform: none;
+    }
   }
 </style>

@@ -65,57 +65,184 @@
   function editorTheme(isDark: boolean, fontSize: number) {
     return EditorView.theme({
       "&": {
-        backgroundColor: "var(--color-base-100)",
+        backgroundColor: "var(--vellum-surface-canvas)",
         color: "var(--color-base-content)",
         fontSize: `${fontSize}px`,
         height: "100%",
       },
       ".cm-content": {
         caretColor: "var(--color-primary)",
+        lineHeight: "1.78",
+        paddingBlock: "clamp(1.5rem, 4vh, 3.5rem)",
+        paddingInline: "clamp(1.25rem, 4vw, 4rem)",
+      },
+      ".cm-line": {
+        maxWidth: "92ch",
+        paddingInline: "0.5rem",
       },
       ".cm-cursor, .cm-dropCursor": {
         borderLeftColor: "var(--color-primary)",
       },
+      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 24%, transparent)",
+      },
       ".cm-scroller": {
         overflow: "auto",
         fontFamily: "var(--vellum-font-mono)",
+        letterSpacing: "0.006em",
+        scrollbarColor:
+          "color-mix(in oklab, var(--color-primary) 30%, transparent) transparent",
       },
       ".cm-gutters": {
-        backgroundColor: "var(--color-base-100)",
-        border: "none",
-        color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)",
+        backgroundColor:
+          "color-mix(in oklab, var(--vellum-surface-canvas) 88%, transparent)",
+        borderRight: "1px solid var(--vellum-border-subtle)",
+        color:
+          "color-mix(in oklab, var(--color-base-content) 30%, transparent)",
+        paddingTop: "clamp(1.5rem, 4vh, 3.5rem)",
       },
-      ".cm-activeLine, .cm-activeLineGutter": {
-        backgroundColor: "color-mix(in oklab, var(--color-base-200) 75%, transparent)",
+      ".cm-lineNumbers .cm-gutterElement": {
+        minWidth: "3rem",
+        paddingInline: "0.75rem 0.625rem",
+        textAlign: "right",
+      },
+      ".cm-activeLine": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 4%, transparent)",
+        boxShadow:
+          "inset 2px 0 0 color-mix(in oklab, var(--color-primary) 38%, transparent)",
+      },
+      ".cm-activeLineGutter": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 7%, transparent)",
+        color: "var(--color-primary)",
       },
       ".cm-panels": {
-        backgroundColor: "var(--color-base-200)",
+        backgroundColor:
+          "color-mix(in oklab, var(--vellum-surface-overlay) 94%, transparent)",
         color: "var(--color-base-content)",
+        backdropFilter: "blur(24px) saturate(1.1)",
       },
       ".cm-panel.cm-search": {
-        borderBottom: "1px solid var(--color-base-300)",
-        padding: "8px",
+        alignItems: "center",
+        border: "1px solid var(--vellum-border-subtle)",
+        borderRadius: "0 0 0.875rem 0.875rem",
+        boxShadow:
+          "inset 0 1px 0 color-mix(in oklab, white 5%, transparent), var(--vellum-shadow-overlay)",
+        gap: "0.5rem",
+        marginInline: "clamp(0.75rem, 2vw, 1.5rem)",
+        padding: "0.625rem 0.75rem",
+      },
+      ".cm-panel.cm-search label": {
+        color:
+          "color-mix(in oklab, var(--color-base-content) 64%, transparent)",
+        fontFamily: "var(--vellum-font-ui)",
+        fontSize: "var(--vellum-text-ui)",
       },
       ".cm-textfield": {
-        backgroundColor: "var(--color-base-100)",
-        border: "1px solid var(--color-base-300)",
-        borderRadius: "var(--vellum-radius-control)",
+        backgroundColor:
+          "color-mix(in oklab, var(--vellum-surface-canvas) 88%, transparent)",
+        border: "1px solid var(--vellum-border-subtle)",
+        borderRadius: "0.625rem",
         color: "var(--color-base-content)",
+        fontFamily: "var(--vellum-font-ui)",
+        minHeight: "var(--vellum-control-compact)",
+        outline: "none",
+        paddingInline: "0.5rem",
+      },
+      ".cm-textfield:focus": {
+        borderColor:
+          "color-mix(in oklab, var(--color-primary) 70%, var(--vellum-border-subtle))",
+        boxShadow:
+          "0 0 0 2px color-mix(in oklab, var(--color-primary) 16%, transparent)",
       },
       ".cm-button": {
         backgroundImage: "none",
-        backgroundColor: "var(--color-base-100)",
-        border: "1px solid var(--color-base-300)",
-        borderRadius: "var(--vellum-radius-control)",
+        backgroundColor:
+          "color-mix(in oklab, var(--vellum-surface-canvas) 72%, transparent)",
+        border: "1px solid var(--vellum-border-subtle)",
+        borderRadius: "0.625rem",
         color: "var(--color-base-content)",
+        fontFamily: "var(--vellum-font-ui)",
+        minHeight: "var(--vellum-control-compact)",
+        paddingInline: "0.5rem",
+      },
+      ".cm-button:hover": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-base-300) 58%, transparent)",
+      },
+      ".cm-searchMatch": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 16%, transparent)",
+        outline:
+          "1px solid color-mix(in oklab, var(--color-primary) 38%, transparent)",
+        borderRadius: "0.2rem",
+      },
+      ".cm-searchMatch.cm-searchMatch-selected": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 28%, transparent)",
+        outline:
+          "1px solid color-mix(in oklab, var(--color-primary) 78%, transparent)",
       },
       ".cm-tooltip": {
-        backgroundColor: "var(--color-base-100)",
-        border: "1px solid var(--color-base-300)",
+        backgroundColor:
+          "color-mix(in oklab, var(--vellum-surface-overlay) 96%, transparent)",
+        border: "1px solid var(--vellum-border-subtle)",
+        borderRadius: "0.875rem",
+        boxShadow: "var(--vellum-shadow-overlay)",
+        color: "var(--color-base-content)",
+        backdropFilter: "blur(28px) saturate(1.12)",
+        overflow: "hidden",
       },
       ".cm-tooltip-autocomplete": {
         fontFamily: "var(--vellum-font-ui)",
-        borderRadius: "var(--vellum-radius-control)",
+      },
+      ".cm-tooltip-autocomplete ul li": {
+        minHeight: "var(--vellum-control-default)",
+        padding: "0.45rem 0.75rem",
+      },
+      ".cm-tooltip-autocomplete ul li[aria-selected]": {
+        backgroundColor:
+          "color-mix(in oklab, var(--color-primary) 14%, transparent)",
+        color: "var(--color-primary)",
+        boxShadow: "inset 2px 0 0 var(--color-primary)",
+      },
+      ".cm-completionDetail": {
+        color:
+          "color-mix(in oklab, var(--color-base-content) 48%, transparent)",
+      },
+      ".cm-tooltip-lint": {
+        fontFamily: "var(--vellum-font-ui)",
+        fontSize: "var(--vellum-text-ui)",
+        lineHeight: "var(--vellum-leading-normal)",
+        padding: "0.5rem 0.625rem",
+      },
+      ".cm-diagnostic": {
+        borderLeftWidth: "2px",
+        padding: "0.25rem 0.5rem",
+      },
+      ".cm-diagnostic-error": {
+        borderLeftColor: "var(--color-error)",
+      },
+      ".cm-diagnostic-warning": {
+        borderLeftColor: "var(--color-warning)",
+      },
+      ".cm-lintRange-error": {
+        backgroundImage:
+          "linear-gradient(135deg, transparent 46%, var(--color-error) 46%, var(--color-error) 54%, transparent 54%)",
+      },
+      ".cm-lintRange-warning": {
+        backgroundImage:
+          "linear-gradient(135deg, transparent 46%, var(--color-warning) 46%, var(--color-warning) 54%, transparent 54%)",
+      },
+      ".cm-lint-marker-error": {
+        content: '""',
+        backgroundColor: "var(--color-error)",
+      },
+      ".cm-lint-marker-warning": {
+        content: '""',
+        backgroundColor: "var(--color-warning)",
       },
     }, { dark: isDark });
   }

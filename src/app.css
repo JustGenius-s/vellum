@@ -1,59 +1,95 @@
 @import "tailwindcss";
-@plugin "daisyui" {
-  themes: light --default, dark --prefersdark;
+
+@theme {
+  --color-base-100: oklch(97.8% 0.008 245);
+  --color-base-200: oklch(94.8% 0.012 245);
+  --color-base-300: oklch(87.5% 0.02 245);
+  --color-base-content: oklch(21% 0.035 252);
+  --color-primary: oklch(55% 0.145 218);
+  --color-primary-content: oklch(98% 0.008 225);
+  --color-neutral: oklch(22% 0.03 252);
+  --color-neutral-content: oklch(96% 0.01 245);
+  --color-error: oklch(56% 0.2 25);
+  --color-warning: oklch(68% 0.15 72);
+  --color-success: oklch(52% 0.12 145);
+  --color-info: oklch(54% 0.1 230);
 }
 
 :root {
   --vellum-font-ui:
-    "SF Pro Text", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "SF Pro Display", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --vellum-font-mono:
     "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace,
     monospace;
   --vellum-text-caption: 0.6875rem;
-  --vellum-text-ui: 0.75rem;
-  --vellum-text-body: 0.8125rem;
-  --vellum-text-title: 0.875rem;
+  --vellum-text-ui: 0.8125rem;
+  --vellum-text-body: 0.875rem;
+  --vellum-text-title: 1rem;
   --vellum-leading-tight: 1.25;
   --vellum-leading-normal: 1.5;
   --vellum-icon-sm: 0.875rem;
   --vellum-icon-md: 1rem;
   --vellum-icon-lg: 1.125rem;
   --vellum-control-compact: 1.75rem;
-  --vellum-control-default: 2rem;
+  --vellum-control-default: 2.25rem;
   --vellum-control-touch: 2.75rem;
-  --vellum-panel-header: 2.5rem;
-  --vellum-statusbar-height: 1.5rem;
-  --vellum-radius-control: 0.375rem;
-  --vellum-motion-fast: 120ms;
-  --vellum-motion-normal: 180ms;
+  --vellum-chrome-height: 3.5rem;
+  --vellum-panel-header: 3rem;
+  --vellum-statusbar-height: 1.75rem;
+  --vellum-radius-control: 0.625rem;
+  --vellum-radius-panel: 1rem;
+  --vellum-indent-step: 0.75rem;
+  --vellum-space-panel: 0.75rem;
+  --vellum-motion-fast: 160ms;
+  --vellum-motion-normal: 280ms;
   --vellum-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 [data-theme="light"] {
-  --color-base-100: oklch(98.4% 0.004 255);
-  --color-base-200: oklch(95.8% 0.007 255);
-  --color-base-300: oklch(89.8% 0.012 255);
-  --color-base-content: oklch(24% 0.02 255);
-  --color-primary: oklch(55% 0.13 244);
-  --color-primary-content: oklch(98% 0.01 244);
-  --color-neutral: oklch(27% 0.02 255);
-  --color-neutral-content: oklch(97% 0.005 255);
+  --color-base-100: oklch(97.8% 0.008 245);
+  --color-base-200: oklch(94.8% 0.012 245);
+  --color-base-300: oklch(87.5% 0.02 245);
+  --color-base-content: oklch(21% 0.035 252);
+  --color-primary: oklch(55% 0.145 218);
+  --color-primary-content: oklch(98% 0.008 225);
+  --color-neutral: oklch(22% 0.03 252);
+  --color-neutral-content: oklch(96% 0.01 245);
   --color-error: oklch(56% 0.2 25);
   --color-warning: oklch(68% 0.15 72);
+  --color-success: oklch(52% 0.12 145);
+  --color-info: oklch(54% 0.1 230);
+  --vellum-surface-app: oklch(92.8% 0.02 245);
+  --vellum-surface-canvas: oklch(98.5% 0.006 245 / 0.86);
+  --vellum-surface-chrome: oklch(96.2% 0.012 245 / 0.76);
+  --vellum-surface-paper: oklch(99.5% 0.004 240);
+  --vellum-surface-overlay: oklch(98% 0.01 245 / 0.92);
+  --vellum-border-subtle: oklch(72% 0.025 245 / 0.3);
+  --vellum-shadow-overlay: 0 24px 64px -28px oklch(18% 0.05 248 / 0.42);
+  --vellum-shadow-paper: 0 22px 54px -30px oklch(18% 0.04 248 / 0.36);
 }
 
 [data-theme="dark"] {
-  --color-base-100: oklch(20.5% 0.014 255);
-  --color-base-200: oklch(23.5% 0.016 255);
-  --color-base-300: oklch(31% 0.018 255);
-  --color-base-content: oklch(91% 0.01 255);
-  --color-primary: oklch(69% 0.12 244);
-  --color-primary-content: oklch(18% 0.025 244);
-  --color-neutral: oklch(15% 0.012 255);
-  --color-neutral-content: oklch(93% 0.008 255);
+  --color-base-100: oklch(16.5% 0.025 252);
+  --color-base-200: oklch(20% 0.032 252);
+  --color-base-300: oklch(29% 0.042 250);
+  --color-base-content: oklch(92% 0.018 235);
+  --color-primary: oklch(72% 0.135 213);
+  --color-primary-content: oklch(14% 0.035 240);
+  --color-neutral: oklch(12.5% 0.022 252);
+  --color-neutral-content: oklch(93% 0.015 235);
   --color-error: oklch(68% 0.18 25);
   --color-warning: oklch(76% 0.13 72);
+  --color-success: oklch(68% 0.11 145);
+  --color-info: oklch(70% 0.09 230);
+  --vellum-surface-app: oklch(11.5% 0.028 252);
+  --vellum-surface-canvas: oklch(18% 0.03 252 / 0.88);
+  --vellum-surface-chrome: oklch(21% 0.036 252 / 0.78);
+  --vellum-surface-paper: oklch(24% 0.028 247);
+  --vellum-surface-overlay: oklch(22% 0.04 250 / 0.94);
+  --vellum-border-subtle: oklch(48% 0.045 245 / 0.22);
+  --vellum-shadow-overlay: 0 28px 72px -24px oklch(4% 0.025 252 / 0.82);
+  --vellum-shadow-paper: 0 24px 60px -30px oklch(4% 0.025 252 / 0.78);
 }
 
 @layer base {
@@ -70,9 +106,21 @@
   }
 
   body {
-    @apply m-0 overflow-hidden bg-base-100 text-base-content;
+    @apply m-0 overflow-hidden text-base-content;
+    background: var(--vellum-surface-app);
     font-size: var(--vellum-text-body);
     line-height: var(--vellum-leading-normal);
+  }
+
+  body::before {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    content: "";
+    opacity: 0.16;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.13'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light;
   }
 
   button {
@@ -84,8 +132,43 @@
   }
 
   :focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--color-primary) 72%, white);
-    outline-offset: 2px;
+    outline: 2px solid color-mix(in oklab, var(--color-primary) 78%, transparent);
+    outline-offset: 3px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color:
+      color-mix(in oklab, var(--color-base-content) 18%, transparent)
+      transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-height: 2.5rem;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background:
+      color-mix(in oklab, var(--color-base-content) 20%, transparent)
+      padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background:
+      color-mix(in oklab, var(--color-primary) 48%, transparent)
+      padding-box;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 
@@ -114,6 +197,13 @@
     min-height: var(--vellum-control-default);
     padding: 0;
     border-radius: var(--vellum-radius-control);
+    color: color-mix(in oklab, var(--color-base-content) 64%, transparent);
+    box-shadow: none;
+  }
+
+  .ui-icon-button:hover {
+    color: var(--color-base-content);
+    background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
   }
 
   .ui-icon-button--compact {
@@ -128,17 +218,40 @@
     min-height: var(--vellum-panel-header);
     align-items: center;
     gap: 0.5rem;
-    border-bottom: 1px solid var(--color-base-300);
-    padding-inline: 0.75rem;
+    padding-inline: 1rem;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-base-content) 2%, transparent),
+      transparent
+    );
+  }
+
+  .ui-page-header {
+    display: flex;
+    min-height: var(--vellum-chrome-height);
+    flex: none;
+    align-items: center;
+    gap: 0.625rem;
+    background: color-mix(in oklab, var(--vellum-surface-chrome) 88%, transparent);
+    backdrop-filter: blur(18px) saturate(1.2);
+    padding-inline: 1rem;
+  }
+
+  .ui-page-title {
+    min-width: 0;
+    flex: 1;
+    font-size: var(--vellum-text-title);
+    font-weight: 620;
+    letter-spacing: -0.025em;
   }
 
   .ui-panel-title {
     min-width: 0;
     flex: 1;
     font-size: var(--vellum-text-ui);
-    font-weight: 600;
+    font-weight: 650;
     line-height: var(--vellum-leading-tight);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.13em;
     text-transform: uppercase;
     color: color-mix(in oklab, var(--color-base-content) 58%, transparent);
   }
@@ -148,7 +261,6 @@
     min-height: var(--vellum-statusbar-height);
     align-items: center;
     gap: 0.75rem;
-    border-top: 1px solid var(--color-base-300);
     padding-inline: 0.625rem;
     font-size: var(--vellum-text-caption);
     color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
@@ -158,6 +270,114 @@
     font-size: var(--vellum-text-ui);
     line-height: var(--vellum-leading-normal);
     color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
+  }
+
+  .ui-text-secondary {
+    color: color-mix(in oklab, var(--color-base-content) 64%, transparent);
+  }
+
+  .ui-text-tertiary {
+    color: color-mix(in oklab, var(--color-base-content) 48%, transparent);
+  }
+
+  .ui-text-muted {
+    color: color-mix(in oklab, var(--color-base-content) 36%, transparent);
+  }
+
+  .ui-surface-canvas {
+    background: var(--vellum-surface-canvas);
+    backdrop-filter: blur(18px);
+  }
+
+  .ui-surface-chrome {
+    background: var(--vellum-surface-chrome);
+    backdrop-filter: blur(22px) saturate(1.18);
+  }
+
+  .ui-surface-overlay {
+    background: var(--vellum-surface-overlay);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    backdrop-filter: blur(28px) saturate(1.25);
+    box-shadow: var(--vellum-shadow-overlay);
+  }
+
+  .ui-paper {
+    background: var(--vellum-surface-paper);
+    box-shadow: var(--vellum-shadow-paper);
+  }
+
+  .ui-list-row {
+    display: flex;
+    min-height: var(--vellum-control-default);
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding-inline: 0.625rem;
+    color: color-mix(in oklab, var(--color-base-content) 68%, transparent);
+    font-size: var(--vellum-text-ui);
+    text-align: left;
+  }
+
+  .ui-list-row:hover {
+    background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+    color: var(--color-base-content);
+  }
+
+  .ui-list-row[aria-current="page"],
+  .ui-list-row[aria-selected="true"] {
+    background: color-mix(in oklab, var(--color-primary) 13%, transparent);
+    color: var(--color-primary);
+  }
+
+  .ui-search-field {
+    display: flex;
+    height: 2.25rem;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--vellum-surface-canvas) 78%, transparent);
+    padding-inline: 0.625rem;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-base-content) 7%, transparent);
+    transition:
+      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
+      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
+  }
+
+  .ui-search-field:focus-within {
+    background: color-mix(in oklab, var(--vellum-surface-canvas) 96%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 56%, transparent);
+  }
+
+  .ui-command-field {
+    height: var(--vellum-chrome-height);
+    border: 0;
+    border-bottom: 1px solid var(--vellum-border-subtle);
+    border-radius: 0;
+    padding-inline: var(--vellum-space-panel);
+  }
+
+  .ui-empty-state {
+    display: flex;
+    min-height: 8rem;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.25rem;
+    text-align: left;
+  }
+
+  .ui-empty-icon {
+    display: flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0 0 1rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    color: var(--color-primary);
   }
 
   .ui-caption {
@@ -174,9 +394,24 @@
       transform var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
-  .ui-interactive:active:not(:disabled) {
-    transform: scale(0.97);
+  .ui-workspace-panel {
+    overflow: hidden;
+    border-radius: var(--vellum-radius-panel);
+    background: var(--vellum-surface-canvas);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 4%, transparent),
+      0 14px 38px -30px oklch(3% 0.025 252 / 0.7);
   }
+
+  .ui-orbital-rail {
+    border-radius: 1rem;
+    background: var(--vellum-surface-chrome);
+    backdrop-filter: blur(24px) saturate(1.2);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 7%, transparent),
+      var(--vellum-shadow-overlay);
+  }
+
 }
 
 @media (pointer: coarse) {
