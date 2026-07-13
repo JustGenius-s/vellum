@@ -77,7 +77,7 @@
     </div>
 
     <div
-      class="hud-filters flex min-h-9 shrink-0 items-center gap-1 px-2"
+      class="hud-filters ui-glass-control flex min-h-9 shrink-0 items-center gap-1 px-2"
       role="toolbar"
       aria-label="Filter problems"
     >
@@ -85,8 +85,7 @@
       <div class="flex min-w-0 flex-1 items-center gap-1">
         <button
           type="button"
-          class="hud-filter ui-interactive"
-          class:is-active={filter === "all"}
+          class="hud-filter ui-glass-hover ui-interactive {filter === 'all' ? 'is-active ui-glass-control--active' : ''}"
           onclick={() => (filter = "all")}
           aria-pressed={filter === "all"}
         >
@@ -94,8 +93,7 @@
         </button>
         <button
           type="button"
-          class="hud-filter ui-interactive"
-          class:is-active={filter === "error"}
+          class="hud-filter ui-glass-hover ui-interactive {filter === 'error' ? 'is-active ui-glass-control--active' : ''}"
           onclick={() => (filter = "error")}
           aria-pressed={filter === "error"}
         >
@@ -103,8 +101,7 @@
         </button>
         <button
           type="button"
-          class="hud-filter ui-interactive"
-          class:is-active={filter === "warning"}
+          class="hud-filter ui-glass-hover ui-interactive {filter === 'warning' ? 'is-active ui-glass-control--active' : ''}"
           onclick={() => (filter = "warning")}
           aria-pressed={filter === "warning"}
         >
@@ -113,7 +110,7 @@
       </div>
     </div>
 
-    <div class="hud-list min-h-0 flex-1 overflow-y-auto p-1.5">
+    <div class="hud-list ui-glass-control min-h-0 flex-1 overflow-y-auto p-1.5">
       {#each visibleDiagnostics as diagnostic}
         <ListRow onclick={() => onSelect(diagnostic)}>
           {#if diagnostic.severity === "error"}
@@ -169,11 +166,6 @@
     height: 12rem;
     max-height: 36dvh;
     border-radius: 0.875rem;
-    background: color-mix(in oklab, var(--vellum-surface-overlay) 92%, transparent);
-    backdrop-filter: blur(18px) saturate(108%);
-    box-shadow:
-      0 10px 30px color-mix(in oklab, var(--vellum-surface-app) 22%, transparent),
-      inset 0 1px 0 color-mix(in oklab, white 4%, transparent);
     transition:
       height var(--vellum-motion-normal) var(--vellum-ease-out),
       opacity var(--vellum-motion-fast) var(--vellum-ease-out),
@@ -186,7 +178,11 @@
   }
 
   .hud-header {
-    background: color-mix(in oklab, var(--vellum-surface-chrome) 58%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--vellum-glass-specular) 18%, transparent),
+      transparent
+    );
   }
 
   .hud-signal {
@@ -208,7 +204,6 @@
   .hud-filters {
     margin: 0 0.5rem 0.25rem;
     border-radius: 0.625rem;
-    background: color-mix(in oklab, var(--vellum-surface-canvas) 52%, transparent);
   }
 
   .hud-filter {
@@ -221,24 +216,15 @@
 
   .hud-filter:hover {
     color: var(--color-base-content);
-    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .hud-filter.is-active {
     color: var(--color-primary);
-    background: color-mix(in oklab, var(--color-primary) 11%, transparent);
   }
 
   .hud-list {
     margin-inline: 0.25rem;
     border-radius: 0.625rem;
-    background: color-mix(in oklab, var(--vellum-surface-canvas) 88%, transparent);
-    scrollbar-color:
-      color-mix(in oklab, var(--color-primary) 26%, transparent) transparent;
-  }
-
-  .hud-list :global(button:hover) {
-    background: color-mix(in oklab, var(--color-base-content) 5%, transparent);
   }
 
   .hud-list :global(button:active) {

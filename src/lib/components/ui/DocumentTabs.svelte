@@ -34,7 +34,7 @@
   {#each tabs as tab}
     <div
       use:flipLayout={tabs.map((entry) => entry.path).join("|")}
-      class="ui-interactive group my-1 flex min-w-28 max-w-48 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs {tab.path === activePath ? 'bg-base-content/6 text-base-content' : ''}"
+      class="document-tab ui-interactive group my-1 flex min-w-28 max-w-48 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs {tab.path === activePath ? 'ui-glass-control--active text-base-content' : ''}"
       class:ui-text-tertiary={tab.path !== activePath}
       role="tab"
       tabindex="0"
@@ -54,7 +54,7 @@
       <button
         use:press
         type="button"
-        class="ui-interactive flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-base-300 {tab.path === activePath ? '' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}"
+        class="tab-close ui-glass-hover ui-interactive flex size-6 shrink-0 items-center justify-center rounded-md {tab.path === activePath ? '' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}"
         onclick={(event) => {
           event.stopPropagation();
           onclose(tab.path);

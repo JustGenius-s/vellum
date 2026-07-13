@@ -37,7 +37,7 @@
   {#if vault.compilePhase !== "idle"}
     <div
       use:surfaceEnter={{ y: -6, scale: 0.99 }}
-      class="compile-status ui-surface-overlay absolute right-4 top-4 z-10 flex h-8 items-center gap-2 rounded-full px-3 text-xs"
+      class="compile-status ui-glass-floating absolute right-4 top-4 z-10 flex h-8 items-center gap-2 rounded-full px-3 text-xs"
       role="status"
       aria-live="polite"
     >
@@ -101,16 +101,21 @@
 
   .preview-canvas {
     background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 16%, transparent),
+        transparent 28%
+      ),
       radial-gradient(
         circle at 50% 0%,
-        color-mix(in oklab, var(--color-primary) 3%, transparent),
+        color-mix(in oklab, var(--color-primary) 7%, transparent),
         transparent 32rem
       ),
       linear-gradient(
         color-mix(in oklab, var(--vellum-surface-chrome) 52%, transparent),
         transparent 11rem
       ),
-      var(--vellum-surface-canvas);
+      color-mix(in oklab, var(--vellum-surface-canvas) 48%, transparent);
   }
 
   .preview-canvas::before {
@@ -130,11 +135,6 @@
   }
 
   .compile-status {
-    background: color-mix(in oklab, var(--vellum-surface-overlay) 86%, transparent);
-    backdrop-filter: blur(16px) saturate(110%);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, white 5%, transparent),
-      0 8px 24px color-mix(in oklab, var(--vellum-surface-app) 20%, transparent);
     animation: status-enter 180ms var(--vellum-ease-out) both;
   }
 

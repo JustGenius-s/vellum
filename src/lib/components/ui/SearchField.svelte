@@ -19,7 +19,7 @@
   } = $props();
 </script>
 
-<label class="ui-search-field">
+<label class="ui-search-field ui-glass-control">
   {#if loading}
     <Spinner size="sm" />
   {:else}

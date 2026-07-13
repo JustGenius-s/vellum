@@ -41,9 +41,9 @@
       </div>
 
       <div class="settings-grid mt-10">
-        <section class="control-zone appearance-zone" aria-labelledby="appearance-title">
+        <section class="control-zone ui-surface-chrome appearance-zone" aria-labelledby="appearance-title">
           <div class="zone-heading">
-            <span class="zone-icon"><Eye class="ui-icon" /></span>
+            <span class="zone-icon ui-glass-accent"><Eye class="ui-icon" /></span>
             <div>
               <p class="zone-index">01 / Interface</p>
               <h3 id="appearance-title">Light field</h3>
@@ -52,8 +52,7 @@
           <p class="zone-description">Switch the visual atmosphere while preserving the same cyan signal layer.</p>
           <div class="theme-switch" aria-label="Application theme">
           <button
-            class:active={theme.theme === "light"}
-            class="theme-option ui-interactive"
+            class="theme-option ui-glass-control ui-interactive {theme.theme === 'light' ? 'active ui-glass-control--active' : ''}"
             onclick={() => theme.applyTheme("light")}
             aria-pressed={theme.theme === "light"}
           >
@@ -62,8 +61,7 @@
             <small>Ice</small>
           </button>
           <button
-            class:active={theme.theme === "dark"}
-            class="theme-option ui-interactive"
+            class="theme-option ui-glass-control ui-interactive {theme.theme === 'dark' ? 'active ui-glass-control--active' : ''}"
             onclick={() => theme.applyTheme("dark")}
             aria-pressed={theme.theme === "dark"}
           >
@@ -74,9 +72,9 @@
         </div>
       </section>
 
-        <section class="control-zone editor-zone" aria-labelledby="editor-title">
+        <section class="control-zone ui-surface-chrome editor-zone" aria-labelledby="editor-title">
           <div class="zone-heading">
-            <span class="zone-icon"><Type class="ui-icon" /></span>
+            <span class="zone-icon ui-glass-accent"><Type class="ui-icon" /></span>
             <div>
               <p class="zone-index">02 / Reading</p>
               <h3 id="editor-title">Editor optics</h3>
@@ -84,7 +82,7 @@
           </div>
           <p class="zone-description">Calibrate type scale and the visual guides surrounding your text.</p>
 
-          <label class="range-console">
+          <label class="range-console ui-glass-control">
             <span class="flex items-end justify-between gap-4">
               <span>
                 <strong>Type scale</strong>
@@ -107,7 +105,7 @@
           </label>
 
           <div class="control-list">
-            <label class="control-row">
+            <label class="control-row ui-glass-hover">
               <span class="control-copy">
                 <strong>Line coordinates</strong>
                 <small>Keep line numbers visible beside the document.</small>
@@ -122,7 +120,7 @@
               />
             </label>
 
-            <label class="control-row">
+            <label class="control-row ui-glass-hover">
               <span class="control-copy">
                 <strong>Adaptive lines</strong>
                 <small>Wrap long passages to the available reading width.</small>
@@ -139,9 +137,9 @@
           </div>
         </section>
 
-        <section class="control-zone files-zone" aria-labelledby="files-title">
+        <section class="control-zone ui-surface-chrome files-zone" aria-labelledby="files-title">
           <div class="zone-heading">
-            <span class="zone-icon"><Save class="ui-icon" /></span>
+            <span class="zone-icon ui-glass-accent"><Save class="ui-icon" /></span>
             <div>
               <p class="zone-index">03 / Persistence</p>
               <h3 id="files-title">Write-through</h3>
@@ -149,7 +147,7 @@
           </div>
           <p class="zone-description">Decide when the active draft crosses from memory to disk.</p>
 
-          <div class="save-status">
+          <div class="save-status ui-glass-control">
             <span class:online={settings.editor.autoSave} class="status-signal" aria-hidden="true"></span>
             <span>
               <strong>{settings.editor.autoSave ? "Auto save active" : "Manual save"}</strong>
@@ -166,7 +164,7 @@
           </div>
 
           {#if settings.editor.autoSave}
-            <label class="delay-control">
+            <label class="delay-control ui-glass-hover">
               <span>
                 <strong>Quiet interval</strong>
                 <small>Wait before writing edits to disk.</small>
@@ -194,9 +192,13 @@
 <style>
   .settings-canvas {
     background:
-      radial-gradient(circle at 82% 12%, color-mix(in oklab, var(--color-primary) 9%, transparent), transparent 24rem),
-      radial-gradient(circle at 12% 78%, color-mix(in oklab, var(--color-primary) 4%, transparent), transparent 28rem),
-      var(--vellum-surface-canvas);
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 16%, transparent),
+        transparent 30%
+      ),
+      radial-gradient(circle at 82% 12%, color-mix(in oklab, var(--color-primary) 10%, transparent), transparent 24rem),
+      radial-gradient(circle at 12% 78%, color-mix(in oklab, var(--color-info) 7%, transparent), transparent 28rem);
   }
 
   .settings-intro {
@@ -220,19 +222,7 @@
 
   .control-zone {
     border-radius: 1.25rem;
-    background:
-      linear-gradient(
-        145deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 24%, transparent),
-        transparent 34%
-      ),
-      color-mix(in oklab, var(--vellum-surface-chrome) 72%, transparent);
     padding: clamp(1.25rem, 3vw, 2rem);
-    -webkit-backdrop-filter: blur(var(--vellum-blur-chrome)) saturate(1.28);
-    backdrop-filter: blur(var(--vellum-blur-chrome)) saturate(1.28);
-    box-shadow:
-      inset 0 1px 0 var(--vellum-glass-edge),
-      inset 0 0 0 1px var(--vellum-glass-rim);
   }
 
   .editor-zone {
@@ -258,7 +248,6 @@
     height: 2.5rem;
     place-items: center;
     border-radius: 0.8rem;
-    background: color-mix(in oklab, var(--color-primary) 9%, transparent);
     color: var(--color-primary);
   }
 
@@ -280,9 +269,6 @@
     min-height: 5.5rem;
     justify-items: start;
     border-radius: 0.9rem;
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 34%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-canvas) 68%, transparent);
     padding: 0.875rem;
     color: color-mix(in oklab, var(--color-base-content) 58%, transparent);
     text-align: left;
@@ -302,23 +288,13 @@
   }
 
   .theme-option.active {
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 32%, transparent), transparent 1px),
-      color-mix(in oklab, var(--color-primary) 11%, transparent);
     color: var(--color-primary);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 28%, transparent);
   }
 
   .range-console {
     display: block;
     border-radius: 0.9rem;
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 34%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-canvas) 62%, transparent);
     padding: 1.1rem;
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 46%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--vellum-glass-rim) 72%, transparent);
   }
 
   .range-console strong,
@@ -379,11 +355,6 @@
     transition: background-color var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
-  .control-row:hover,
-  .delay-control:hover {
-    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
-  }
-
   .save-status {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -391,7 +362,6 @@
     gap: 0.875rem;
     border-radius: 0.9rem;
     padding: 1rem;
-    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
   }
 
   .status-signal {

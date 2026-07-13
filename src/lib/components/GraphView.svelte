@@ -134,7 +134,7 @@
       circle.setAttribute("r", "7");
       circle.setAttribute(
         "fill",
-        "color-mix(in oklab, var(--vellum-surface-overlay) 92%, transparent)",
+        "color-mix(in oklab, var(--vellum-surface-overlay) 72%, transparent)",
       );
       circle.setAttribute(
         "stroke",
@@ -404,12 +404,16 @@
   .graph-space {
     isolation: isolate;
     background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 16%, transparent),
+        transparent 28%
+      ),
       radial-gradient(
         circle at 50% 48%,
-        color-mix(in oklab, var(--color-primary) 7%, transparent),
+        color-mix(in oklab, var(--color-primary) 10%, transparent),
         transparent 34%
-      ),
-      var(--vellum-surface-canvas);
+      );
   }
 
   .depth-field {

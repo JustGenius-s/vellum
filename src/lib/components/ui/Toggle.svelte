@@ -15,7 +15,7 @@
 <button
   use:press
   type="button"
-  class="toggle-control"
+  class="toggle-control ui-glass-control"
   class:is-checked={checked}
   role="switch"
   aria-checked={checked}
@@ -33,8 +33,9 @@
     flex: none;
     border: 0;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--color-base-content) 14%, transparent);
-    transition: background-color var(--vellum-motion-fast) var(--vellum-ease-out);
+    transition:
+      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
+      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
   .toggle-control span {
@@ -52,7 +53,12 @@
   }
 
   .toggle-control.is-checked {
-    background: color-mix(in oklab, var(--color-primary) 78%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, white 14%, transparent), transparent 48%),
+      color-mix(in oklab, var(--color-primary) 80%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 28%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 42%, transparent);
   }
 
   .toggle-control.is-checked span {

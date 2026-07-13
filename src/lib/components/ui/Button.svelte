@@ -28,7 +28,7 @@
   {type}
   {disabled}
   {onclick}
-  class="control-button control-button--{variant} control-button--{size} {active ? 'is-active' : ''} {className}"
+  class="control-button control-button--{variant} control-button--{size} {variant === 'ghost' ? 'ui-glass-hover' : variant === 'soft' ? 'ui-glass-control' : ''} {active ? 'is-active ui-glass-control--active' : ''} {className}"
 >
   {@render children()}
 </button>
@@ -74,17 +74,10 @@
   .control-button--ghost:hover,
   .control-button--ghost.is-active {
     color: var(--color-base-content);
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 42%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-overlay) 56%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 54%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--vellum-glass-rim) 72%, transparent);
   }
 
   .control-button--ghost.is-active {
     color: var(--color-primary);
-    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
   }
 
   .control-button--primary {
@@ -104,10 +97,6 @@
 
   .control-button--soft {
     color: var(--color-base-content);
-    background: color-mix(in oklab, var(--vellum-surface-overlay) 62%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 58%, transparent),
-      inset 0 0 0 1px var(--vellum-glass-rim);
   }
 
   .control-button--danger {

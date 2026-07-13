@@ -33,7 +33,7 @@
     <header class="outline-header">
       <span class="panel-kicker">Structure</span>
       <div class="mt-1.5 mb-4 flex min-w-0 items-center gap-3">
-        <span class="document-mark" aria-hidden="true">
+        <span class="document-mark ui-glass-accent" aria-hidden="true">
           <FileText class="ui-icon" />
         </span>
         <div class="min-w-0 flex-1">
@@ -68,7 +68,7 @@
             aria-level={heading.level}
             aria-selected="false"
           >
-            <span class="level-node shrink-0 font-mono" aria-hidden="true">
+            <span class="level-node ui-glass-accent shrink-0 font-mono" aria-hidden="true">
               {heading.level}
             </span>
             <span class="min-w-0 flex-1 truncate text-[0.8125rem] font-medium">{heading.title}</span>
@@ -101,8 +101,16 @@
 <style>
   .outline-shell {
     background:
-      linear-gradient(160deg, color-mix(in oklab, var(--color-primary) 4%, transparent), transparent 14rem),
-      var(--vellum-surface-chrome);
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 18%, transparent),
+        transparent 28%
+      ),
+      linear-gradient(
+        160deg,
+        color-mix(in oklab, var(--color-primary) 7%, transparent),
+        transparent 14rem
+      );
   }
 
   .outline-header {
@@ -125,7 +133,6 @@
     flex: none;
     place-items: center;
     border-radius: 0.8rem;
-    background: color-mix(in oklab, var(--color-primary) 9%, transparent);
     color: color-mix(in oklab, var(--color-primary) 86%, var(--color-base-content));
   }
 
@@ -140,10 +147,6 @@
     margin-block: 0.125rem;
     gap: 0.625rem;
     padding-left: 0.6875rem;
-  }
-
-  .outline-row:hover {
-    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .outline-row[aria-level="1"] {
@@ -167,7 +170,6 @@
     height: 1.6rem;
     place-items: center;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--color-primary) 8%, transparent);
     color: color-mix(in oklab, var(--color-primary) 78%, var(--color-base-content));
     font-size: 0.625rem;
   }

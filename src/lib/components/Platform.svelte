@@ -107,7 +107,7 @@
   <aside class="hidden shrink-0 lg:flex">
     <nav
       bind:this={dock}
-      class="ui-orbital-rail fixed bottom-10 left-1/2 z-30 flex h-14 -translate-x-1/2 items-center gap-1 px-2"
+      class="ui-orbital-rail ui-glass-floating fixed bottom-10 left-1/2 z-30 flex h-14 -translate-x-1/2 items-center gap-1 px-2"
       aria-label="Workspace"
     >
       <span bind:this={dockIndicator} class="dock-indicator" aria-hidden="true"></span>
@@ -325,8 +325,7 @@
             <button
               role="tab"
               aria-selected={mobileTab === "editor"}
-              class="ui-interactive flex items-center justify-center gap-1.5 rounded-sm text-xs"
-              class:bg-base-100={mobileTab === "editor"}
+              class="mobile-view-tab ui-interactive flex items-center justify-center gap-1.5 rounded-lg text-xs {mobileTab === 'editor' ? 'ui-glass-control--active' : ''}"
               class:ui-text-tertiary={mobileTab !== "editor"}
               onclick={() => (mobileTab = "editor")}
             >
@@ -336,8 +335,7 @@
             <button
               role="tab"
               aria-selected={mobileTab === "preview"}
-              class="ui-interactive flex items-center justify-center gap-1.5 rounded-sm text-xs"
-              class:bg-base-100={mobileTab === "preview"}
+              class="mobile-view-tab ui-interactive flex items-center justify-center gap-1.5 rounded-lg text-xs {mobileTab === 'preview' ? 'ui-glass-control--active' : ''}"
               class:ui-text-tertiary={mobileTab !== "preview"}
               onclick={() => (mobileTab = "preview")}
             >
@@ -367,9 +365,8 @@
           <span>{vault.status || "Ready"}</span>
           <button
             type="button"
-            class="ui-interactive flex h-full items-center gap-1.5 px-1.5 hover:bg-base-300"
+            class="status-problems ui-glass-hover ui-interactive flex h-full items-center gap-1.5 px-1.5 {ui.problemsOpen ? 'ui-glass-control--active' : ''}"
             class:text-error={vault.diagnostics.length > 0}
-            class:bg-base-300={ui.problemsOpen}
             onclick={() => (ui.problemsOpen = !ui.problemsOpen)}
             aria-expanded={ui.problemsOpen}
             aria-label="Toggle problems panel"
@@ -491,5 +488,7 @@
 
   :global(.ui-orbital-rail .icon-button.is-active) {
     background: transparent;
+    box-shadow: none;
   }
+
 </style>

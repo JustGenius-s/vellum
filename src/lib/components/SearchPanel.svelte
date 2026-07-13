@@ -96,7 +96,7 @@
         <span class="result-total tabular-nums">{results.length} matches</span>
       {/if}
     </div>
-    <label class="search-input ui-search-field">
+    <label class="search-input ui-search-field ui-glass-control">
       {#if searching}
         <Spinner size="sm" label="Searching" />
       {:else}
@@ -135,7 +135,7 @@
       {#each groupedResults as group}
         <section class="result-group mb-4">
           <div class="group-header ui-text-secondary flex min-h-10 items-center gap-2.5 px-3">
-            <span class="file-node" aria-hidden="true">
+            <span class="file-node ui-glass-accent" aria-hidden="true">
               <FileText class="ui-icon ui-icon--sm" />
             </span>
             <span class="min-w-0 flex-1 truncate">{group.relativePath}</span>
@@ -166,8 +166,16 @@
 <style>
   .search-shell {
     background:
-      radial-gradient(circle at 88% 0%, color-mix(in oklab, var(--color-primary) 6%, transparent), transparent 14rem),
-      var(--vellum-surface-chrome);
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 18%, transparent),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at 88% 0%,
+        color-mix(in oklab, var(--color-primary) 8%, transparent),
+        transparent 14rem
+      );
   }
 
   .search-header {
@@ -213,7 +221,6 @@
     flex: none;
     place-items: center;
     border-radius: 0.55rem;
-    background: color-mix(in oklab, var(--color-primary) 8%, transparent);
     color: color-mix(in oklab, var(--color-primary) 84%, var(--color-base-content));
   }
 
@@ -234,10 +241,6 @@
     min-height: 2.625rem;
     margin-block: 0.125rem;
     padding-inline: 0.75rem;
-  }
-
-  .result-group :global(.ui-list-row:hover) {
-    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .result-group :global(.ui-list-row:hover .line-index) {

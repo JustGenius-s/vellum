@@ -65,7 +65,7 @@
   function editorTheme(isDark: boolean, fontSize: number) {
     return EditorView.theme({
       "&": {
-        backgroundColor: "var(--vellum-surface-canvas)",
+        backgroundColor: "transparent",
         color: "var(--color-base-content)",
         fontSize: `${fontSize}px`,
         height: "100%",
@@ -91,13 +91,12 @@
         overflow: "auto",
         fontFamily: "var(--vellum-font-mono)",
         letterSpacing: "0.006em",
-        scrollbarColor:
-          "color-mix(in oklab, var(--color-primary) 30%, transparent) transparent",
+        scrollbarWidth: "none",
       },
       ".cm-gutters": {
         backgroundColor:
-          "color-mix(in oklab, var(--vellum-surface-canvas) 88%, transparent)",
-        borderRight: "1px solid var(--vellum-border-subtle)",
+          "color-mix(in oklab, var(--vellum-surface-canvas) 34%, transparent)",
+        borderRight: "0",
         color:
           "color-mix(in oklab, var(--color-base-content) 30%, transparent)",
         paddingTop: "clamp(1.5rem, 4vh, 3.5rem)",
@@ -120,16 +119,16 @@
       },
       ".cm-panels": {
         backgroundColor:
-          "color-mix(in oklab, var(--vellum-surface-overlay) 94%, transparent)",
+          "color-mix(in oklab, var(--vellum-surface-overlay) 72%, transparent)",
         color: "var(--color-base-content)",
-        backdropFilter: "blur(24px) saturate(1.1)",
+        backdropFilter: "var(--vellum-glass-filter-floating)",
       },
       ".cm-panel.cm-search": {
         alignItems: "center",
-        border: "1px solid var(--vellum-border-subtle)",
+        border: "0",
         borderRadius: "0 0 0.875rem 0.875rem",
         boxShadow:
-          "inset 0 1px 0 color-mix(in oklab, white 5%, transparent), var(--vellum-shadow-overlay)",
+          "var(--vellum-glass-shadow-floating)",
         gap: "0.5rem",
         marginInline: "clamp(0.75rem, 2vw, 1.5rem)",
         padding: "0.625rem 0.75rem",
@@ -142,14 +141,16 @@
       },
       ".cm-textfield": {
         backgroundColor:
-          "color-mix(in oklab, var(--vellum-surface-canvas) 88%, transparent)",
-        border: "1px solid var(--vellum-border-subtle)",
+          "color-mix(in oklab, var(--vellum-surface-canvas) 58%, transparent)",
+        border: "0",
         borderRadius: "0.625rem",
         color: "var(--color-base-content)",
         fontFamily: "var(--vellum-font-ui)",
         minHeight: "var(--vellum-control-compact)",
         outline: "none",
         paddingInline: "0.5rem",
+        boxShadow:
+          "var(--vellum-glass-shadow-control)",
       },
       ".cm-textfield:focus": {
         borderColor:
@@ -160,13 +161,15 @@
       ".cm-button": {
         backgroundImage: "none",
         backgroundColor:
-          "color-mix(in oklab, var(--vellum-surface-canvas) 72%, transparent)",
-        border: "1px solid var(--vellum-border-subtle)",
+          "color-mix(in oklab, var(--vellum-surface-canvas) 56%, transparent)",
+        border: "0",
         borderRadius: "0.625rem",
         color: "var(--color-base-content)",
         fontFamily: "var(--vellum-font-ui)",
         minHeight: "var(--vellum-control-compact)",
         paddingInline: "0.5rem",
+        boxShadow:
+          "var(--vellum-glass-shadow-control)",
       },
       ".cm-button:hover": {
         backgroundColor:
@@ -187,12 +190,13 @@
       },
       ".cm-tooltip": {
         backgroundColor:
-          "color-mix(in oklab, var(--vellum-surface-overlay) 96%, transparent)",
-        border: "1px solid var(--vellum-border-subtle)",
+          "color-mix(in oklab, var(--vellum-surface-overlay) 76%, transparent)",
+        border: "0",
         borderRadius: "0.875rem",
-        boxShadow: "var(--vellum-shadow-overlay)",
+        boxShadow:
+          "var(--vellum-glass-shadow-floating)",
         color: "var(--color-base-content)",
-        backdropFilter: "blur(28px) saturate(1.12)",
+        backdropFilter: "var(--vellum-glass-filter-floating)",
         overflow: "hidden",
       },
       ".cm-tooltip-autocomplete": {
@@ -485,5 +489,12 @@
   }
   .cm-host :global(.cm-editor .cm-scroller) {
     overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .cm-host :global(.cm-editor .cm-scroller::-webkit-scrollbar) {
+    display: none;
+    width: 0;
+    height: 0;
   }
 </style>

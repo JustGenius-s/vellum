@@ -83,7 +83,7 @@
     ></button>
     <aside
       bind:this={panel}
-      class="drawer-panel"
+      class="drawer-panel ui-glass-floating"
       aria-label={label}
       onpointerdown={pointerDown}
       onpointermove={pointerMove}
@@ -116,19 +116,6 @@
     width: min(84vw, 20rem);
     height: 100%;
     overflow: hidden;
-    background:
-      linear-gradient(
-        135deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 30%, transparent),
-        transparent 34%
-      ),
-      var(--vellum-surface-chrome);
-    box-shadow:
-      inset -1px 0 0 var(--vellum-glass-rim),
-      inset 0 1px 0 var(--vellum-glass-edge),
-      var(--vellum-shadow-overlay);
-    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.36);
-    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.36);
     touch-action: pan-y;
   }
 </style>

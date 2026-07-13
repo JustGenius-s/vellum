@@ -207,7 +207,7 @@
           <nav class="mode-track" aria-label="Palette mode">
             <button
               type="button"
-              class:active={mode === "files"}
+              class="ui-glass-hover {mode === 'files' ? 'active ui-glass-control--active' : ''}"
               onclick={() => switchMode("files")}
               aria-pressed={mode === "files"}
             >
@@ -215,7 +215,7 @@
             </button>
             <button
               type="button"
-              class:active={mode === "commands"}
+              class="ui-glass-hover {mode === 'commands' ? 'active ui-glass-control--active' : ''}"
               onclick={() => switchMode("commands")}
               aria-pressed={mode === "commands"}
             >
@@ -223,7 +223,7 @@
             </button>
             <button
               type="button"
-              class:active={mode === "line"}
+              class="ui-glass-hover {mode === 'line' ? 'active ui-glass-control--active' : ''}"
               onclick={() => switchMode("line")}
               aria-pressed={mode === "line"}
             >
@@ -231,8 +231,8 @@
             </button>
           </nav>
         </div>
-        <label class="command-input">
-          <span class="mode-glyph" aria-hidden="true">
+        <label class="command-input ui-glass-control">
+          <span class="mode-glyph ui-glass-accent" aria-hidden="true">
             {#if mode === "commands"}
               <Command class="ui-icon ui-icon--lg" />
             {:else if mode === "line"}
@@ -277,7 +277,7 @@
               onclick={() => void selectItem(item)}
             >
               {#if item.type === "file"}
-                <span class="result-icon"><FileText class="ui-icon" /></span>
+                <span class="result-icon ui-glass-control"><FileText class="ui-icon" /></span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-semibold tracking-[-0.01em]">{item.name}</span>
                   {#if parentDirectory(item.relativePath)}
@@ -288,9 +288,9 @@
                 </span>
               {:else if item.type === "command"}
                 {#if item.icon}
-                  <span class="result-icon"><item.icon class="ui-icon" /></span>
+                  <span class="result-icon ui-glass-control"><item.icon class="ui-icon" /></span>
                 {:else}
-                  <span class="result-icon"><Command class="ui-icon" /></span>
+                  <span class="result-icon ui-glass-control"><Command class="ui-icon" /></span>
                 {/if}
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-medium">{item.label}</span>
@@ -300,7 +300,7 @@
                   <kbd class="shortcut shrink-0">{item.shortcut}</kbd>
                 {/if}
               {:else}
-                <span class="result-icon"><Hash class="ui-icon" /></span>
+                <span class="result-icon ui-glass-control"><Hash class="ui-icon" /></span>
                 <span class="min-w-0 flex-1 truncate text-sm font-medium">
                   Move cursor to line {item.line}
                 </span>
@@ -388,7 +388,6 @@
   }
 
   .mode-track button:hover {
-    background: color-mix(in oklab, var(--color-base-content) 5%, transparent);
     opacity: 1;
   }
 
@@ -397,14 +396,8 @@
   }
 
   .mode-track button.active {
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 42%, transparent), transparent 1px),
-      color-mix(in oklab, var(--color-primary) 11%, transparent);
     color: var(--color-primary);
     opacity: 1;
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 52%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 14%, transparent);
   }
 
   .command-input {
@@ -413,21 +406,16 @@
     align-items: center;
     gap: 0.875rem;
     border-radius: 1rem;
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 48%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-canvas) 78%, transparent);
     padding: 0.6rem 0.75rem;
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 58%, transparent),
-      inset 0 0 0 1px var(--vellum-glass-rim),
-      0 8px 24px -18px color-mix(in oklab, var(--color-neutral) 28%, transparent);
     transition:
       background-color var(--vellum-motion-fast) var(--vellum-ease-out),
       box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
   .command-input:focus-within {
-    background: color-mix(in oklab, var(--vellum-surface-canvas) 86%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 56%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-canvas) 72%, transparent);
     box-shadow:
       inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 32%, transparent),
       0 10px 28px color-mix(in oklab, var(--vellum-surface-app) 24%, transparent);
@@ -440,7 +428,6 @@
     flex: none;
     place-items: center;
     border-radius: 0.75rem;
-    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
   }
 
@@ -454,10 +441,6 @@
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-  }
-
-  .result-stack {
-    scrollbar-gutter: stable;
   }
 
   .command-result {
@@ -478,13 +461,6 @@
     transform: translateX(2px);
   }
 
-  .command-result[aria-selected="true"] {
-    background:
-      linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 12%, transparent), transparent 72%),
-      color-mix(in oklab, var(--color-base-content) 4%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in oklab, white 4%, transparent);
-  }
-
   .result-icon {
     display: grid;
     width: 2.25rem;
@@ -492,7 +468,6 @@
     flex: none;
     place-items: center;
     border-radius: 0.7rem;
-    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
     color: color-mix(in oklab, var(--color-base-content) 48%, transparent);
   }
 
@@ -516,7 +491,9 @@
     min-height: 3rem;
     align-items: center;
     gap: 1rem;
-    background: color-mix(in oklab, var(--vellum-surface-canvas) 32%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 22%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-canvas) 38%, transparent);
     padding-inline: 1rem;
     font-size: 0.6875rem;
   }

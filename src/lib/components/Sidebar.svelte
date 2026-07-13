@@ -156,11 +156,11 @@
 >
   <div class="navigator-header">
     <button
-      class="vault-identity ui-interactive min-w-0 flex-1"
+      class="vault-identity ui-glass-hover ui-interactive min-w-0 flex-1"
       onclick={() => vault.openVault()}
       title={vault.vaultPath || "Open vault"}
     >
-      <span class="vault-mark" aria-hidden="true">
+      <span class="vault-mark ui-glass-accent" aria-hidden="true">
         <FolderOpen class="ui-icon" />
       </span>
       <span class="min-w-0 text-left">
@@ -220,7 +220,7 @@
           <input
             type="text"
             bind:value={createValue}
-            class="inline-input min-w-0 flex-1"
+            class="inline-input ui-glass-control min-w-0 flex-1"
             placeholder={creating.isDir ? "folder name" : "note.typ"}
             aria-label={creating.isDir ? "Folder name" : "File name"}
             onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
@@ -252,7 +252,7 @@
         <input
           type="text"
           bind:value={renameValue}
-          class="inline-input min-w-0 flex-1"
+          class="inline-input ui-glass-control min-w-0 flex-1"
           aria-label="New name"
           onkeydown={(e) => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') renaming = null; }}
           onchange={confirmRename}
@@ -286,7 +286,7 @@
               <input
                 type="text"
                 bind:value={createValue}
-                class="inline-input flex-1"
+                class="inline-input ui-glass-control flex-1"
                 placeholder={creating.isDir ? "folder name" : "note.typ"}
                 onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
                 onchange={confirmCreate}
@@ -316,7 +316,7 @@
 
 {#if contextMenu}
   <ul
-    class="context-island fixed z-50 min-w-44 rounded-2xl p-2"
+    class="context-island ui-glass-floating fixed z-50 min-w-44 rounded-2xl p-2"
     style="left: min({contextMenu.x}px, calc(100vw - 11rem)); top: min({contextMenu.y}px, calc(100vh - 12rem))"
     role="menu"
     tabindex="-1"
@@ -363,8 +363,16 @@
 <style>
   .navigator-shell {
     background:
-      linear-gradient(180deg, color-mix(in oklab, var(--color-primary) 3%, transparent), transparent 10rem),
-      var(--vellum-surface-chrome);
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 20%, transparent),
+        transparent 26%
+      ),
+      radial-gradient(
+        circle at 20% 0,
+        color-mix(in oklab, var(--color-primary) 8%, transparent),
+        transparent 13rem
+      );
   }
 
   .navigator-header {
@@ -384,10 +392,6 @@
     padding: 0.375rem 0.5rem;
   }
 
-  .vault-identity:hover {
-    background: color-mix(in oklab, var(--color-base-content) 5%, transparent);
-  }
-
   .vault-mark {
     display: grid;
     width: 2.125rem;
@@ -395,7 +399,6 @@
     flex: none;
     place-items: center;
     border-radius: 0.7rem;
-    background: color-mix(in oklab, var(--color-primary) 9%, transparent);
     color: color-mix(in oklab, var(--color-primary) 88%, var(--color-base-content));
   }
 
@@ -431,9 +434,14 @@
   }
 
   .tree-row[aria-current="page"] {
-    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 24%, transparent), transparent 1px),
+      color-mix(in oklab, var(--color-primary) 12%, transparent);
     color: color-mix(in oklab, var(--color-primary) 82%, var(--color-base-content));
     font-weight: 560;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 40%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 10%, transparent);
   }
 
   .tree-row[aria-current="page"] :global(.ui-text-tertiary) {
@@ -442,7 +450,9 @@
 
   .create-row {
     border-radius: 0.75rem;
-    background: color-mix(in oklab, var(--color-primary) 6%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 24%, transparent), transparent 1px),
+      color-mix(in oklab, var(--color-primary) 7%, transparent);
   }
 
   .inline-input {
@@ -451,14 +461,15 @@
     border-radius: 0.65rem;
     outline: 0;
     color: var(--color-base-content);
-    background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
     padding-inline: 0.65rem;
     font: inherit;
     font-size: var(--vellum-text-ui);
   }
 
   .inline-input:focus {
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 58%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 54%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 58%, transparent);
   }
 
   .operation-error {
@@ -469,19 +480,6 @@
 
   .context-island {
     border: 0;
-    background:
-      linear-gradient(
-        145deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 34%, transparent),
-        transparent 36%
-      ),
-      var(--vellum-surface-overlay);
-    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
-    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
-    box-shadow:
-      inset 0 1px 0 var(--vellum-glass-edge),
-      inset 0 0 0 1px var(--vellum-glass-rim),
-      var(--vellum-shadow-overlay);
   }
 
   .context-island :global(button) {

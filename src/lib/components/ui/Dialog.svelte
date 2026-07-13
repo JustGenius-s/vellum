@@ -47,7 +47,7 @@
     <div
       use:surfaceEnter={{ y: 18, scale: 0.985 }}
       bind:this={panel}
-      class="dialog-surface"
+      class="dialog-surface ui-glass-floating"
       role="dialog"
       aria-modal="true"
       aria-label={label}
@@ -83,18 +83,5 @@
     max-height: min(40rem, calc(100dvh - 1rem));
     overflow: hidden;
     border-radius: 1.5rem;
-    background:
-      radial-gradient(
-        circle at 18% 0,
-        color-mix(in oklab, var(--vellum-glass-specular) 42%, transparent),
-        transparent 34%
-      ),
-      var(--vellum-surface-overlay);
-    box-shadow:
-      inset 0 1px 0 var(--vellum-glass-edge),
-      inset 0 0 0 1px var(--vellum-glass-rim),
-      var(--vellum-shadow-overlay);
-    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.42);
-    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.42);
   }
 </style>

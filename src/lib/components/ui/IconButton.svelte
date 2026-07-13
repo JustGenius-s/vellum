@@ -26,7 +26,7 @@
 <button
   use:press
   type="button"
-  class="icon-button ui-icon-button {active ? 'is-active' : ''}"
+  class="icon-button ui-icon-button ui-glass-hover {active ? 'is-active ui-glass-control--active' : ''}"
   class:ui-icon-button--compact={compact}
   class:ui-touch-target={touch}
   {disabled}
@@ -52,21 +52,9 @@
 
   .icon-button:hover {
     color: var(--color-base-content);
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 44%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-overlay) 56%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 54%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--vellum-glass-rim) 70%, transparent);
   }
 
   .icon-button.is-active {
     color: var(--color-primary);
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 28%, transparent), transparent 1px),
-      color-mix(in oklab, var(--color-primary) 14%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 58%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 18%, transparent);
   }
 </style>

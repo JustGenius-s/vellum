@@ -30,15 +30,10 @@
     padding: 0.35rem 0.55rem;
     border-radius: 0.5rem;
     color: var(--color-base-content);
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 32%, transparent), transparent 1px),
-      var(--vellum-surface-overlay);
-    box-shadow:
-      inset 0 1px 0 var(--vellum-glass-edge),
-      inset 0 0 0 1px var(--vellum-glass-rim),
-      var(--vellum-shadow-overlay);
-    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.35);
-    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.35);
+    background: var(--vellum-surface-overlay);
+    box-shadow: var(--vellum-glass-shadow-floating);
+    -webkit-backdrop-filter: var(--vellum-glass-filter-floating);
+    backdrop-filter: var(--vellum-glass-filter-floating);
     content: attr(data-tooltip);
     font-size: var(--vellum-text-caption);
     line-height: 1.3;
