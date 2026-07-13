@@ -14,6 +14,8 @@ export type Keybindings = ReturnType<typeof createKeybindingManager>;
 export type UIState = {
   currentView: View;
   paletteOpen: boolean;
+  /** Initial query used to select quick-open mode. */
+  paletteQuery: string;
   findPanelOpen: boolean;
   /** Whether the desktop explorer panel is hidden. */
   sidebarCollapsed: boolean;
@@ -21,8 +23,8 @@ export type UIState = {
   sidebarView: SidebarView;
   /** When set, editor scrolls to this 1-based line then clears. */
   gotoLine: number | null;
-  /** User dismissed the diagnostics panel until next compile error. */
-  diagnosticsDismissed: boolean;
+  /** Whether the workspace-level problems panel is visible. */
+  problemsOpen: boolean;
   /** Scroll ratio 0–1 for editor ↔ preview sync. */
   scrollRatio: number;
   /** Which side last drove scroll sync. */

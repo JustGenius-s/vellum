@@ -3,6 +3,12 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
 export interface TreeNode { name: string; path: string; is_dir: boolean; children: TreeNode[]; }
+export interface VaultFileEntry {
+  path: string;
+  name: string;
+  stem: string;
+  relativePath: string;
+}
 interface BacklinkIndex { links: Record<string, string[]>; }
 
 export interface CompileDiagnostic {
@@ -53,7 +59,8 @@ export function createVault() {
   let activeTab = $derived(tabs.find((t) => t.path === activeTabPath));
   let activeTabName = $derived(activeTab?.name || "Vellum");
   let currentStem = $derived(fileStem(activeTabPath));
-  let fileNames = $derived(flattenTree(files));
+  let fileEntries = $derived(flattenFiles(files, vaultPath));
+  let fileNames = $derived(fileEntries.map((file) => file.stem));
 
   function fileName(path: string): string {
     return path.split(/[/\\]/).pop() || path;
@@ -69,16 +76,26 @@ export function createVault() {
       path.startsWith(`${parent}\\`);
   }
 
-  function flattenTree(nodes: TreeNode[]): string[] {
-    const names: string[] = [];
+  function flattenFiles(nodes: TreeNode[], root: string): VaultFileEntry[] {
+    const entries: VaultFileEntry[] = [];
     function walk(ns: TreeNode[]) {
       for (const n of ns) {
         if (n.is_dir) walk(n.children);
-        else if (n.name.endsWith(".typ")) names.push(n.name.replace(/\.typ$/, ""));
+        else if (n.name.endsWith(".typ")) {
+          entries.push({
+            path: n.path,
+            name: n.name,
+            stem: n.name.replace(/\.typ$/, ""),
+            relativePath: n.path
+              .slice(root.length)
+              .replace(/^[/\\]+/, "")
+              .replaceAll("\\", "/"),
+          });
+        }
       }
     }
     walk(nodes);
-    return names;
+    return entries;
   }
 
   function getAppState() {
@@ -175,6 +192,18 @@ export function createVault() {
     } catch (e) {
       status = `Error: ${e}`;
     }
+  }
+
+  async function openDiagnostic(diagnostic: CompileDiagnostic) {
+    if (!diagnostic.path || !vaultPath) return;
+    const separator = vaultPath.includes("\\") ? "\\" : "/";
+    const relativePath = diagnostic.path
+      .replace(/^[/\\]+/, "")
+      .replaceAll(/[\\/]/g, separator);
+    const path = vaultPath.endsWith(separator)
+      ? `${vaultPath}${relativePath}`
+      : `${vaultPath}${separator}${relativePath}`;
+    await openFile(path);
   }
 
   async function openByStem(stem: string) {
@@ -368,6 +397,7 @@ export function createVault() {
     get status() { return status; },
     get diagnostics() { return diagnostics; },
     get source() { return source; },
+    get fileEntries() { return fileEntries; },
     get fileNames() { return fileNames; },
     get backlinkIndex() { return backlinkIndex; },
     get hasActiveFile() { return !!activeTabPath; },
@@ -375,6 +405,7 @@ export function createVault() {
     openVault,
     refreshFiles,
     openFile,
+    openDiagnostic,
     openByStem,
     closeTab,
     switchTab,

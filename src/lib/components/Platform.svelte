@@ -2,6 +2,7 @@
   import { fly } from "svelte/transition";
   import {
     Circle,
+    CircleAlert,
     Command,
     Download,
     Eye,
@@ -20,6 +21,7 @@
   import SettingsPage from "$lib/components/SettingsPage.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PreviewPanel from "$lib/components/PreviewPanel.svelte";
+  import DiagnosticsPanel from "$lib/components/DiagnosticsPanel.svelte";
   import GraphView from "$lib/components/GraphView.svelte";
   import { getVault, getUI, getRegistry } from "$lib/stores.svelte";
 
@@ -85,7 +87,7 @@
         <li class="tooltip tooltip-right" data-tip="Command palette (⌘P)">
           <button
             class="btn btn-ghost ui-icon-button ui-interactive"
-            onclick={() => registry.executeCommand("palette.open")}
+            onclick={() => registry.executeCommand("palette.open-commands")}
             aria-label="Open command palette"
           >
             <Command class="ui-icon ui-icon--lg" />
@@ -193,7 +195,7 @@
           </div>
           <button
             class="btn btn-ghost ui-icon-button ui-touch-target ui-interactive"
-            onclick={() => registry.executeCommand("palette.open")}
+            onclick={() => registry.executeCommand("palette.open-commands")}
             aria-label="Open command palette"
           >
             <Command class="ui-icon ui-icon--lg" />
@@ -303,13 +305,25 @@
           </div>
         </div>
 
+        <DiagnosticsPanel />
+
         <footer class="ui-statusbar shrink-0 bg-base-200/55">
           <span class="min-w-0 flex-1 truncate">
             {vault.activeTabPath || "No file open"}
           </span>
-          <span class:text-error={vault.diagnostics.length > 0}>
-            {vault.status || "Ready"}
-          </span>
+          <span>{vault.status || "Ready"}</span>
+          <button
+            type="button"
+            class="ui-interactive flex h-full items-center gap-1.5 px-1.5 hover:bg-base-300"
+            class:text-error={vault.diagnostics.length > 0}
+            class:bg-base-300={ui.problemsOpen}
+            onclick={() => (ui.problemsOpen = !ui.problemsOpen)}
+            aria-expanded={ui.problemsOpen}
+            aria-label="Toggle problems panel"
+          >
+            <CircleAlert class="ui-icon ui-icon--sm" />
+            <span class="tabular-nums">{vault.diagnostics.length}</span>
+          </button>
         </footer>
       {/if}
     </main>

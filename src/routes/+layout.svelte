@@ -2,6 +2,7 @@
   import "../app.css";
   import { setContext, onMount } from "svelte";
   import {
+    CircleAlert,
     Download,
     GitGraph,
     Moon,
@@ -25,21 +26,23 @@
   const ui = $state<{
     currentView: View;
     paletteOpen: boolean;
+    paletteQuery: string;
     findPanelOpen: boolean;
     sidebarCollapsed: boolean;
     sidebarView: SidebarView;
     gotoLine: number | null;
-    diagnosticsDismissed: boolean;
+    problemsOpen: boolean;
     scrollRatio: number;
     scrollSource: "editor" | "preview" | null;
   }>({
     currentView: "editor",
     paletteOpen: false,
+    paletteQuery: "",
     findPanelOpen: false,
     sidebarCollapsed: false,
     sidebarView: "files",
     gotoLine: null,
-    diagnosticsDismissed: false,
+    problemsOpen: false,
     scrollRatio: 0,
     scrollSource: null,
   });
@@ -110,6 +113,13 @@
     }));
 
     disposers.push(registry.registerCommand({
+      id: "view.toggle-problems",
+      label: "Toggle Problems",
+      icon: CircleAlert,
+      handler: () => { ui.problemsOpen = !ui.problemsOpen; },
+    }));
+
+    disposers.push(registry.registerCommand({
       id: "theme.toggle",
       get label() { return theme.theme === "dark" ? "Switch to Light" : "Switch to Dark"; },
       get icon() { return theme.theme === "dark" ? Sun : Moon; },
@@ -118,16 +128,34 @@
 
     disposers.push(registry.registerCommand({
       id: "palette.open",
-      handler: () => { ui.paletteOpen = true; },
+      label: "Quick Open",
+      handler: () => {
+        ui.paletteQuery = "";
+        ui.paletteOpen = true;
+      },
+    }));
+
+    disposers.push(registry.registerCommand({
+      id: "palette.open-commands",
+      label: "Show Command Palette",
+      handler: () => {
+        ui.paletteQuery = ">";
+        ui.paletteOpen = true;
+      },
     }));
 
     disposers.push(registry.registerCommand({
       id: "editor.find",
+      label: "Find in Document",
       handler: () => { ui.findPanelOpen = true; },
     }));
 
     disposers.push(keybindings.bind({ keys: "Cmd+S", command: "file.save" }));
     disposers.push(keybindings.bind({ keys: "Cmd+P", command: "palette.open" }));
+    disposers.push(keybindings.bind({
+      keys: "Cmd+Shift+P",
+      command: "palette.open-commands",
+    }));
     disposers.push(keybindings.bind({ keys: "Cmd+F", command: "editor.find" }));
     disposers.push(keybindings.bind({
       keys: "Cmd+B",
