@@ -27,32 +27,34 @@
     const position = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-      const target = container?.querySelector<HTMLElement>(selector);
-      if (!target || !container || !indicator) {
-        animate(
-          indicator!,
-          { opacity: 0 },
-          { duration: motionDurations.micro },
-        );
-        return;
-      }
+        const target = container?.querySelector<HTMLElement>(selector);
+        if (!target || !container || !indicator) {
+          animate(
+            indicator!,
+            { opacity: 0 },
+            { duration: motionDurations.micro },
+          );
+          return;
+        }
 
-      const parentRect = container.getBoundingClientRect();
-      const rect = target.getBoundingClientRect();
-      const x = rect.left - parentRect.left + container.scrollLeft + inset;
-      const y = rect.top - parentRect.top + container.scrollTop + inset;
-      const width = Math.max(1, rect.width - inset * 2);
-      const height = Math.max(1, rect.height - inset * 2);
-      animate(
-        indicator,
-        {
-          opacity: 1,
-          transform: `translate(${x}px, ${y}px) scale(${width}, ${height})`,
-        },
-        prefersReducedMotion()
-          ? { duration: motionDurations.instant }
-          : motionSprings.surface,
-      );
+        const parentRect = container.getBoundingClientRect();
+        const rect = target.getBoundingClientRect();
+        const x = rect.left - parentRect.left + container.scrollLeft + inset;
+        const y = rect.top - parentRect.top + container.scrollTop + inset;
+        const width = Math.max(1, rect.width - inset * 2);
+        const height = Math.max(1, rect.height - inset * 2);
+        animate(
+          indicator,
+          {
+            opacity: 1,
+            width,
+            height,
+            transform: `translate(${x}px, ${y}px)`,
+          },
+          prefersReducedMotion()
+            ? { duration: motionDurations.instant }
+            : motionSprings.surface,
+        );
       });
     };
     const observer = new ResizeObserver(position);
@@ -77,7 +79,7 @@
     z-index: 0;
     width: 1px;
     height: 1px;
-    border-radius: var(--vellum-highlight-unit-radius);
+    border-radius: var(--vellum-radius-control);
     background:
       linear-gradient(
         180deg,
@@ -85,10 +87,10 @@
         transparent 1px
       ),
       color-mix(in oklab, var(--color-primary) 12%, transparent);
-    box-shadow: inset 0 0 0 0.03rem
+    box-shadow: inset 0 0 0 1px
       color-mix(in oklab, var(--color-primary) 12%, transparent);
     opacity: 0;
     pointer-events: none;
-    transform-origin: top left;
+    will-change: width, height, transform;
   }
 </style>
