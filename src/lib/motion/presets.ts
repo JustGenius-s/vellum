@@ -1,4 +1,6 @@
 export const motionDurations = {
+  instant: 0.01,
+  reduced: 0.06,
   micro: 0.12,
   response: 0.2,
   spatial: 0.34,
@@ -22,4 +24,19 @@ export function prefersReducedMotion(): boolean {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
+}
+
+export function observeReducedMotion(
+  listener: (reduced: boolean) => void,
+): () => void {
+  if (typeof window === "undefined") {
+    listener(false);
+    return () => {};
+  }
+
+  const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const notify = () => listener(query.matches);
+  notify();
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
 }

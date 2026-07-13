@@ -10,7 +10,7 @@
     display: inline-block;
     border: 1.5px solid color-mix(in oklab, var(--color-primary) 24%, transparent);
     border-top-color: var(--color-primary);
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     animation: spin 0.72s linear infinite;
   }
 

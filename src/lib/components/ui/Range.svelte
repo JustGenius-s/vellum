@@ -40,7 +40,7 @@
 
   input::-webkit-slider-runnable-track {
     height: 0.25rem;
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: linear-gradient(
       to right,
       var(--color-primary) var(--range-progress),
@@ -55,20 +55,20 @@
     margin-top: -0.325rem;
     appearance: none;
     border: 0.2rem solid var(--vellum-surface-canvas);
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: var(--color-primary);
     box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 55%, transparent);
   }
 
   input::-moz-range-track {
     height: 0.25rem;
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   input::-moz-range-progress {
     height: 0.25rem;
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: var(--color-primary);
   }
 
@@ -76,7 +76,7 @@
     width: 0.7rem;
     height: 0.7rem;
     border: 0.2rem solid var(--vellum-surface-canvas);
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: var(--color-primary);
   }
 </style>

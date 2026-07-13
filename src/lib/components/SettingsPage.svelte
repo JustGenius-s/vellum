@@ -2,15 +2,26 @@
   import { ArrowLeft, Eye, Moon, RotateCcw, Save, Sun, Type } from "lucide-svelte";
   import { getSettings, getTheme, getUI } from "$lib/stores.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import IconBadge from "$lib/components/ui/IconBadge.svelte";
   import IconButton from "$lib/components/ui/IconButton.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import Range from "$lib/components/ui/Range.svelte";
+  import SegmentedControl, {
+    type SegmentOption,
+  } from "$lib/components/ui/SegmentedControl.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import StatusDot from "$lib/components/ui/StatusDot.svelte";
   import Toggle from "$lib/components/ui/Toggle.svelte";
+  import { crossfadeEnter } from "$lib/motion/actions";
 
   const theme = getTheme();
   const settings = getSettings();
   const ui = getUI();
+
+  const themeOptions: SegmentOption[] = [
+    { value: "light", label: "Light · Ice", icon: Sun },
+    { value: "dark", label: "Dark · Void", icon: Moon },
+  ];
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
@@ -28,7 +39,7 @@
     {/snippet}
   </PanelHeader>
 
-  <div class="settings-canvas ui-surface-canvas min-h-0 flex-1 overflow-y-auto">
+  <div class="settings-canvas ui-surface-canvas ui-surface-canvas--tinted min-h-0 flex-1 overflow-y-auto">
     <main class="mx-auto w-full max-w-5xl px-5 pb-28 pt-8 sm:px-8 sm:pb-28 sm:pt-12">
       <div class="settings-intro">
         <span class="console-kicker">Environment control</span>
@@ -43,38 +54,25 @@
       <div class="settings-grid mt-10">
         <section class="control-zone ui-surface-chrome appearance-zone" aria-labelledby="appearance-title">
           <div class="zone-heading">
-            <span class="zone-icon ui-glass-accent"><Eye class="ui-icon" /></span>
+            <IconBadge size="lg"><Eye class="ui-icon" /></IconBadge>
             <div>
               <p class="zone-index">01 / Interface</p>
               <h3 id="appearance-title">Light field</h3>
             </div>
           </div>
           <p class="zone-description">Switch the visual atmosphere while preserving the same cyan signal layer.</p>
-          <div class="theme-switch" aria-label="Application theme">
-          <button
-            class="theme-option ui-glass-control ui-interactive {theme.theme === 'light' ? 'active ui-glass-control--active' : ''}"
-            onclick={() => theme.applyTheme("light")}
-            aria-pressed={theme.theme === "light"}
-          >
-            <Sun class="ui-icon" />
-            <span>Light</span>
-            <small>Ice</small>
-          </button>
-          <button
-            class="theme-option ui-glass-control ui-interactive {theme.theme === 'dark' ? 'active ui-glass-control--active' : ''}"
-            onclick={() => theme.applyTheme("dark")}
-            aria-pressed={theme.theme === "dark"}
-          >
-            <Moon class="ui-icon" />
-            <span>Dark</span>
-            <small>Void</small>
-          </button>
-        </div>
+          <SegmentedControl
+            value={theme.theme}
+            options={themeOptions}
+            label="Application theme"
+            variant="card"
+            onchange={(value) => theme.applyTheme(value as "light" | "dark")}
+          />
       </section>
 
         <section class="control-zone ui-surface-chrome editor-zone" aria-labelledby="editor-title">
           <div class="zone-heading">
-            <span class="zone-icon ui-glass-accent"><Type class="ui-icon" /></span>
+            <IconBadge size="lg"><Type class="ui-icon" /></IconBadge>
             <div>
               <p class="zone-index">02 / Reading</p>
               <h3 id="editor-title">Editor optics</h3>
@@ -139,7 +137,7 @@
 
         <section class="control-zone ui-surface-chrome files-zone" aria-labelledby="files-title">
           <div class="zone-heading">
-            <span class="zone-icon ui-glass-accent"><Save class="ui-icon" /></span>
+            <IconBadge size="lg"><Save class="ui-icon" /></IconBadge>
             <div>
               <p class="zone-index">03 / Persistence</p>
               <h3 id="files-title">Write-through</h3>
@@ -148,7 +146,7 @@
           <p class="zone-description">Decide when the active draft crosses from memory to disk.</p>
 
           <div class="save-status ui-glass-control">
-            <span class:online={settings.editor.autoSave} class="status-signal" aria-hidden="true"></span>
+            <StatusDot tone={settings.editor.autoSave ? "success" : "neutral"} />
             <span>
               <strong>{settings.editor.autoSave ? "Auto save active" : "Manual save"}</strong>
               <small>{settings.editor.autoSave ? "Changes are committed after a quiet interval." : "Changes wait for an explicit save command."}</small>
@@ -164,7 +162,7 @@
           </div>
 
           {#if settings.editor.autoSave}
-            <label class="delay-control ui-glass-hover">
+            <label use:crossfadeEnter={{ y: -4 }} class="delay-control ui-glass-hover">
               <span>
                 <strong>Quiet interval</strong>
                 <small>Wait before writing edits to disk.</small>
@@ -190,17 +188,6 @@
 </div>
 
 <style>
-  .settings-canvas {
-    background:
-      linear-gradient(
-        145deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 16%, transparent),
-        transparent 30%
-      ),
-      radial-gradient(circle at 82% 12%, color-mix(in oklab, var(--color-primary) 10%, transparent), transparent 24rem),
-      radial-gradient(circle at 12% 78%, color-mix(in oklab, var(--color-info) 7%, transparent), transparent 28rem);
-  }
-
   .settings-intro {
     padding-left: clamp(0rem, 5vw, 3.5rem);
   }
@@ -221,7 +208,7 @@
   }
 
   .control-zone {
-    border-radius: 1.25rem;
+    border-radius: var(--vellum-radius-panel);
     padding: clamp(1.25rem, 3vw, 2rem);
   }
 
@@ -242,15 +229,6 @@
     letter-spacing: -0.025em;
   }
 
-  .zone-icon {
-    display: grid;
-    width: 2.5rem;
-    height: 2.5rem;
-    place-items: center;
-    border-radius: 0.8rem;
-    color: var(--color-primary);
-  }
-
   .zone-description {
     margin: 1rem 0 1.5rem;
     color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
@@ -258,42 +236,9 @@
     line-height: 1.65;
   }
 
-  .theme-switch {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.625rem;
-  }
-
-  .theme-option {
-    display: grid;
-    min-height: 5.5rem;
-    justify-items: start;
-    border-radius: 0.9rem;
-    padding: 0.875rem;
-    color: color-mix(in oklab, var(--color-base-content) 58%, transparent);
-    text-align: left;
-  }
-
-  .theme-option span {
-    margin-top: 0.5rem;
-    font-size: 0.8125rem;
-    font-weight: 650;
-  }
-
-  .theme-option small {
-    color: color-mix(in oklab, var(--color-base-content) 38%, transparent);
-    font-size: 0.625rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .theme-option.active {
-    color: var(--color-primary);
-  }
-
   .range-console {
     display: block;
-    border-radius: 0.9rem;
+    border-radius: var(--vellum-radius-md);
     padding: 1.1rem;
   }
 
@@ -350,7 +295,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    border-radius: 0.8rem;
+    border-radius: var(--vellum-radius-control);
     padding-inline: 0.75rem;
     transition: background-color var(--vellum-motion-fast) var(--vellum-ease-out);
   }
@@ -360,19 +305,8 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.875rem;
-    border-radius: 0.9rem;
+    border-radius: var(--vellum-radius-md);
     padding: 1rem;
-  }
-
-  .status-signal {
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--color-base-content) 25%, transparent);
-  }
-
-  .status-signal.online {
-    background: var(--color-primary);
   }
 
   .delay-control {

@@ -28,7 +28,7 @@
     width: max-content;
     max-width: 14rem;
     padding: 0.35rem 0.55rem;
-    border-radius: 0.5rem;
+    border-radius: var(--vellum-radius-xs);
     color: var(--color-base-content);
     background: var(--vellum-surface-overlay);
     box-shadow: var(--vellum-glass-shadow-floating);

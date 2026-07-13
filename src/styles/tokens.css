@@ -1,0 +1,127 @@
+@theme {
+  --color-base-100: oklch(97.8% 0.008 245);
+  --color-base-200: oklch(94.8% 0.012 245);
+  --color-base-300: oklch(87.5% 0.02 245);
+  --color-base-content: oklch(21% 0.035 252);
+  --color-primary: oklch(55% 0.145 218);
+  --color-primary-content: oklch(98% 0.008 225);
+  --color-neutral: oklch(22% 0.03 252);
+  --color-neutral-content: oklch(96% 0.01 245);
+  --color-error: oklch(56% 0.2 25);
+  --color-warning: oklch(68% 0.15 72);
+  --color-success: oklch(52% 0.12 145);
+  --color-info: oklch(54% 0.1 230);
+}
+
+:root {
+  --vellum-font-ui:
+    "SF Pro Display", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --vellum-font-mono:
+    "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace,
+    monospace;
+  --vellum-text-caption: 0.6875rem;
+  --vellum-text-ui: 0.8125rem;
+  --vellum-text-body: 0.875rem;
+  --vellum-text-title: 1rem;
+  --vellum-leading-tight: 1.25;
+  --vellum-leading-normal: 1.5;
+  --vellum-icon-sm: 0.875rem;
+  --vellum-icon-md: 1rem;
+  --vellum-icon-lg: 1.125rem;
+  --vellum-control-compact: 1.75rem;
+  --vellum-control-default: 2.25rem;
+  --vellum-control-relaxed: 2.625rem;
+  --vellum-control-touch: 2.75rem;
+  --vellum-chrome-height: 3.5rem;
+  --vellum-panel-header: 3rem;
+  --vellum-statusbar-height: 1.75rem;
+  --vellum-radius-xs: 0.5rem;
+  --vellum-radius-sm: 0.625rem;
+  --vellum-radius-control: 0.75rem;
+  --vellum-radius-md: 0.875rem;
+  --vellum-radius-lg: 1rem;
+  --vellum-radius-rail: 1.125rem;
+  --vellum-radius-panel: 1.25rem;
+  --vellum-radius-floating: 1.5rem;
+  --vellum-radius-pill: 999px;
+  --vellum-highlight-unit-radius: 0.02rem;
+  --vellum-indent-step: 0.75rem;
+  --vellum-space-panel: 0.75rem;
+  --vellum-motion-fast: 160ms;
+  --vellum-motion-normal: 280ms;
+  --vellum-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --vellum-disabled-opacity: 0.38;
+  --vellum-blur-scrim: 8px;
+  --vellum-blur-canvas: 28px;
+  --vellum-blur-chrome: 36px;
+  --vellum-blur-floating: 48px;
+  --vellum-glass-filter-canvas: blur(var(--vellum-blur-canvas)) saturate(1.2);
+  --vellum-glass-filter-chrome: blur(var(--vellum-blur-chrome)) saturate(1.3);
+  --vellum-glass-filter-floating: blur(var(--vellum-blur-floating))
+    saturate(1.38);
+  --vellum-glass-shadow-control:
+    inset 0 1px 0
+      color-mix(in oklab, var(--vellum-glass-edge) 48%, transparent),
+    inset 0 0 0 1px var(--vellum-glass-rim);
+  --vellum-glass-shadow-floating:
+    inset 0 1px 0 var(--vellum-glass-edge),
+    inset 0 0 0 1px var(--vellum-glass-rim),
+    var(--vellum-shadow-overlay);
+}
+
+[data-theme="light"] {
+  --color-base-100: oklch(97.8% 0.008 245);
+  --color-base-200: oklch(94.8% 0.012 245);
+  --color-base-300: oklch(87.5% 0.02 245);
+  --color-base-content: oklch(21% 0.035 252);
+  --color-primary: oklch(55% 0.145 218);
+  --color-primary-content: oklch(98% 0.008 225);
+  --color-neutral: oklch(22% 0.03 252);
+  --color-neutral-content: oklch(96% 0.01 245);
+  --color-error: oklch(56% 0.2 25);
+  --color-warning: oklch(68% 0.15 72);
+  --color-success: oklch(52% 0.12 145);
+  --color-info: oklch(54% 0.1 230);
+  --vellum-surface-app: oklch(87% 0.045 238);
+  --vellum-surface-canvas: oklch(99% 0.006 235 / 0.5);
+  --vellum-surface-chrome: oklch(97% 0.014 235 / 0.56);
+  --vellum-surface-paper: oklch(99.5% 0.004 240);
+  --vellum-surface-overlay: oklch(98.5% 0.012 235 / 0.68);
+  --vellum-border-subtle: oklch(62% 0.03 238 / 0.18);
+  --vellum-glass-edge: oklch(100% 0 0 / 0.72);
+  --vellum-glass-rim: oklch(46% 0.035 240 / 0.16);
+  --vellum-glass-specular: oklch(100% 0 0 / 0.82);
+  --vellum-shadow-overlay:
+    0 28px 70px -30px oklch(20% 0.06 240 / 0.36),
+    0 8px 24px -16px oklch(20% 0.05 240 / 0.2);
+  --vellum-shadow-paper: 0 24px 60px -32px oklch(18% 0.04 248 / 0.32);
+}
+
+[data-theme="dark"] {
+  --color-base-100: oklch(16.5% 0.025 252);
+  --color-base-200: oklch(20% 0.032 252);
+  --color-base-300: oklch(29% 0.042 250);
+  --color-base-content: oklch(92% 0.018 235);
+  --color-primary: oklch(72% 0.135 213);
+  --color-primary-content: oklch(14% 0.035 240);
+  --color-neutral: oklch(12.5% 0.022 252);
+  --color-neutral-content: oklch(93% 0.015 235);
+  --color-error: oklch(68% 0.18 25);
+  --color-warning: oklch(76% 0.13 72);
+  --color-success: oklch(68% 0.11 145);
+  --color-info: oklch(70% 0.09 230);
+  --vellum-surface-app: oklch(9.5% 0.042 250);
+  --vellum-surface-canvas: oklch(20% 0.032 245 / 0.56);
+  --vellum-surface-chrome: oklch(24% 0.04 245 / 0.62);
+  --vellum-surface-paper: oklch(25% 0.028 247 / 0.9);
+  --vellum-surface-overlay: oklch(25% 0.045 245 / 0.76);
+  --vellum-border-subtle: oklch(68% 0.035 230 / 0.14);
+  --vellum-glass-edge: oklch(96% 0.02 225 / 0.16);
+  --vellum-glass-rim: oklch(4% 0.02 250 / 0.46);
+  --vellum-glass-specular: oklch(94% 0.025 220 / 0.24);
+  --vellum-shadow-overlay:
+    0 34px 80px -28px oklch(3% 0.03 250 / 0.82),
+    0 10px 28px -18px oklch(3% 0.03 250 / 0.72);
+  --vellum-shadow-paper: 0 26px 64px -30px oklch(3% 0.025 252 / 0.74);
+}

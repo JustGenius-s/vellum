@@ -31,7 +31,7 @@ export function press(node: HTMLElement) {
       node,
       { transform: "translateY(0) scale(1)" },
       prefersReducedMotion()
-        ? { duration: 0.01 }
+        ? { duration: motionDurations.instant }
         : motionSprings.signal,
     );
   };
@@ -48,36 +48,6 @@ export function press(node: HTMLElement) {
       node.removeEventListener("pointerup", up);
       node.removeEventListener("pointercancel", up);
       node.removeEventListener("pointerleave", up);
-    },
-  };
-}
-
-export function hoverLift(node: HTMLElement) {
-  let control: MotionCleanup = null;
-  const enter = () => {
-    if (prefersReducedMotion()) return;
-    stop(control);
-    control = animate(
-      node,
-      { transform: "translateY(-1px)" },
-      motionSprings.signal,
-    );
-  };
-  const leave = () => {
-    stop(control);
-    control = animate(
-      node,
-      { transform: "translateY(0)" },
-      { duration: motionDurations.micro, ease: motionEasings.out },
-    );
-  };
-  node.addEventListener("pointerenter", enter);
-  node.addEventListener("pointerleave", leave);
-  return {
-    destroy() {
-      stop(control);
-      node.removeEventListener("pointerenter", enter);
-      node.removeEventListener("pointerleave", leave);
     },
   };
 }
@@ -99,7 +69,7 @@ export function surfaceEnter(
           ],
         },
     reduced
-      ? { duration: 0.08 }
+      ? { duration: motionDurations.reduced }
       : { duration: motionDurations.spatial, ease: motionEasings.out },
   );
   return { destroy: () => control.stop() };
@@ -107,38 +77,125 @@ export function surfaceEnter(
 
 export function staggerChildren(
   node: HTMLElement,
-  selector = "[data-motion-item]",
+  config:
+    | string
+    | { selector?: string; dependency?: unknown; limit?: number } = {},
 ) {
-  const children = Array.from(node.querySelectorAll<HTMLElement>(selector));
-  if (children.length === 0) return {};
+  let control: MotionCleanup = null;
+
+  function run(nextConfig: typeof config) {
+    const options =
+      typeof nextConfig === "string"
+        ? { selector: nextConfig }
+        : nextConfig;
+    const selector = options.selector ?? "[data-motion-item]";
+    const limit = options.limit ?? 30;
+    const children = Array.from(
+      node.querySelectorAll<HTMLElement>(selector),
+    ).slice(0, limit);
+    if (children.length === 0) return;
+    const reduced = prefersReducedMotion();
+    stop(control);
+    control = animate(
+      children,
+      reduced
+        ? { opacity: [0, 1] }
+        : { opacity: [0, 1], transform: ["translateY(6px)", "translateY(0)"] },
+      {
+        duration: reduced ? motionDurations.reduced : motionDurations.response,
+        delay: reduced ? 0 : stagger(0.024),
+        ease: motionEasings.out,
+      },
+    );
+  }
+
+  run(config);
+  return {
+    update(nextConfig: typeof config) {
+      requestAnimationFrame(() => run(nextConfig));
+    },
+    destroy() {
+      stop(control);
+    },
+  };
+}
+
+export function crossfadeEnter(
+  node: HTMLElement,
+  options: { x?: number; y?: number } = {},
+) {
   const reduced = prefersReducedMotion();
   const control = animate(
-    children,
+    node,
     reduced
       ? { opacity: [0, 1] }
-      : { opacity: [0, 1], transform: ["translateY(6px)", "translateY(0)"] },
+      : {
+          opacity: [0, 1],
+          transform: [
+            `translate(${options.x ?? 0}px, ${options.y ?? 4}px)`,
+            "translate(0, 0)",
+          ],
+        },
     {
-      duration: reduced ? 0.08 : motionDurations.response,
-      delay: reduced ? 0 : stagger(0.024),
+      duration: reduced ? motionDurations.reduced : motionDurations.response,
       ease: motionEasings.out,
     },
   );
   return { destroy: () => control.stop() };
 }
 
-export function focusTransfer(node: HTMLElement) {
-  const focus = () => {
-    if (prefersReducedMotion()) return;
-    animate(
-      node,
-      { opacity: [0.72, 1], transform: ["translateY(2px)", "translateY(0)"] },
-      { duration: motionDurations.response, ease: motionEasings.out },
-    );
-  };
-  node.addEventListener("focusin", focus);
-  return {
-    destroy() {
-      node.removeEventListener("focusin", focus);
+export function crossfadeExit(node: HTMLElement) {
+  const reduced = prefersReducedMotion();
+  const control = animate(
+    node,
+    { opacity: [1, 0] },
+    {
+      duration: reduced ? motionDurations.reduced : motionDurations.response,
+      ease: motionEasings.exit,
     },
-  };
+  );
+  return { destroy: () => control.stop() };
+}
+
+export function expandEnter(node: HTMLElement) {
+  const targetHeight = node.scrollHeight;
+  node.style.overflow = "hidden";
+  const control = animate(
+    node,
+    prefersReducedMotion()
+      ? { opacity: [0, 1] }
+      : { height: [0, targetHeight], opacity: [0, 1] },
+    {
+      duration: prefersReducedMotion()
+        ? motionDurations.reduced
+        : motionDurations.spatial,
+      ease: motionEasings.out,
+    },
+  );
+  void control.then(() => {
+    node.style.height = "auto";
+    node.style.overflow = "";
+  });
+  return { destroy: () => control.stop() };
+}
+
+export async function animateExit(
+  node: HTMLElement,
+  options: { x?: number; y?: number } = {},
+): Promise<void> {
+  const reduced = prefersReducedMotion();
+  const control = animate(
+    node,
+    reduced
+      ? { opacity: [1, 0] }
+      : {
+          opacity: 0,
+          transform: `translate(${options.x ?? 0}px, ${options.y ?? 4}px)`,
+        },
+    {
+      duration: reduced ? motionDurations.reduced : motionDurations.micro,
+      ease: motionEasings.exit,
+    },
+  );
+  await control;
 }

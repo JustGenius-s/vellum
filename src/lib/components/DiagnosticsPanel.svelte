@@ -10,9 +10,13 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import IconButton from "$lib/components/ui/IconButton.svelte";
   import ListRow from "$lib/components/ui/ListRow.svelte";
+  import SegmentedControl, {
+    type SegmentOption,
+  } from "$lib/components/ui/SegmentedControl.svelte";
+  import StatusDot from "$lib/components/ui/StatusDot.svelte";
   import { getVault, getUI } from "$lib/stores.svelte";
   import type { CompileDiagnostic } from "$lib/vault.svelte";
-  import { surfaceEnter } from "$lib/motion/actions";
+  import { animateExit, staggerChildren, surfaceEnter } from "$lib/motion/actions";
 
   const vault = getVault();
   const ui = getUI();
@@ -20,6 +24,8 @@
   let filter = $state<"all" | "error" | "warning">("all");
   let expanded = $state(false);
   let previousCount = 0;
+  let visible = $state(false);
+  let panel = $state<HTMLDivElement>();
   let errorCount = $derived(
     vault.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length,
   );
@@ -29,6 +35,27 @@
       ? vault.diagnostics
       : vault.diagnostics.filter((diagnostic) => diagnostic.severity === filter),
   );
+  let filterOptions = $derived<SegmentOption[]>([
+    { value: "all", label: "All", count: vault.diagnostics.length },
+    { value: "error", label: "Errors", count: errorCount },
+    { value: "warning", label: "Warnings", count: warningCount },
+  ]);
+
+  $effect(() => {
+    if (ui.problemsOpen) {
+      visible = true;
+      return;
+    }
+    if (visible && panel) {
+      let cancelled = false;
+      void animateExit(panel, { y: 12 }).then(() => {
+        if (!cancelled) visible = false;
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+  });
 
   $effect(() => {
     const count = vault.diagnostics.length;
@@ -48,15 +75,16 @@
   }
 </script>
 
-{#if ui.problemsOpen}
+{#if visible}
   <div
+    bind:this={panel}
     use:surfaceEnter={{ y: 16, scale: 0.99 }}
     class="problems-hud ui-surface-overlay mx-2 mb-2 flex shrink-0 flex-col overflow-hidden"
     class:problems-hud--expanded={expanded}
     aria-label="Problems panel"
   >
     <div class="hud-header flex min-h-11 shrink-0 items-center gap-2 px-3">
-      <span class="hud-signal" aria-hidden="true"></span>
+      <StatusDot tone="primary" pulse={vault.compilePhase !== "idle"} />
       <CircleAlert class="ui-icon ui-icon--sm text-primary" />
       <h2 class="hud-title">Problems</h2>
       <span class="ui-caption ui-text-tertiary tabular-nums">
@@ -76,43 +104,25 @@
       </div>
     </div>
 
-    <div
-      class="hud-filters ui-glass-control flex min-h-9 shrink-0 items-center gap-1 px-2"
-      role="toolbar"
-      aria-label="Filter problems"
-    >
-      <ListFilter class="ui-icon ui-icon--sm ui-text-tertiary mr-1" />
-      <div class="flex min-w-0 flex-1 items-center gap-1">
-        <button
-          type="button"
-          class="hud-filter ui-glass-hover ui-interactive {filter === 'all' ? 'is-active ui-glass-control--active' : ''}"
-          onclick={() => (filter = "all")}
-          aria-pressed={filter === "all"}
-        >
-          All {vault.diagnostics.length}
-        </button>
-        <button
-          type="button"
-          class="hud-filter ui-glass-hover ui-interactive {filter === 'error' ? 'is-active ui-glass-control--active' : ''}"
-          onclick={() => (filter = "error")}
-          aria-pressed={filter === "error"}
-        >
-          Errors {errorCount}
-        </button>
-        <button
-          type="button"
-          class="hud-filter ui-glass-hover ui-interactive {filter === 'warning' ? 'is-active ui-glass-control--active' : ''}"
-          onclick={() => (filter = "warning")}
-          aria-pressed={filter === "warning"}
-        >
-          Warnings {warningCount}
-        </button>
-      </div>
+    <div class="hud-filters shrink-0">
+      <SegmentedControl
+        value={filter}
+        options={filterOptions}
+        label="Filter problems"
+        onchange={(value) => (filter = value as typeof filter)}
+      />
     </div>
 
-    <div class="hud-list ui-glass-control min-h-0 flex-1 overflow-y-auto p-1.5">
-      {#each visibleDiagnostics as diagnostic}
-        <ListRow onclick={() => onSelect(diagnostic)}>
+    <div
+      use:staggerChildren={{ dependency: visibleDiagnostics, limit: 24 }}
+      class="hud-list ui-glass-control min-h-0 flex-1 overflow-y-auto p-1.5"
+    >
+      {#each visibleDiagnostics as diagnostic (`${diagnostic.path}:${diagnostic.line}:${diagnostic.column}:${diagnostic.message}`)}
+        <ListRow
+          motionItem
+          motionDependency={visibleDiagnostics}
+          onclick={() => onSelect(diagnostic)}
+        >
           {#if diagnostic.severity === "error"}
             <CircleAlert class="ui-icon ui-icon--sm shrink-0 text-error" />
           {:else}
@@ -165,11 +175,10 @@
   .problems-hud {
     height: 12rem;
     max-height: 36dvh;
-    border-radius: 0.875rem;
+    border-radius: var(--vellum-radius-md);
     transition:
       height var(--vellum-motion-normal) var(--vellum-ease-out),
-      opacity var(--vellum-motion-fast) var(--vellum-ease-out),
-      transform var(--vellum-motion-fast) var(--vellum-ease-out);
+      opacity var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
   .problems-hud--expanded {
@@ -185,14 +194,6 @@
     );
   }
 
-  .hud-signal {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 999px;
-    background: var(--color-primary);
-    opacity: 0.72;
-  }
-
   .hud-title {
     color: color-mix(in oklab, var(--color-base-content) 82%, transparent);
     font-size: var(--vellum-text-ui);
@@ -203,38 +204,11 @@
 
   .hud-filters {
     margin: 0 0.5rem 0.25rem;
-    border-radius: 0.625rem;
-  }
-
-  .hud-filter {
-    min-height: 1.75rem;
-    border-radius: 999px;
-    padding-inline: 0.625rem;
-    color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
-    font-size: var(--vellum-text-caption);
-  }
-
-  .hud-filter:hover {
-    color: var(--color-base-content);
-  }
-
-  .hud-filter.is-active {
-    color: var(--color-primary);
   }
 
   .hud-list {
     margin-inline: 0.25rem;
-    border-radius: 0.625rem;
+    border-radius: var(--vellum-radius-sm);
   }
 
-  .hud-list :global(button:active) {
-    transform: scale(0.995);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .problems-hud,
-    .hud-list :global(button) {
-      transition: none;
-    }
-  }
 </style>

@@ -8,6 +8,8 @@
     compact = false,
     touch = false,
     active = false,
+    current = false,
+    class: className = "",
     disabled = false,
     onclick,
     children,
@@ -17,6 +19,8 @@
     compact?: boolean;
     touch?: boolean;
     active?: boolean;
+    current?: boolean;
+    class?: string;
     disabled?: boolean;
     onclick?: (event: MouseEvent) => void;
     children: Snippet;
@@ -26,13 +30,14 @@
 <button
   use:press
   type="button"
-  class="icon-button ui-icon-button ui-glass-hover {active ? 'is-active ui-glass-control--active' : ''}"
+  class="icon-button ui-icon-button ui-glass-hover {active || current ? 'is-active ui-glass-control--active' : ''} {className}"
   class:ui-icon-button--compact={compact}
   class:ui-touch-target={touch}
   {disabled}
   {onclick}
   aria-label={label}
   aria-pressed={active || undefined}
+  aria-current={current ? "page" : undefined}
   {title}
 >
   {@render children()}

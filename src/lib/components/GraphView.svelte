@@ -6,6 +6,8 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import IconButton from "$lib/components/ui/IconButton.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
+  import StatusBadge from "$lib/components/ui/StatusBadge.svelte";
+  import { observeReducedMotion } from "$lib/motion/presets";
 
   const vault = getVault();
   const ui = getUI();
@@ -34,7 +36,8 @@
   let height = $state(600);
   let frameId: number | null = null;
   let hovered: string | null = null;
-  let prefersReducedMotion = false;
+  let reducedMotion = false;
+  let simulationFrame = 0;
 
   function hashStem(stem: string) {
     let hash = 0;
@@ -81,7 +84,7 @@
 
     nodes = Array.from(nodeMap.values());
     renderStatic();
-    if (!prefersReducedMotion) startSimulation();
+    if (!reducedMotion) startSimulation();
   }
 
   function renderStatic() {
@@ -111,12 +114,16 @@
       g.setAttribute("class", "graph-node");
       g.style.cursor = "pointer";
       g.style.transition =
-        "opacity var(--vellum-motion-normal) var(--vellum-ease-out)";
+        reducedMotion
+          ? "none"
+          : "opacity var(--vellum-motion-normal) var(--vellum-ease-out)";
 
       const visual = document.createElementNS("http://www.w3.org/2000/svg", "g");
       visual.setAttribute("class", "node-visual");
       visual.style.transition =
-        "transform var(--vellum-motion-normal) var(--vellum-ease-out)";
+        reducedMotion
+          ? "none"
+          : "transform var(--vellum-motion-normal) var(--vellum-ease-out)";
 
       const orbit = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       orbit.setAttribute("r", "15");
@@ -202,6 +209,7 @@
 
   function startSimulation() {
     if (frameId !== null) cancelAnimationFrame(frameId);
+    simulationFrame = 0;
     frameId = requestAnimationFrame(simulate);
   }
 
@@ -259,8 +267,9 @@
     }
 
     syncPositions();
+    simulationFrame++;
 
-    if (totalEnergy > 0.5) {
+    if (!reducedMotion && totalEnergy > 0.5 && simulationFrame < 240) {
       frameId = requestAnimationFrame(simulate);
     } else {
       frameId = null;
@@ -330,9 +339,26 @@
   });
 
   onMount(() => {
-    prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const stopObservingMotion = observeReducedMotion((reduced) => {
+      reducedMotion = reduced;
+      if (reduced && frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      } else if (!reduced && nodes.length > 0) {
+        startSimulation();
+      }
+      for (const element of nodeEls.values()) {
+        element.style.transition = reduced
+          ? "none"
+          : "opacity var(--vellum-motion-normal) var(--vellum-ease-out)";
+        const visual = element.querySelector<SVGGElement>(".node-visual");
+        if (visual) {
+          visual.style.transition = reduced
+            ? "none"
+            : "transform var(--vellum-motion-normal) var(--vellum-ease-out)";
+        }
+      }
+    });
     const ro = new ResizeObserver(() => {
       if (!container) return;
       height = container.clientHeight;
@@ -353,6 +379,7 @@
 
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId);
+      stopObservingMotion();
       ro.disconnect();
     };
   });
@@ -370,11 +397,11 @@
       </IconButton>
     {/snippet}
     {#snippet meta()}
-      {noteCount} notes, {linkCount} links
+      <StatusBadge tone="neutral">{noteCount} notes · {linkCount} links</StatusBadge>
     {/snippet}
   </PanelHeader>
 
-  <div use:surfaceEnter={{ y: 8, scale: 0.998 }} class="graph-space ui-surface-canvas relative flex-1 overflow-hidden">
+  <div use:surfaceEnter={{ y: 8, scale: 0.998 }} class="graph-space ui-surface-canvas ui-surface-canvas--tinted relative flex-1 overflow-hidden">
     <div class="depth-field" aria-hidden="true"></div>
     {#if noteCount === 0}
       <div class="flex h-full items-center justify-center">
@@ -403,17 +430,6 @@
 <style>
   .graph-space {
     isolation: isolate;
-    background:
-      linear-gradient(
-        145deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 16%, transparent),
-        transparent 28%
-      ),
-      radial-gradient(
-        circle at 50% 48%,
-        color-mix(in oklab, var(--color-primary) 10%, transparent),
-        transparent 34%
-      );
   }
 
   .depth-field {

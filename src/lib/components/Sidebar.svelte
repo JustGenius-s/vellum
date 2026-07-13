@@ -1,6 +1,5 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { slide } from "svelte/transition";
   import {
     ChevronDown,
     ChevronRight,
@@ -17,7 +16,14 @@
   import { getVault, type TreeNode } from "$lib/stores.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
+  import IconBadge from "$lib/components/ui/IconBadge.svelte";
   import IconButton from "$lib/components/ui/IconButton.svelte";
+  import ListRow from "$lib/components/ui/ListRow.svelte";
+  import MenuItem from "$lib/components/ui/MenuItem.svelte";
+  import SharedHighlight from "$lib/components/ui/SharedHighlight.svelte";
+  import TextField from "$lib/components/ui/TextField.svelte";
+  import { expandEnter, surfaceEnter } from "$lib/motion/actions";
 
   const vault = getVault();
 
@@ -28,6 +34,7 @@
   let creating = $state<{ parent: string; isDir: boolean } | null>(null);
   let createValue = $state("");
   let operationError = $state("");
+  let treeTrack = $state<HTMLDivElement>();
 
   let vaultName = $derived(
     vault.vaultPath.split(/[/\\]/).filter(Boolean).at(-1) || "No vault",
@@ -145,10 +152,8 @@
   }
 </script>
 
-<svelte:window onclick={() => { if (contextMenu) closeContextMenu(); }} />
-
 <div
-  class="navigator-shell ui-surface-chrome flex h-full flex-col"
+  class="navigator-shell ui-surface-chrome ui-surface-chrome--tinted flex h-full flex-col"
   role="tree"
   tabindex="0"
   aria-label="Vault files"
@@ -160,11 +165,11 @@
       onclick={() => vault.openVault()}
       title={vault.vaultPath || "Open vault"}
     >
-      <span class="vault-mark ui-glass-accent" aria-hidden="true">
+      <IconBadge>
         <FolderOpen class="ui-icon" />
-      </span>
+      </IconBadge>
       <span class="min-w-0 text-left">
-        <span class="navigator-kicker">Workspace</span>
+        <span class="ui-kicker mb-1 block">Workspace</span>
         <span class="block truncate text-sm font-semibold tracking-[-0.01em]">{vaultName}</span>
       </span>
     </button>
@@ -183,7 +188,7 @@
   {#if operationError}
     <div
       class="operation-error ui-caption m-2 grid grid-cols-[auto_1fr_auto] items-start gap-2 p-2 leading-4"
-      transition:slide={{ duration: 160 }}
+      use:surfaceEnter={{ y: -4, scale: 0.995 }}
     >
       <CircleAlert class="ui-icon ui-icon--sm mt-px" />
       <span class="min-w-0 flex-1 wrap-break-word">{operationError}</span>
@@ -197,7 +202,13 @@
     </div>
   {/if}
 
-  <div class="navigator-track min-h-0 flex-1 overflow-y-auto px-2 py-3">
+  <div bind:this={treeTrack} class="navigator-track relative min-h-0 flex-1 overflow-y-auto px-2 py-3">
+    <SharedHighlight
+      container={treeTrack}
+      selector='[data-highlight-target="true"]'
+      dependency={vault.activeTabPath}
+      inset={1}
+    />
     {#if !vault.vaultPath}
       <EmptyState
         title="Open a vault"
@@ -217,14 +228,13 @@
           {:else}
             <FilePlus class="ui-icon ui-icon--sm ui-text-tertiary" />
           {/if}
-          <input
-            type="text"
+          <TextField
             bind:value={createValue}
-            class="inline-input ui-glass-control min-w-0 flex-1"
+            size="sm"
             placeholder={creating.isDir ? "folder name" : "note.typ"}
-            aria-label={creating.isDir ? "Folder name" : "File name"}
+            label={creating.isDir ? "Folder name" : "File name"}
             onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
-            onchange={confirmCreate}
+            onblur={confirmCreate}
           />
         </div>
       {/if}
@@ -249,33 +259,32 @@
         {:else}
           <FileText class="ui-icon ui-icon--sm ui-text-tertiary" />
         {/if}
-        <input
-          type="text"
+        <TextField
           bind:value={renameValue}
-          class="inline-input ui-glass-control min-w-0 flex-1"
-          aria-label="New name"
+          size="sm"
+          label="New name"
           onkeydown={(e) => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') renaming = null; }}
-          onchange={confirmRename}
+          onblur={confirmRename}
         />
       </div>
     {:else if node.is_dir}
-      <button
-        type="button"
-        class="tree-row ui-list-row ui-interactive ui-touch-target font-medium"
+      <ListRow
+        class="tree-row ui-touch-target font-medium"
+        role="treeitem"
+        ariaLevel={depth + 1}
+        ariaExpanded={expanded.has(node.path)}
+        density="relaxed"
         onclick={() => toggle(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
-        aria-expanded={expanded.has(node.path)}
       >
-        {#if expanded.has(node.path)}
-          <ChevronDown class="ui-icon ui-icon--sm ui-text-tertiary" />
-        {:else}
+        <span class="tree-chevron" class:tree-chevron--open={expanded.has(node.path)}>
           <ChevronRight class="ui-icon ui-icon--sm ui-text-tertiary" />
-        {/if}
+        </span>
         <FolderOpen class="ui-icon ui-text-tertiary" />
         <span class="truncate">{node.name}</span>
-      </button>
+      </ListRow>
       {#if expanded.has(node.path)}
-        <div transition:slide={{ duration: 150 }}>
+        <div use:expandEnter>
           {#if creating?.parent === node.path}
             <div class="create-row flex items-center gap-2 px-3 py-1.5" style="padding-left: {(depth + 1) * 14}px">
               {#if creating.isDir}
@@ -283,13 +292,13 @@
               {:else}
                 <FilePlus class="ui-icon ui-icon--sm ui-text-tertiary" />
               {/if}
-              <input
-                type="text"
+              <TextField
                 bind:value={createValue}
-                class="inline-input ui-glass-control flex-1"
+                size="sm"
                 placeholder={creating.isDir ? "folder name" : "note.typ"}
+                label={creating.isDir ? "Folder name" : "File name"}
                 onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') creating = null; }}
-                onchange={confirmCreate}
+                onblur={confirmCreate}
               />
             </div>
           {/if}
@@ -299,82 +308,67 @@
         </div>
       {/if}
     {:else}
-      <button
-        type="button"
-        class="tree-row ui-list-row ui-interactive ui-touch-target"
+      <ListRow
+        class="tree-row ui-touch-target"
+        selected={node.path === vault.activeTabPath}
+        highlightTarget={node.path === vault.activeTabPath}
+        role="treeitem"
+        ariaLevel={depth + 1}
+        density="relaxed"
         onclick={() => vault.openFile(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
-        aria-current={node.path === vault.activeTabPath ? "page" : undefined}
       >
         <span class="w-3.5 shrink-0"></span>
         <FileText class="ui-icon ui-text-tertiary" />
         <span class="truncate">{node.name}</span>
-      </button>
+      </ListRow>
     {/if}
   </div>
 {/snippet}
 
-{#if contextMenu}
-  <ul
-    class="context-island ui-glass-floating fixed z-50 min-w-44 rounded-2xl p-2"
-    style="left: min({contextMenu.x}px, calc(100vw - 11rem)); top: min({contextMenu.y}px, calc(100vh - 12rem))"
-    role="menu"
-    tabindex="-1"
-    oncontextmenu={(e) => e.preventDefault()}
-  >
-    {#if contextMenu.node?.is_dir}
-      <li>
-        <button role="menuitem" onclick={() => startCreate(contextMenu!.node!.path, false)}>
-          <FilePlus class="ui-icon ui-icon--sm" /> New File
-        </button>
-      </li>
-      <li>
-        <button role="menuitem" onclick={() => startCreate(contextMenu!.node!.path, true)}>
-          <FolderPlus class="ui-icon ui-icon--sm" /> New Folder
-        </button>
-      </li>
+<ContextMenu
+  open={contextMenu != null}
+  x={contextMenu?.x ?? 0}
+  y={contextMenu?.y ?? 0}
+  label="File actions"
+  onclose={closeContextMenu}
+>
+    {#if contextMenu?.node?.is_dir}
+        <MenuItem onclick={() => startCreate(contextMenu!.node!.path, false)}>
+          {#snippet leading()}
+          <FilePlus class="ui-icon ui-icon--sm" />
+          {/snippet}
+          New File
+        </MenuItem>
+        <MenuItem onclick={() => startCreate(contextMenu!.node!.path, true)}>
+          {#snippet leading()}
+          <FolderPlus class="ui-icon ui-icon--sm" />
+          {/snippet}
+          New Folder
+        </MenuItem>
     {/if}
-    {#if contextMenu.node}
-      <li>
-        <button role="menuitem" onclick={() => startRename(contextMenu!.node!)}>
-          <Pencil class="ui-icon ui-icon--sm" /> Rename
-        </button>
-      </li>
-      <li>
-        <button class="text-error" role="menuitem" onclick={() => confirmDelete(contextMenu!.node!)}>
-          <Trash2 class="ui-icon ui-icon--sm" /> Delete
-        </button>
-      </li>
+    {#if contextMenu?.node}
+        <MenuItem onclick={() => startRename(contextMenu!.node!)}>
+          {#snippet leading()}<Pencil class="ui-icon ui-icon--sm" />{/snippet}
+          Rename
+        </MenuItem>
+        <MenuItem variant="danger" onclick={() => confirmDelete(contextMenu!.node!)}>
+          {#snippet leading()}<Trash2 class="ui-icon ui-icon--sm" />{/snippet}
+          Delete
+        </MenuItem>
     {:else}
-      <li>
-        <button role="menuitem" onclick={() => startCreate(vault.vaultPath, false)}>
-          <FilePlus class="ui-icon ui-icon--sm" /> New File
-        </button>
-      </li>
-      <li>
-        <button role="menuitem" onclick={() => startCreate(vault.vaultPath, true)}>
-          <FolderPlus class="ui-icon ui-icon--sm" /> New Folder
-        </button>
-      </li>
+        <MenuItem onclick={() => startCreate(vault.vaultPath, false)}>
+          {#snippet leading()}<FilePlus class="ui-icon ui-icon--sm" />{/snippet}
+          New File
+        </MenuItem>
+        <MenuItem onclick={() => startCreate(vault.vaultPath, true)}>
+          {#snippet leading()}<FolderPlus class="ui-icon ui-icon--sm" />{/snippet}
+          New Folder
+        </MenuItem>
     {/if}
-  </ul>
-{/if}
+</ContextMenu>
 
 <style>
-  .navigator-shell {
-    background:
-      linear-gradient(
-        145deg,
-        color-mix(in oklab, var(--vellum-glass-specular) 20%, transparent),
-        transparent 26%
-      ),
-      radial-gradient(
-        circle at 20% 0,
-        color-mix(in oklab, var(--color-primary) 8%, transparent),
-        transparent 13rem
-      );
-  }
-
   .navigator-header {
     display: flex;
     min-height: 4.5rem;
@@ -388,29 +382,8 @@
     min-height: 3.125rem;
     align-items: center;
     gap: 0.6875rem;
-    border-radius: 0.875rem;
+    border-radius: var(--vellum-radius-md);
     padding: 0.375rem 0.5rem;
-  }
-
-  .vault-mark {
-    display: grid;
-    width: 2.125rem;
-    height: 2.125rem;
-    flex: none;
-    place-items: center;
-    border-radius: 0.7rem;
-    color: color-mix(in oklab, var(--color-primary) 88%, var(--color-base-content));
-  }
-
-  .navigator-kicker {
-    display: block;
-    margin-bottom: 0.2rem;
-    color: color-mix(in oklab, var(--color-base-content) 42%, transparent);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    line-height: 1;
-    text-transform: uppercase;
   }
 
   .navigator-track {
@@ -421,7 +394,7 @@
     position: relative;
   }
 
-  .tree-row {
+  :global(.tree-row) {
     min-height: 2.5rem;
     gap: 0.5625rem;
     margin-block: 0.0625rem;
@@ -429,80 +402,40 @@
     font-size: 0.8125rem;
   }
 
-  .tree-row:hover :global(.ui-text-tertiary) {
+  :global(.tree-row:hover .ui-text-tertiary) {
     color: color-mix(in oklab, var(--color-base-content) 64%, transparent);
   }
 
-  .tree-row[aria-current="page"] {
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 24%, transparent), transparent 1px),
-      color-mix(in oklab, var(--color-primary) 12%, transparent);
+  :global(.tree-row[aria-current="page"]) {
+    background: transparent;
     color: color-mix(in oklab, var(--color-primary) 82%, var(--color-base-content));
+    box-shadow: none;
     font-weight: 560;
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 40%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 10%, transparent);
   }
 
-  .tree-row[aria-current="page"] :global(.ui-text-tertiary) {
+  :global(.tree-row[aria-current="page"] .ui-text-tertiary) {
     color: var(--color-primary);
   }
 
   .create-row {
-    border-radius: 0.75rem;
+    border-radius: var(--vellum-radius-control);
     background:
       linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 24%, transparent), transparent 1px),
       color-mix(in oklab, var(--color-primary) 7%, transparent);
   }
 
-  .inline-input {
-    min-height: 2.25rem;
-    border: 0;
-    border-radius: 0.65rem;
-    outline: 0;
-    color: var(--color-base-content);
-    padding-inline: 0.65rem;
-    font: inherit;
-    font-size: var(--vellum-text-ui);
-  }
-
-  .inline-input:focus {
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 54%, transparent),
-      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 58%, transparent);
-  }
-
   .operation-error {
-    border-radius: 0.75rem;
+    border-radius: var(--vellum-radius-control);
     color: var(--color-error);
     background: color-mix(in oklab, var(--color-error) 10%, transparent);
   }
 
-  .context-island {
-    border: 0;
+  .tree-chevron {
+    display: inline-flex;
+    transition: transform var(--vellum-motion-fast) var(--vellum-ease-out);
   }
 
-  .context-island :global(button) {
-    display: flex;
-    width: 100%;
-    min-height: 2.5rem;
-    align-items: center;
-    border: 0;
-    border-radius: 0.7rem;
-    gap: 0.625rem;
-    color: var(--color-base-content);
-    background: transparent;
-    padding-inline: 0.75rem;
-    font: inherit;
-    font-size: 0.8125rem;
-    text-align: left;
-  }
-
-  .context-island :global(button:hover) {
-    background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
-  }
-
-  .context-island :global(button.text-error:hover) {
-    background: color-mix(in oklab, var(--color-error) 9%, transparent);
+  .tree-chevron--open {
+    transform: rotate(90deg);
   }
 </style>

@@ -3,13 +3,30 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
   import { getVault, getUI } from "$lib/stores.svelte";
-  import { surfaceEnter } from "$lib/motion/actions";
+  import {
+    crossfadeEnter,
+    crossfadeExit,
+    surfaceEnter,
+  } from "$lib/motion/actions";
 
   const vault = getVault();
   const ui = getUI();
 
   let scrollEl = $state<HTMLDivElement>();
   let applyingScroll = false;
+  let currentSvg = $state("");
+  let previousSvg = $state("");
+
+  $effect(() => {
+    const nextSvg = vault.svg;
+    if (nextSvg === currentSvg) return;
+    previousSvg = currentSvg;
+    currentSvg = nextSvg;
+    const timer = setTimeout(() => {
+      previousSvg = "";
+    }, 240);
+    return () => clearTimeout(timer);
+  });
 
   function onScroll() {
     if (!scrollEl || applyingScroll) return;
@@ -52,9 +69,24 @@
     onscroll={onScroll}
   >
     <div class="preview-canvas relative flex min-h-full flex-col items-center p-5 sm:p-8">
-      {#if vault.svg}
-        <div use:surfaceEnter={{ y: 8, scale: 0.998 }} class="ui-paper preview-svg relative w-full max-w-2xl overflow-hidden rounded-md">
-          {@html vault.svg}
+      {#if currentSvg}
+        <div class="preview-stack relative w-full max-w-2xl">
+          {#if previousSvg}
+            {#key previousSvg}
+              <div use:crossfadeExit class="absolute inset-x-0 top-0 z-0">
+                <div class="ui-paper preview-svg relative w-full overflow-hidden rounded-md">
+                  {@html previousSvg}
+                </div>
+              </div>
+            {/key}
+          {/if}
+          {#key currentSvg}
+            <div use:crossfadeEnter={{ y: 5 }} class="relative z-1">
+              <div class="ui-paper preview-svg relative w-full overflow-hidden rounded-md">
+                {@html currentSvg}
+              </div>
+            </div>
+          {/key}
         </div>
       {:else if vault.compilePhase !== "idle"}
         <div class="ui-paper preview-state w-full max-w-2xl rounded-md" aria-busy="true">
@@ -134,10 +166,6 @@
     transform: translateX(-50%);
   }
 
-  .compile-status {
-    animation: status-enter 180ms var(--vellum-ease-out) both;
-  }
-
   .preview-state {
     position: relative;
     min-height: 18rem;
@@ -197,13 +225,6 @@
     background: var(--vellum-surface-paper);
   }
 
-  @keyframes status-enter {
-    from {
-      opacity: 0;
-      transform: translateY(-4px) scale(0.98);
-    }
-  }
-
   @keyframes preview-shimmer {
     to {
       transform: translateX(100%);
@@ -211,7 +232,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .compile-status,
     .preview-state[aria-busy="true"]::before {
       animation: none;
     }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { surfaceEnter } from "$lib/motion/actions";
+  import { animateExit, surfaceEnter } from "$lib/motion/actions";
+  import Scrim from "./Scrim.svelte";
 
   let {
     open,
@@ -15,9 +16,26 @@
   } = $props();
 
   let panel = $state<HTMLElement>();
+  let visible = $state(false);
 
   $effect(() => {
-    if (!open || !panel) return;
+    if (open) {
+      visible = true;
+      return;
+    }
+    if (visible && panel) {
+      let cancelled = false;
+      void animateExit(panel, { y: 8 }).then(() => {
+        if (!cancelled) visible = false;
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+  });
+
+  $effect(() => {
+    if (!visible || !panel) return;
     const previous = document.activeElement as HTMLElement | null;
     const focusable = panel.querySelector<HTMLElement>(
       "input, button, select, textarea, [tabindex]:not([tabindex='-1'])",
@@ -30,20 +48,32 @@
     if (open && event.key === "Escape") {
       event.preventDefault();
       onclose();
+      return;
+    }
+    if (!open || event.key !== "Tab" || !panel) return;
+    const focusable = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        "input, button, select, textarea, [tabindex]:not([tabindex='-1'])",
+      ),
+    ).filter((element) => !element.hasAttribute("disabled"));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if open}
+{#if visible}
   <div class="dialog-layer" role="presentation">
-    <button
-      type="button"
-      class="dialog-backdrop"
-      aria-label={`Close ${label}`}
-      onclick={onclose}
-    ></button>
+    <Scrim label={`Close ${label}`} onclick={onclose} />
     <div
       use:surfaceEnter={{ y: 18, scale: 0.985 }}
       bind:this={panel}
@@ -67,21 +97,12 @@
     padding: min(11dvh, 6rem) 0.5rem 0.5rem;
   }
 
-  .dialog-backdrop {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: color-mix(in oklab, var(--color-neutral) 42%, transparent);
-    -webkit-backdrop-filter: blur(8px) saturate(0.82);
-    backdrop-filter: blur(8px) saturate(0.82);
-  }
-
   .dialog-surface {
     position: relative;
     z-index: 1;
     width: min(42rem, calc(100vw - 1rem));
     max-height: min(40rem, calc(100dvh - 1rem));
     overflow: hidden;
-    border-radius: 1.5rem;
+    border-radius: var(--vellum-radius-floating);
   }
 </style>

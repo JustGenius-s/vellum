@@ -5,6 +5,14 @@
   import type { VaultFileEntry } from "$lib/vault.svelte";
   import Dialog from "$lib/components/ui/Dialog.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import IconBadge from "$lib/components/ui/IconBadge.svelte";
+  import ListRow from "$lib/components/ui/ListRow.svelte";
+  import SegmentedControl, {
+    type SegmentOption,
+  } from "$lib/components/ui/SegmentedControl.svelte";
+  import SharedHighlight from "$lib/components/ui/SharedHighlight.svelte";
+  import StatusBadge from "$lib/components/ui/StatusBadge.svelte";
+  import TextField from "$lib/components/ui/TextField.svelte";
   import { staggerChildren } from "$lib/motion/actions";
 
   const vault = getVault();
@@ -37,6 +45,13 @@
   let selectedIndex = $state(0);
   let inputEl = $state<HTMLInputElement>();
   let registryVersion = $state(0);
+  let resultStack = $state<HTMLDivElement>();
+
+  const modeOptions: SegmentOption[] = [
+    { value: "files", label: "Files", icon: Search },
+    { value: "commands", label: "Commands", icon: Command },
+    { value: "line", label: "Line", icon: Hash },
+  ];
 
   function fuzzyScore(value: string, needle: string): number | null {
     if (!needle) return 0;
@@ -193,6 +208,14 @@
     query = nextMode === "commands" ? `>${value}` : nextMode === "line" ? `:${value}` : value;
     setTimeout(() => inputEl?.focus(), 0);
   }
+
+  function itemKey(item: Item): string {
+    return item.type === "file"
+      ? item.path
+      : item.type === "command"
+        ? item.id
+        : `line-${item.line}`;
+  }
 </script>
 
 <Dialog
@@ -203,36 +226,27 @@
     <div class="command-island max-h-[min(40rem,calc(100dvh-1rem))] overflow-hidden">
       <header class="island-header">
         <div class="mb-3 flex items-center justify-between gap-4">
-          <span class="island-kicker">Command island</span>
-          <nav class="mode-track" aria-label="Palette mode">
-            <button
-              type="button"
-              class="ui-glass-hover {mode === 'files' ? 'active ui-glass-control--active' : ''}"
-              onclick={() => switchMode("files")}
-              aria-pressed={mode === "files"}
-            >
-              <Search class="ui-icon ui-icon--sm" /> Files
-            </button>
-            <button
-              type="button"
-              class="ui-glass-hover {mode === 'commands' ? 'active ui-glass-control--active' : ''}"
-              onclick={() => switchMode("commands")}
-              aria-pressed={mode === "commands"}
-            >
-              <Command class="ui-icon ui-icon--sm" /> Commands
-            </button>
-            <button
-              type="button"
-              class="ui-glass-hover {mode === 'line' ? 'active ui-glass-control--active' : ''}"
-              onclick={() => switchMode("line")}
-              aria-pressed={mode === "line"}
-            >
-              <Hash class="ui-icon ui-icon--sm" /> Line
-            </button>
-          </nav>
+          <span class="ui-kicker">Command island</span>
+          <SegmentedControl
+            value={mode}
+            options={modeOptions}
+            label="Palette mode"
+            onchange={(value) => switchMode(value as "files" | "commands" | "line")}
+          />
         </div>
-        <label class="command-input ui-glass-control">
-          <span class="mode-glyph ui-glass-accent" aria-hidden="true">
+        <TextField
+          bind:input={inputEl}
+          bind:value={query}
+          size="lg"
+          {placeholder}
+          label={placeholder}
+          controls="command-palette-results"
+          activedescendant={items[safeIndex] ? `command-palette-item-${safeIndex}` : undefined}
+          autocomplete="off"
+          onkeydown={handleKeydown}
+        >
+          {#snippet leading()}
+          <IconBadge size="lg">
             {#if mode === "commands"}
               <Command class="ui-icon ui-icon--lg" />
             {:else if mode === "line"}
@@ -240,44 +254,45 @@
             {:else}
               <Search class="ui-icon ui-icon--lg" />
             {/if}
-          </span>
-          <input
-            bind:this={inputEl}
-            type="text"
-            {placeholder}
-            bind:value={query}
-            onkeydown={handleKeydown}
-            class="min-w-0 flex-1 bg-transparent px-0 text-base outline-none"
-            aria-label={placeholder}
-            aria-controls="command-palette-results"
-            aria-activedescendant={items[safeIndex] ? `command-palette-item-${safeIndex}` : undefined}
-          />
-          <span class="mode-label">{modeLabel}</span>
-        </label>
+          </IconBadge>
+          {/snippet}
+          {#snippet trailing()}
+            <StatusBadge>{modeLabel}</StatusBadge>
+          {/snippet}
+        </TextField>
       </header>
 
       {#if items.length > 0}
         <div
-          use:staggerChildren
+          use:staggerChildren={{ dependency: items, limit: 12 }}
+          bind:this={resultStack}
           id="command-palette-results"
-          class="result-stack max-h-[min(26rem,60dvh)] overflow-y-auto px-2 py-3"
+          class="result-stack relative max-h-[min(26rem,60dvh)] overflow-y-auto px-2 py-3"
           role="listbox"
           aria-label={`${modeLabel} results`}
         >
-          {#each items as item, idx}
-            <button
-              data-motion-item
+          <SharedHighlight
+            container={resultStack}
+            selector='[data-highlight-target="true"]'
+            dependency={safeIndex}
+            inset={3}
+          />
+          {#each items as item, idx (itemKey(item))}
+            <ListRow
+              motionItem
+              motionDependency={items}
+              highlightTarget={idx === safeIndex}
+              selected={idx === safeIndex}
+              selectionMode="selected"
+              density="relaxed"
               id={`command-palette-item-${idx}`}
-              type="button"
-              class="command-result ui-list-row ui-interactive gap-3"
-              style={`--item-index: ${idx}`}
+              class="command-result gap-3"
               role="option"
-              aria-selected={idx === safeIndex}
               onmouseenter={() => (selectedIndex = idx)}
               onclick={() => void selectItem(item)}
             >
               {#if item.type === "file"}
-                <span class="result-icon ui-glass-control"><FileText class="ui-icon" /></span>
+                <IconBadge muted><FileText class="ui-icon" /></IconBadge>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-semibold tracking-[-0.01em]">{item.name}</span>
                   {#if parentDirectory(item.relativePath)}
@@ -288,9 +303,9 @@
                 </span>
               {:else if item.type === "command"}
                 {#if item.icon}
-                  <span class="result-icon ui-glass-control"><item.icon class="ui-icon" /></span>
+                  <IconBadge muted><item.icon class="ui-icon" /></IconBadge>
                 {:else}
-                  <span class="result-icon ui-glass-control"><Command class="ui-icon" /></span>
+                  <IconBadge muted><Command class="ui-icon" /></IconBadge>
                 {/if}
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-medium">{item.label}</span>
@@ -300,12 +315,12 @@
                   <kbd class="shortcut shrink-0">{item.shortcut}</kbd>
                 {/if}
               {:else}
-                <span class="result-icon ui-glass-control"><Hash class="ui-icon" /></span>
+                <IconBadge muted><Hash class="ui-icon" /></IconBadge>
                 <span class="min-w-0 flex-1 truncate text-sm font-medium">
                   Move cursor to line {item.line}
                 </span>
               {/if}
-            </button>
+            </ListRow>
           {/each}
         </div>
       {:else}
@@ -340,7 +355,7 @@
 
 <style>
   .command-island {
-    border-radius: 1.5rem;
+    border-radius: var(--vellum-radius-floating);
     background:
       radial-gradient(
         circle at 84% 0%,
@@ -354,131 +369,22 @@
     padding: 1rem 1rem 0.75rem;
   }
 
-  .island-kicker {
-    color: var(--color-primary);
-    font-size: 0.625rem;
-    font-weight: 750;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  .mode-track {
-    display: flex;
-    gap: 0.25rem;
-  }
-
-  .mode-track button {
-    display: flex;
-    min-height: 1.9rem;
-    align-items: center;
-    gap: 0.3rem;
-    border-radius: 999px;
-    padding-inline: 0.55rem;
-    color: color-mix(in oklab, var(--color-base-content) 42%, transparent);
-    font-size: 0.625rem;
-    font-weight: 650;
-    transition:
-      transform var(--vellum-motion-fast) var(--vellum-ease-out),
-      opacity var(--vellum-motion-fast) var(--vellum-ease-out),
-      background-color var(--vellum-motion-fast) var(--vellum-ease-out);
-  }
-
-  .mode-track button:not(.active) {
-    opacity: 0.66;
-  }
-
-  .mode-track button:hover {
-    opacity: 1;
-  }
-
-  .mode-track button:active {
-    transform: scale(0.96);
-  }
-
-  .mode-track button.active {
-    color: var(--color-primary);
-    opacity: 1;
-  }
-
-  .command-input {
-    display: flex;
-    min-height: 4rem;
-    align-items: center;
-    gap: 0.875rem;
-    border-radius: 1rem;
-    padding: 0.6rem 0.75rem;
-    transition:
-      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
-      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
-  }
-
-  .command-input:focus-within {
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 56%, transparent), transparent 1px),
-      color-mix(in oklab, var(--vellum-surface-canvas) 72%, transparent);
-    box-shadow:
-      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 32%, transparent),
-      0 10px 28px color-mix(in oklab, var(--vellum-surface-app) 24%, transparent);
-  }
-
-  .mode-glyph {
-    display: grid;
-    width: 2.5rem;
-    height: 2.5rem;
-    flex: none;
-    place-items: center;
-    border-radius: 0.75rem;
-    color: var(--color-primary);
-  }
-
-  .mode-label {
-    flex: none;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--color-primary) 8%, transparent);
-    padding: 0.25rem 0.5rem;
-    color: var(--color-primary);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .command-result {
+  :global(.command-result) {
     min-height: 3.75rem;
     margin-block: 0.2rem;
     border-radius: 1rem;
     padding: 0.6rem 0.75rem;
-    animation: result-enter 260ms var(--vellum-ease-out) both;
-    animation-delay: calc(var(--item-index) * 22ms);
-    transition:
-      background-color var(--vellum-motion-fast) var(--vellum-ease-out),
-      transform var(--vellum-motion-fast) var(--vellum-ease-out),
-      box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
+    background: transparent;
   }
 
-  .command-result:hover {
-    background: color-mix(in oklab, var(--color-base-content) 4%, transparent);
-    transform: translateX(2px);
-  }
-
-  .result-icon {
-    display: grid;
-    width: 2.25rem;
-    height: 2.25rem;
-    flex: none;
-    place-items: center;
-    border-radius: 0.7rem;
-    color: color-mix(in oklab, var(--color-base-content) 48%, transparent);
-  }
-
-  .command-result[aria-selected="true"] .result-icon {
-    background: color-mix(in oklab, var(--color-primary) 11%, transparent);
-    color: var(--color-primary);
+  :global(.command-result[aria-selected="true"]) {
+    background: transparent;
+    box-shadow: none;
   }
 
   .shortcut,
   .island-footer kbd {
-    border-radius: 0.45rem;
+    border-radius: var(--vellum-radius-xs);
     background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
     padding: 0.2rem 0.4rem;
     color: color-mix(in oklab, var(--color-base-content) 52%, transparent);
@@ -504,48 +410,4 @@
     gap: 0.25rem;
   }
 
-  @keyframes result-enter {
-    from {
-      opacity: 0;
-      transform: translateY(6px) scale(0.99);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @media (max-width: 560px) {
-    .mode-track button {
-      width: 1.9rem;
-      justify-content: center;
-      overflow: hidden;
-      padding: 0;
-      color: transparent;
-      font-size: 0;
-    }
-
-    .mode-track button :global(svg) {
-      color: currentColor;
-    }
-
-    .mode-track button.active {
-      color: var(--color-primary);
-    }
-
-    .mode-label {
-      display: none;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .command-result {
-      animation: none;
-      transition: none;
-    }
-
-    .command-result:hover {
-      transform: none;
-    }
-  }
 </style>

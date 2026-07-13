@@ -32,7 +32,7 @@
     height: 1.4rem;
     flex: none;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     transition:
       background-color var(--vellum-motion-fast) var(--vellum-ease-out),
       box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);
@@ -44,7 +44,7 @@
     left: 0.2rem;
     width: 1rem;
     height: 1rem;
-    border-radius: 999px;
+    border-radius: var(--vellum-radius-pill);
     background: color-mix(in oklab, var(--color-base-content) 72%, transparent);
     transform: translateX(0);
     transition:

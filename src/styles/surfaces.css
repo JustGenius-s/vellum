@@ -1,0 +1,117 @@
+@layer components {
+  .ui-surface-canvas,
+  .ui-workspace-panel {
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 34%, transparent),
+        transparent 28%
+      ),
+      var(--vellum-surface-canvas);
+    -webkit-backdrop-filter: var(--vellum-glass-filter-canvas);
+    backdrop-filter: var(--vellum-glass-filter-canvas);
+  }
+
+  .ui-surface-chrome {
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 26%, transparent),
+        transparent 32%
+      ),
+      var(--vellum-surface-chrome);
+    -webkit-backdrop-filter: var(--vellum-glass-filter-chrome);
+    backdrop-filter: var(--vellum-glass-filter-chrome);
+  }
+
+  .ui-surface-canvas--tinted,
+  .ui-surface-chrome--tinted {
+    background-image:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 18%, transparent),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at var(--vellum-tint-x, 82%) var(--vellum-tint-y, 0%),
+        color-mix(in oklab, var(--color-primary) var(--vellum-tint-strength, 8%), transparent),
+        transparent var(--vellum-tint-radius, 16rem)
+      );
+  }
+
+  .ui-surface-overlay,
+  .ui-glass-floating {
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 34%, transparent),
+        transparent 36%
+      ),
+      var(--vellum-surface-overlay);
+    -webkit-backdrop-filter: var(--vellum-glass-filter-floating);
+    backdrop-filter: var(--vellum-glass-filter-floating);
+    box-shadow: var(--vellum-glass-shadow-floating);
+  }
+
+  .ui-paper {
+    background: var(--vellum-surface-paper);
+    box-shadow: var(--vellum-shadow-paper);
+  }
+
+  .ui-glass-control {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--vellum-glass-edge) 40%, transparent),
+        transparent 1px
+      ),
+      color-mix(in oklab, var(--vellum-surface-canvas) 58%, transparent);
+    box-shadow: var(--vellum-glass-shadow-control);
+  }
+
+  .ui-glass-control--active {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 28%, transparent),
+        transparent 1px
+      ),
+      color-mix(in oklab, var(--color-primary) 12%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 52%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 14%, transparent);
+  }
+
+  .ui-glass-accent {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 26%, transparent),
+        transparent 1px
+      ),
+      color-mix(in oklab, var(--color-primary) 9%, transparent);
+    color: var(--color-primary);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 38%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 8%, transparent);
+  }
+
+  .ui-glass-hover:hover {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--vellum-glass-edge) 30%, transparent),
+        transparent 1px
+      ),
+      color-mix(in oklab, var(--vellum-surface-overlay) 42%, transparent);
+    box-shadow: inset 0 1px 0
+      color-mix(in oklab, var(--vellum-glass-edge) 38%, transparent);
+  }
+
+  .ui-scrim {
+    border: 0;
+    background: color-mix(in oklab, var(--color-neutral) 42%, transparent);
+    -webkit-backdrop-filter: blur(var(--vellum-blur-scrim)) saturate(0.84);
+    backdrop-filter: blur(var(--vellum-blur-scrim)) saturate(0.84);
+  }
+}

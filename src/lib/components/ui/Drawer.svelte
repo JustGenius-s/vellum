@@ -1,7 +1,13 @@
 <script lang="ts">
   import { animate } from "motion";
   import type { Snippet } from "svelte";
-  import { motionSprings, prefersReducedMotion } from "$lib/motion/presets";
+  import { animateExit } from "$lib/motion/actions";
+  import {
+    motionDurations,
+    motionSprings,
+    prefersReducedMotion,
+  } from "$lib/motion/presets";
+  import Scrim from "./Scrim.svelte";
 
   let {
     open,
@@ -16,19 +22,38 @@
   } = $props();
 
   let panel = $state<HTMLElement>();
+  let visible = $state(false);
   let startX = 0;
   let startTime = 0;
   let tracking = false;
   let dragging = false;
 
   $effect(() => {
-    if (!open || !panel) return;
+    if (open) {
+      visible = true;
+      return;
+    }
+    if (visible && panel) {
+      let cancelled = false;
+      void animateExit(panel, { x: -panel.clientWidth }).then(() => {
+        if (!cancelled) visible = false;
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+  });
+
+  $effect(() => {
+    if (!visible || !panel || !open) return;
     const control = animate(
       panel,
       prefersReducedMotion()
         ? { opacity: [0, 1] }
         : { opacity: [0.8, 1], transform: ["translateX(-24px)", "translateX(0)"] },
-      prefersReducedMotion() ? { duration: 0.08 } : motionSprings.surface,
+      prefersReducedMotion()
+        ? { duration: motionDurations.reduced }
+        : motionSprings.surface,
     );
     return () => control.stop();
   });
@@ -73,14 +98,9 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if open}
+{#if visible}
   <div class="drawer-layer">
-    <button
-      type="button"
-      class="drawer-backdrop"
-      aria-label={`Close ${label}`}
-      onclick={onclose}
-    ></button>
+    <Scrim label={`Close ${label}`} onclick={onclose} />
     <aside
       bind:this={panel}
       class="drawer-panel ui-glass-floating"
@@ -100,15 +120,6 @@
     position: fixed;
     inset: 0;
     z-index: 60;
-  }
-
-  .drawer-backdrop {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: color-mix(in oklab, var(--color-neutral) 38%, transparent);
-    -webkit-backdrop-filter: blur(6px) saturate(0.86);
-    backdrop-filter: blur(6px) saturate(0.86);
   }
 
   .drawer-panel {

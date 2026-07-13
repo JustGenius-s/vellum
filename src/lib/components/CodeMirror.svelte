@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { animate } from "motion";
   import { Compartment, EditorState } from "@codemirror/state";
-  import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+  import {
+    EditorView,
+    keymap,
+    lineNumbers,
+    highlightActiveLine,
+    highlightActiveLineGutter,
+  } from "@codemirror/view";
   import { defaultKeymap } from "@codemirror/commands";
   import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
   import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
@@ -10,6 +17,11 @@
   import { typst } from "$lib/typst-language";
   import { getSettings, getTheme, getUI } from "$lib/stores.svelte";
   import type { CompileDiagnostic } from "$lib/vault.svelte";
+  import {
+    motionDurations,
+    motionEasings,
+    prefersReducedMotion,
+  } from "$lib/motion/presets";
 
   let {
     source = "",
@@ -91,7 +103,6 @@
         overflow: "auto",
         fontFamily: "var(--vellum-font-mono)",
         letterSpacing: "0.006em",
-        scrollbarWidth: "none",
       },
       ".cm-gutters": {
         backgroundColor:
@@ -323,6 +334,7 @@
 
     const scrollHandler = () => reportScroll();
     const extensions = [
+      highlightActiveLine(),
       highlightActiveLineGutter(),
       keymap.of([...searchKeymap, ...defaultKeymap]),
       updateListener,
@@ -398,6 +410,16 @@
       view.scrollDOM.scrollTop = existing?.scrollTop ?? 0;
       view.scrollDOM.scrollLeft = existing?.scrollLeft ?? 0;
       view.focus();
+      if (!prefersReducedMotion()) {
+        animate(
+          host,
+          {
+            opacity: [0.72, 1],
+            transform: ["translateX(5px)", "translateX(0)"],
+          },
+          { duration: motionDurations.response, ease: motionEasings.out },
+        );
+      }
     });
   });
 
@@ -458,6 +480,20 @@
       selection: { anchor: lineObj.from },
       effects: EditorView.scrollIntoView(lineObj.from, { y: "center" }),
     });
+    requestAnimationFrame(() => {
+      const targetLine = view?.dom.querySelector<HTMLElement>(".cm-activeLine");
+      if (!targetLine || prefersReducedMotion()) return;
+      animate(
+        targetLine,
+        {
+          backgroundColor: [
+            "color-mix(in oklab, var(--color-primary) 18%, transparent)",
+            "color-mix(in oklab, var(--color-primary) 4%, transparent)",
+          ],
+        },
+        { duration: motionDurations.canvas, ease: motionEasings.out },
+      );
+    });
     ui.gotoLine = null;
   });
 
@@ -489,12 +525,5 @@
   }
   .cm-host :global(.cm-editor .cm-scroller) {
     overflow: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .cm-host :global(.cm-editor .cm-scroller::-webkit-scrollbar) {
-    display: none;
-    width: 0;
-    height: 0;
   }
 </style>

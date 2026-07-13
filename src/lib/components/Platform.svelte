@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { fly } from "svelte/transition";
-  import { animate } from "motion";
   import {
     CircleAlert,
     Command,
@@ -30,9 +28,14 @@
   import Drawer from "$lib/components/ui/Drawer.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import IconButton from "$lib/components/ui/IconButton.svelte";
+  import SegmentedControl, {
+    type SegmentOption,
+  } from "$lib/components/ui/SegmentedControl.svelte";
+  import SharedHighlight from "$lib/components/ui/SharedHighlight.svelte";
+  import StatusDot from "$lib/components/ui/StatusDot.svelte";
   import Tooltip from "$lib/components/ui/Tooltip.svelte";
   import { getVault, getUI, getRegistry } from "$lib/stores.svelte";
-  import { motionSprings, prefersReducedMotion } from "$lib/motion/presets";
+  import { crossfadeEnter, surfaceEnter } from "$lib/motion/actions";
 
   const vault = getVault();
   const ui = getUI();
@@ -41,7 +44,10 @@
   let mobileTab = $state<"editor" | "preview">("editor");
   let mobileSidebarOpen = $state(false);
   let dock = $state<HTMLElement>();
-  let dockIndicator = $state<HTMLSpanElement>();
+  const mobileViewOptions: SegmentOption[] = [
+    { value: "editor", label: "Editor", icon: FileText },
+    { value: "preview", label: "Preview", icon: Eye },
+  ];
   let sidebarTitle = $derived(
     ui.sidebarView === "files"
       ? "Explorer"
@@ -49,36 +55,14 @@
         ? "Search"
         : "Outline",
   );
+  let activeDirty = $derived(
+    vault.tabs.find((tab) => tab.path === vault.activeTabPath)?.dirty ?? false,
+  );
 
   $effect(() => {
     vault.activeTabPath;
     vault.vaultPath;
     mobileSidebarOpen = false;
-  });
-
-  $effect(() => {
-    ui.currentView;
-    ui.sidebarView;
-    ui.sidebarCollapsed;
-    if (!dock || !dockIndicator) return;
-    const frame = requestAnimationFrame(() => {
-      const active = dock?.querySelector<HTMLElement>('[aria-pressed="true"]');
-      if (!active || !dock || !dockIndicator) {
-        animate(dockIndicator!, { opacity: 0 }, { duration: 0.12 });
-        return;
-      }
-      const dockRect = dock.getBoundingClientRect();
-      const activeRect = active.getBoundingClientRect();
-      animate(
-        dockIndicator,
-        {
-          opacity: 1,
-          transform: `translateX(${activeRect.left - dockRect.left}px)`,
-        },
-        prefersReducedMotion() ? { duration: 0.01 } : motionSprings.surface,
-      );
-    });
-    return () => cancelAnimationFrame(frame);
   });
 
   function setSidebarCollapsed(collapsed: boolean) {
@@ -110,7 +94,12 @@
       class="ui-orbital-rail ui-glass-floating fixed bottom-10 left-1/2 z-30 flex h-14 -translate-x-1/2 items-center gap-1 px-2"
       aria-label="Workspace"
     >
-      <span bind:this={dockIndicator} class="dock-indicator" aria-hidden="true"></span>
+      <SharedHighlight
+        container={dock}
+        selector='[aria-pressed="true"]'
+        dependency={`${ui.currentView}:${ui.sidebarView}:${ui.sidebarCollapsed}`}
+        inset={1}
+      />
       <div class="mr-1 flex items-center justify-center pr-1" aria-hidden="true">
         <span class="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-xs font-black tracking-tighter text-primary">
           V
@@ -206,9 +195,11 @@
 
     {#if ui.currentView === "editor" && !ui.sidebarCollapsed}
       <div
+        use:surfaceEnter={{ x: -12, scale: 0.995 }}
         class="ui-workspace-panel flex w-64 flex-col"
-        transition:fly={{ x: -12, duration: 180 }}
       >
+        {#key ui.sidebarView}
+        <div use:crossfadeEnter={{ x: -5 }} class="min-h-0 flex flex-1 flex-col">
         {#if ui.sidebarView === "files"}
           <div class="min-h-0 flex-1">
             <Sidebar />
@@ -232,6 +223,8 @@
             {/if}
           </div>
         {/if}
+        </div>
+        {/key}
       </div>
     {/if}
   </aside>
@@ -239,10 +232,15 @@
   <div class="ui-workspace-panel min-w-0 flex-1">
     <main class="flex h-full min-w-0 flex-col overflow-hidden">
       {#if ui.currentView === "settings"}
-        <SettingsPage />
+        <div use:crossfadeEnter={{ x: 8 }} class="h-full">
+          <SettingsPage />
+        </div>
       {:else if ui.currentView === "graph"}
-        <GraphView />
+        <div use:crossfadeEnter={{ x: 8 }} class="h-full">
+          <GraphView />
+        </div>
       {:else}
+        <div use:crossfadeEnter={{ x: -5 }} class="flex h-full min-h-0 flex-col">
         <header class="ui-page-header px-2 lg:hidden">
           <IconButton
             label="Open explorer"
@@ -318,32 +316,18 @@
         {/if}
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
-          <div
-            role="tablist"
-            class="ui-surface-chrome mx-3 mt-3 grid h-9 shrink-0 grid-cols-2 rounded-xl p-0.5"
-          >
-            <button
-              role="tab"
-              aria-selected={mobileTab === "editor"}
-              class="mobile-view-tab ui-interactive flex items-center justify-center gap-1.5 rounded-lg text-xs {mobileTab === 'editor' ? 'ui-glass-control--active' : ''}"
-              class:ui-text-tertiary={mobileTab !== "editor"}
-              onclick={() => (mobileTab = "editor")}
-            >
-              <FileText class="ui-icon ui-icon--sm" />
-              Editor
-            </button>
-            <button
-              role="tab"
-              aria-selected={mobileTab === "preview"}
-              class="mobile-view-tab ui-interactive flex items-center justify-center gap-1.5 rounded-lg text-xs {mobileTab === 'preview' ? 'ui-glass-control--active' : ''}"
-              class:ui-text-tertiary={mobileTab !== "preview"}
-              onclick={() => (mobileTab = "preview")}
-            >
-              <Eye class="ui-icon ui-icon--sm" />
-              Preview
-            </button>
+          <div class="mx-3 mt-3 shrink-0">
+            <SegmentedControl
+              value={mobileTab}
+              options={mobileViewOptions}
+              label="Workspace view"
+              variant="tab"
+              onchange={(value) => (mobileTab = value as typeof mobileTab)}
+            />
           </div>
           <div class="mt-2 min-h-0 flex-1 overflow-hidden">
+            {#key mobileTab}
+            <div use:crossfadeEnter={{ x: mobileTab === "editor" ? -5 : 5 }} class="h-full">
             {#if mobileTab === "editor"}
               {#if vault.activeTabPath}
                 <EditorPanel />
@@ -353,6 +337,8 @@
             {:else}
               <PreviewPanel />
             {/if}
+            </div>
+            {/key}
           </div>
         </div>
 
@@ -363,6 +349,10 @@
             {vault.activeTabPath || "No file open"}
           </span>
           <span>{vault.status || "Ready"}</span>
+          <StatusDot
+            tone={vault.compilePhase !== "idle" ? "primary" : activeDirty ? "warning" : "success"}
+            pulse={vault.compilePhase !== "idle"}
+          />
           <button
             type="button"
             class="status-problems ui-glass-hover ui-interactive flex h-full items-center gap-1.5 px-1.5 {ui.problemsOpen ? 'ui-glass-control--active' : ''}"
@@ -375,6 +365,7 @@
             <span class="tabular-nums">{vault.diagnostics.length}</span>
           </button>
         </footer>
+        </div>
       {/if}
     </main>
 
@@ -421,6 +412,8 @@
           </IconButton>
         </header>
         <div class="min-h-0 flex-1">
+          {#key ui.sidebarView}
+          <div use:crossfadeEnter={{ x: 5 }} class="h-full">
           {#if ui.sidebarView === "files"}
             <Sidebar />
           {:else if ui.sidebarView === "search"}
@@ -428,6 +421,8 @@
           {:else}
             <OutlinePanel onnavigate={() => (mobileSidebarOpen = false)} />
           {/if}
+          </div>
+          {/key}
         </div>
         <div class="grid grid-cols-2 gap-1 p-2">
             <Button
@@ -469,19 +464,7 @@
 {/snippet}
 
 <style>
-  .dock-indicator {
-    position: absolute;
-    top: 0.625rem;
-    left: 0;
-    width: var(--vellum-control-default);
-    height: var(--vellum-control-default);
-    border-radius: var(--vellum-radius-control);
-    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  :global(.ui-orbital-rail > *) {
+  :global(.ui-orbital-rail > :not(.shared-highlight)) {
     position: relative;
     z-index: 1;
   }
