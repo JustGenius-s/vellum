@@ -19,10 +19,20 @@
   .menu-surface {
     min-width: 11rem;
     border-radius: 1rem;
-    background: var(--vellum-surface-overlay);
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 34%, transparent),
+        transparent 38%
+      ),
+      var(--vellum-surface-overlay);
     padding: 0.45rem;
-    box-shadow: var(--vellum-shadow-overlay);
-    backdrop-filter: blur(24px) saturate(1.16);
+    box-shadow:
+      inset 0 1px 0 var(--vellum-glass-edge),
+      inset 0 0 0 1px var(--vellum-glass-rim),
+      var(--vellum-shadow-overlay);
+    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
+    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
   }
 
   :global(.menu-surface > button) {

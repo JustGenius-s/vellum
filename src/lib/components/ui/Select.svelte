@@ -33,7 +33,12 @@
     align-items: center;
     min-width: 8rem;
     border-radius: var(--vellum-radius-control);
-    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 44%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-overlay) 62%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 52%, transparent),
+      inset 0 0 0 1px var(--vellum-glass-rim);
   }
 
   select {

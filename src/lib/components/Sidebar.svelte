@@ -468,10 +468,20 @@
   }
 
   .context-island {
-    border: 1px solid color-mix(in oklab, var(--color-base-content) 7%, transparent);
-    background: var(--vellum-surface-overlay);
-    backdrop-filter: blur(28px) saturate(1.2);
-    box-shadow: var(--vellum-shadow-overlay);
+    border: 0;
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 34%, transparent),
+        transparent 36%
+      ),
+      var(--vellum-surface-overlay);
+    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
+    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.38);
+    box-shadow:
+      inset 0 1px 0 var(--vellum-glass-edge),
+      inset 0 0 0 1px var(--vellum-glass-rim),
+      var(--vellum-shadow-overlay);
   }
 
   .context-island :global(button) {

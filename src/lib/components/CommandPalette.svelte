@@ -342,12 +342,12 @@
   .command-island {
     border-radius: 1.5rem;
     background:
-      radial-gradient(circle at 84% 0%, color-mix(in oklab, var(--color-primary) 7%, transparent), transparent 19rem),
-      color-mix(in oklab, var(--vellum-surface-overlay) 94%, transparent);
-    backdrop-filter: blur(22px) saturate(112%);
-    box-shadow:
-      var(--vellum-shadow-overlay),
-      inset 0 1px 0 color-mix(in oklab, white 5%, transparent);
+      radial-gradient(
+        circle at 84% 0%,
+        color-mix(in oklab, var(--color-primary) 9%, transparent),
+        transparent 19rem
+      ),
+      transparent;
   }
 
   .island-header {
@@ -397,10 +397,14 @@
   }
 
   .mode-track button.active {
-    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 42%, transparent), transparent 1px),
+      color-mix(in oklab, var(--color-primary) 11%, transparent);
     color: var(--color-primary);
     opacity: 1;
-    box-shadow: inset 0 1px 0 color-mix(in oklab, white 4%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 52%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 14%, transparent);
   }
 
   .command-input {
@@ -409,11 +413,14 @@
     align-items: center;
     gap: 0.875rem;
     border-radius: 1rem;
-    background: color-mix(in oklab, var(--vellum-surface-canvas) 76%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 48%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-canvas) 78%, transparent);
     padding: 0.6rem 0.75rem;
     box-shadow:
-      inset 0 1px 0 color-mix(in oklab, white 4%, transparent),
-      0 8px 24px color-mix(in oklab, var(--vellum-surface-app) 18%, transparent);
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 58%, transparent),
+      inset 0 0 0 1px var(--vellum-glass-rim),
+      0 8px 24px -18px color-mix(in oklab, var(--color-neutral) 28%, transparent);
     transition:
       background-color var(--vellum-motion-fast) var(--vellum-ease-out),
       box-shadow var(--vellum-motion-fast) var(--vellum-ease-out);

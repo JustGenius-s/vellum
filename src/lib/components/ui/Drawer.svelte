@@ -106,8 +106,9 @@
     position: absolute;
     inset: 0;
     border: 0;
-    background: color-mix(in oklab, var(--color-neutral) 48%, transparent);
-    backdrop-filter: blur(2px);
+    background: color-mix(in oklab, var(--color-neutral) 38%, transparent);
+    -webkit-backdrop-filter: blur(6px) saturate(0.86);
+    backdrop-filter: blur(6px) saturate(0.86);
   }
 
   .drawer-panel {
@@ -115,8 +116,19 @@
     width: min(84vw, 20rem);
     height: 100%;
     overflow: hidden;
-    background: var(--vellum-surface-chrome);
-    box-shadow: var(--vellum-shadow-overlay);
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--vellum-glass-specular) 30%, transparent),
+        transparent 34%
+      ),
+      var(--vellum-surface-chrome);
+    box-shadow:
+      inset -1px 0 0 var(--vellum-glass-rim),
+      inset 0 1px 0 var(--vellum-glass-edge),
+      var(--vellum-shadow-overlay);
+    -webkit-backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.36);
+    backdrop-filter: blur(var(--vellum-blur-floating)) saturate(1.36);
     touch-action: pan-y;
   }
 </style>

@@ -45,6 +45,9 @@
     font-weight: 620;
     letter-spacing: -0.01em;
     white-space: nowrap;
+    box-shadow:
+      inset 0 1px 0 transparent,
+      inset 0 0 0 1px transparent;
     transition:
       color var(--vellum-motion-fast) var(--vellum-ease-out),
       background-color var(--vellum-motion-fast) var(--vellum-ease-out),
@@ -71,7 +74,12 @@
   .control-button--ghost:hover,
   .control-button--ghost.is-active {
     color: var(--color-base-content);
-    background: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 42%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-overlay) 56%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 54%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--vellum-glass-rim) 72%, transparent);
   }
 
   .control-button--ghost.is-active {
@@ -81,8 +89,13 @@
 
   .control-button--primary {
     color: var(--color-primary-content);
-    background: var(--color-primary);
-    box-shadow: inset 0 1px 0 color-mix(in oklab, white 18%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, white 14%, transparent), transparent 48%),
+      var(--color-primary);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 34%, transparent),
+      inset 0 -1px 0 color-mix(in oklab, var(--color-neutral) 16%, transparent),
+      0 8px 18px -14px color-mix(in oklab, var(--color-primary) 72%, transparent);
   }
 
   .control-button--primary:hover {
@@ -91,7 +104,10 @@
 
   .control-button--soft {
     color: var(--color-base-content);
-    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    background: color-mix(in oklab, var(--vellum-surface-overlay) 62%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 58%, transparent),
+      inset 0 0 0 1px var(--vellum-glass-rim);
   }
 
   .control-button--danger {

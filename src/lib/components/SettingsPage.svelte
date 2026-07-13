@@ -223,11 +223,16 @@
     background:
       linear-gradient(
         145deg,
-        color-mix(in oklab, var(--vellum-surface-chrome) 74%, transparent),
-        color-mix(in oklab, var(--vellum-surface-canvas) 46%, transparent)
-      );
+        color-mix(in oklab, var(--vellum-glass-specular) 24%, transparent),
+        transparent 34%
+      ),
+      color-mix(in oklab, var(--vellum-surface-chrome) 72%, transparent);
     padding: clamp(1.25rem, 3vw, 2rem);
-    backdrop-filter: blur(22px) saturate(1.15);
+    -webkit-backdrop-filter: blur(var(--vellum-blur-chrome)) saturate(1.28);
+    backdrop-filter: blur(var(--vellum-blur-chrome)) saturate(1.28);
+    box-shadow:
+      inset 0 1px 0 var(--vellum-glass-edge),
+      inset 0 0 0 1px var(--vellum-glass-rim);
   }
 
   .editor-zone {
@@ -275,7 +280,9 @@
     min-height: 5.5rem;
     justify-items: start;
     border-radius: 0.9rem;
-    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 34%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-canvas) 68%, transparent);
     padding: 0.875rem;
     color: color-mix(in oklab, var(--color-base-content) 58%, transparent);
     text-align: left;
@@ -295,7 +302,9 @@
   }
 
   .theme-option.active {
-    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-specular) 32%, transparent), transparent 1px),
+      color-mix(in oklab, var(--color-primary) 11%, transparent);
     color: var(--color-primary);
     box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 28%, transparent);
   }
@@ -303,8 +312,13 @@
   .range-console {
     display: block;
     border-radius: 0.9rem;
-    background: color-mix(in oklab, var(--color-base-content) 2.5%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--vellum-glass-edge) 34%, transparent), transparent 1px),
+      color-mix(in oklab, var(--vellum-surface-canvas) 62%, transparent);
     padding: 1.1rem;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--vellum-glass-edge) 46%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--vellum-glass-rim) 72%, transparent);
   }
 
   .range-console strong,
