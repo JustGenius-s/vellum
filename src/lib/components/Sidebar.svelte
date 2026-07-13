@@ -10,6 +10,7 @@
     FolderOpen,
     FolderPlus,
     Pencil,
+    Plus,
     Trash2,
     X,
   } from "lucide-svelte";
@@ -58,6 +59,16 @@
     e.preventDefault();
     e.stopPropagation();
     contextMenu = { x: e.clientX, y: e.clientY, node };
+  }
+
+  function openCreateMenu(event: MouseEvent) {
+    event.stopPropagation();
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    contextMenu = {
+      x: Math.max(8, bounds.right - 160),
+      y: bounds.bottom + 4,
+      node: null,
+    };
   }
 
   function closeContextMenu() {
@@ -152,19 +163,11 @@
     {#if vault.vaultPath}
       <button
         class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive"
-        onclick={() => startCreate(vault.vaultPath, false)}
-        aria-label="New file"
-        title="New file"
+        onclick={openCreateMenu}
+        aria-label="Create file or folder"
+        title="Create"
       >
-        <FilePlus class="ui-icon ui-icon--sm" />
-      </button>
-      <button
-        class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive"
-        onclick={() => startCreate(vault.vaultPath, true)}
-        aria-label="New folder"
-        title="New folder"
-      >
-        <FolderPlus class="ui-icon ui-icon--sm" />
+        <Plus class="ui-icon ui-icon--sm" />
       </button>
     {/if}
   </div>
@@ -247,7 +250,8 @@
       </div>
     {:else if node.is_dir}
       <button
-        class="btn btn-ghost ui-interactive ui-touch-target h-auto min-h-7 w-full justify-start gap-1.5 px-2 py-1.5 text-xs font-medium"
+        type="button"
+        class="ui-interactive ui-touch-target flex min-h-7 w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs font-medium hover:bg-base-300/70"
         onclick={() => toggle(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
         aria-expanded={expanded.has(node.path)}
@@ -286,7 +290,8 @@
       {/if}
     {:else}
       <button
-        class="btn btn-ghost ui-interactive ui-touch-target h-auto min-h-7 w-full justify-start gap-1.5 px-2 py-1.5 text-xs {node.path === vault.activeTabPath ? 'btn-active text-primary' : ''}"
+        type="button"
+        class="ui-interactive ui-touch-target flex min-h-7 w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs hover:bg-base-300/70 {node.path === vault.activeTabPath ? 'bg-base-300/80 text-primary' : ''}"
         onclick={() => vault.openFile(node.path)}
         oncontextmenu={(e) => onContextMenu(e, node)}
         aria-current={node.path === vault.activeTabPath ? "page" : undefined}

@@ -47,12 +47,15 @@ export function createVault() {
   let status = $state("");
   let diagnostics = $state<CompileDiagnostic[]>([]);
   let backlinkIndex = $state<Record<string, string[]>>({});
+  let compilePhase = $state<"idle" | "pending" | "compiling">("idle");
 
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
   let skipSave = $state(true);
   let compileToken = 0;
+  let autoSaveEnabled = true;
+  let autoSaveDelayMs = 2000;
 
   let source = $derived(tabs.find((t) => t.path === activeTabPath)?.content ?? "");
   let currentFile = $derived(activeTabPath);
@@ -100,6 +103,16 @@ export function createVault() {
 
   function getAppState() {
     return { vaultPath, openTabs: tabs.map((t) => t.path), activeTabPath };
+  }
+
+  function scheduleCompile(delayMs = 0) {
+    if (compileTimer) clearTimeout(compileTimer);
+    const token = ++compileToken;
+    compilePhase = "pending";
+    compileTimer = setTimeout(() => {
+      compileTimer = null;
+      void compilePreview(token);
+    }, delayMs);
   }
 
   $effect(() => {
@@ -180,7 +193,7 @@ export function createVault() {
     const existing = tabs.find((t) => t.path === path);
     if (existing) {
       activeTabPath = path;
-      await compilePreview();
+      scheduleCompile(32);
       return;
     }
     try {
@@ -188,7 +201,7 @@ export function createVault() {
       const name = fileName(path);
       tabs = [...tabs, { path, name, content, dirty: false }];
       activeTabPath = path;
-      await compilePreview();
+      scheduleCompile(32);
     } catch (e) {
       status = `Error: ${e}`;
     }
@@ -239,13 +252,13 @@ export function createVault() {
         const newIdx = Math.max(0, idx - 1);
         activeTabPath = tabs[newIdx].path;
       }
-      compilePreview();
+      scheduleCompile(32);
     }
   }
 
   function switchTab(path: string) {
     activeTabPath = path;
-    compilePreview();
+    scheduleCompile(32);
   }
 
   async function renamePath(oldPath: string, newPath: string) {
@@ -308,6 +321,15 @@ export function createVault() {
     }
   }
 
+  function configureAutoSave(enabled: boolean, delayMs: number) {
+    autoSaveEnabled = enabled;
+    autoSaveDelayMs = Math.min(Math.max(delayMs, 500), 10000);
+    if (!enabled && autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+  }
+
   function onSourceChange(newValue: string) {
     const tab = tabs.find((t) => t.path === activeTabPath);
     if (!tab) return;
@@ -316,26 +338,30 @@ export function createVault() {
     tabs = [...tabs];
     status = "Editing...";
 
-    if (compileTimer) clearTimeout(compileTimer);
-    compileTimer = setTimeout(compilePreview, 500);
+    scheduleCompile(500);
 
+    if (!autoSaveEnabled) return;
     const pathToSave = activeTabPath;
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(async () => {
       if (pathToSave) await saveFile(pathToSave);
-    }, 2000);
+    }, autoSaveDelayMs);
   }
 
-  async function compilePreview() {
+  async function compilePreview(scheduledToken?: number) {
+    const token = scheduledToken ?? ++compileToken;
+    if (token !== compileToken) return;
     if (!source) {
       svg = "";
       diagnostics = [];
+      compilePhase = "idle";
       return;
     }
-    const token = ++compileToken;
     const src = source;
     const mainFile = currentFile;
     const vp = vaultPath;
+    compilePhase = "compiling";
+    status = "Compiling...";
     try {
       const result = await invoke<CompileSvgResult>("compile_typst_svg", {
         source: src,
@@ -366,6 +392,8 @@ export function createVault() {
         hints: [],
       }];
       status = `Error: ${e}`;
+    } finally {
+      if (token === compileToken) compilePhase = "idle";
     }
   }
 
@@ -395,6 +423,7 @@ export function createVault() {
     get activeTabName() { return activeTabName; },
     get svg() { return svg; },
     get status() { return status; },
+    get compilePhase() { return compilePhase; },
     get diagnostics() { return diagnostics; },
     get source() { return source; },
     get fileEntries() { return fileEntries; },
@@ -412,6 +441,7 @@ export function createVault() {
     renamePath,
     deletePath,
     saveFile,
+    configureAutoSave,
     onSourceChange,
     compilePreview,
     exportPDF,

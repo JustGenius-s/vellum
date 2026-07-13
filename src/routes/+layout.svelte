@@ -7,11 +7,13 @@
     GitGraph,
     Moon,
     PanelLeftClose,
+    Search,
     Settings,
     Sun,
   } from "lucide-svelte";
   import { createVault } from "$lib/vault.svelte";
   import { createTheme } from "$lib/theme.svelte";
+  import { createSettings } from "$lib/settings.svelte";
   import { createCommandRegistry } from "$lib/commands/registry";
   import { createKeybindingManager, ResolveResultKind } from "$lib/commands/keybinding";
   import type { SidebarView, View } from "$lib/stores.svelte";
@@ -20,6 +22,7 @@
 
   const vault = createVault();
   const theme = createTheme();
+  const settings = createSettings();
   const registry = createCommandRegistry();
   const keybindings = createKeybindingManager();
 
@@ -49,19 +52,29 @@
 
   setContext("vault", vault);
   setContext("theme", theme);
+  setContext("settings", settings);
   setContext("registry", registry);
   setContext("keybindings", keybindings);
   setContext("ui", ui);
 
+  $effect(() => {
+    vault.configureAutoSave(
+      settings.editor.autoSave,
+      settings.editor.autoSaveDelayMs,
+    );
+  });
+
   onMount(() => {
     ui.sidebarCollapsed =
       localStorage.getItem("vellum-sidebar-collapsed") === "true";
+    const savedSidebarView = localStorage.getItem("vellum-sidebar-view");
     ui.sidebarView =
-      localStorage.getItem("vellum-sidebar-view") === "outline"
-        ? "outline"
+      savedSidebarView === "outline" || savedSidebarView === "search"
+        ? savedSidebarView
         : "files";
 
     theme.init();
+    settings.init();
     void vault.loadSavedState();
 
     const disposers: (() => void)[] = [];
@@ -120,6 +133,19 @@
     }));
 
     disposers.push(registry.registerCommand({
+      id: "view.search",
+      label: "Search in Vault",
+      icon: Search,
+      handler: () => {
+        ui.currentView = "editor";
+        ui.sidebarView = "search";
+        ui.sidebarCollapsed = false;
+        localStorage.setItem("vellum-sidebar-view", "search");
+        localStorage.setItem("vellum-sidebar-collapsed", "false");
+      },
+    }));
+
+    disposers.push(registry.registerCommand({
       id: "theme.toggle",
       get label() { return theme.theme === "dark" ? "Switch to Light" : "Switch to Dark"; },
       get icon() { return theme.theme === "dark" ? Sun : Moon; },
@@ -157,6 +183,10 @@
       command: "palette.open-commands",
     }));
     disposers.push(keybindings.bind({ keys: "Cmd+F", command: "editor.find" }));
+    disposers.push(keybindings.bind({
+      keys: "Cmd+Shift+F",
+      command: "view.search",
+    }));
     disposers.push(keybindings.bind({
       keys: "Cmd+B",
       command: "view.toggle-sidebar",

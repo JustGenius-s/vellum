@@ -29,12 +29,27 @@
   });
 </script>
 
-<div class="flex flex-col h-full overflow-hidden">
+<div class="relative flex h-full flex-col overflow-hidden">
+  {#if vault.compilePhase !== "idle"}
+    <div
+      class="absolute right-3 top-3 z-10 flex h-8 items-center gap-2 rounded-md border border-base-300 bg-base-100/95 px-3 text-xs shadow-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="loading loading-spinner loading-xs text-primary"></span>
+      {vault.compilePhase === "pending" ? "Updating preview" : "Compiling"}
+    </div>
+  {/if}
+
   <div class="flex-1 overflow-auto" bind:this={scrollEl} onscroll={onScroll}>
     <div class="flex flex-col items-center p-4 bg-base-100 min-h-full">
       {#if vault.svg}
         <div class="w-full max-w-2xl shadow-md rounded overflow-hidden bg-white preview-svg">
           {@html vault.svg}
+        </div>
+      {:else if vault.compilePhase !== "idle"}
+        <div class="flex min-h-72 w-full max-w-2xl items-center justify-center rounded border border-base-300 bg-white">
+          <span class="loading loading-spinner loading-md text-primary"></span>
         </div>
       {:else if vault.diagnostics.some((d) => d.severity === "error")}
         <p class="text-sm text-error/70 py-8">Preview unavailable — see problems below</p>

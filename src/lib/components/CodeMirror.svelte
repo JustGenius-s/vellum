@@ -8,7 +8,7 @@
   import { lintGutter, setDiagnostics, type Diagnostic as EditorDiagnostic } from "@codemirror/lint";
   import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
   import { typst } from "$lib/typst-language";
-  import { getTheme, getUI } from "$lib/stores.svelte";
+  import { getSettings, getTheme, getUI } from "$lib/stores.svelte";
   import type { CompileDiagnostic } from "$lib/vault.svelte";
 
   let {
@@ -29,12 +29,23 @@
 
   const ui = getUI();
   const theme = getTheme();
+  const settings = getSettings();
   const themeCompartment = new Compartment();
+  const editorSettingsCompartment = new Compartment();
+
+  interface EditorSession {
+    state: EditorState;
+    scrollTop: number;
+    scrollLeft: number;
+  }
 
   let view: EditorView | null = null;
   let host: HTMLDivElement;
   let isProgrammaticChange = false;
   let applyingScroll = false;
+  let currentPath = "";
+  let createEditorState: ((doc: string) => EditorState) | null = null;
+  const sessions = new Map<string, EditorSession>();
 
   function wikilinkCompletions(context: CompletionContext) {
     const word = context.matchBefore(/\[\[[^\]|]*/);
@@ -51,12 +62,12 @@
     };
   }
 
-  function editorTheme(isDark: boolean) {
+  function editorTheme(isDark: boolean, fontSize: number) {
     return EditorView.theme({
       "&": {
         backgroundColor: "var(--color-base-100)",
         color: "var(--color-base-content)",
-        fontSize: "14px",
+        fontSize: `${fontSize}px`,
         height: "100%",
       },
       ".cm-content": {
@@ -109,6 +120,13 @@
     }, { dark: isDark });
   }
 
+  function editorSettingsExtensions() {
+    return [
+      settings.editor.lineNumbers ? lineNumbers() : [],
+      settings.editor.wordWrap ? EditorView.lineWrapping : [],
+    ];
+  }
+
   function editorDiagnostics(): EditorDiagnostic[] {
     if (!view) return [];
     const normalizedActivePath = activePath.replaceAll("\\", "/");
@@ -145,6 +163,13 @@
   function reportScroll() {
     if (!view || applyingScroll) return;
     const scroller = view.scrollDOM;
+    if (currentPath) {
+      sessions.set(currentPath, {
+        state: view.state,
+        scrollTop: scroller.scrollTop,
+        scrollLeft: scroller.scrollLeft,
+      });
+    }
     const max = scroller.scrollHeight - scroller.clientHeight;
     const ratio = max > 0 ? scroller.scrollTop / max : 0;
     ui.scrollSource = "editor";
@@ -156,29 +181,44 @@
       if (u.docChanged && !isProgrammaticChange) {
         onchange(u.state.doc.toString());
       }
+      if (currentPath) {
+        sessions.set(currentPath, {
+          state: u.state,
+          scrollTop: view?.scrollDOM.scrollTop ?? 0,
+          scrollLeft: view?.scrollDOM.scrollLeft ?? 0,
+        });
+      }
     });
 
     const scrollHandler = () => reportScroll();
+    const extensions = [
+      highlightActiveLineGutter(),
+      keymap.of([...searchKeymap, ...defaultKeymap]),
+      updateListener,
+      autocompletion({ override: [wikilinkCompletions] }),
+      search({ top: true }),
+      lintGutter(),
+      typst,
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      editorSettingsCompartment.of(editorSettingsExtensions()),
+      themeCompartment.of(
+        editorTheme(theme.theme === "dark", settings.editor.fontSize),
+      ),
+    ];
+    createEditorState = (doc) => EditorState.create({ doc, extensions });
+    currentPath = activePath;
 
     view = new EditorView({
-      state: EditorState.create({
-        doc: source,
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          keymap.of([...searchKeymap, ...defaultKeymap]),
-          updateListener,
-          autocompletion({ override: [wikilinkCompletions] }),
-          search({ top: true }),
-          lintGutter(),
-          typst,
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          EditorView.lineWrapping,
-          themeCompartment.of(editorTheme(theme.theme === "dark")),
-        ],
-      }),
+      state: createEditorState(source),
       parent: host,
     });
+    if (currentPath) {
+      sessions.set(currentPath, {
+        state: view.state,
+        scrollTop: 0,
+        scrollLeft: 0,
+      });
+    }
     view.scrollDOM.addEventListener("scroll", scrollHandler, { passive: true });
     onViewCreated(view);
 
@@ -189,6 +229,45 @@
 
   onDestroy(() => {
     view?.destroy();
+  });
+
+  $effect(() => {
+    const nextPath = activePath;
+    const nextSource = source;
+    if (!view || !createEditorState || !nextPath || nextPath === currentPath) return;
+
+    if (currentPath) {
+      sessions.set(currentPath, {
+        state: view.state,
+        scrollTop: view.scrollDOM.scrollTop,
+        scrollLeft: view.scrollDOM.scrollLeft,
+      });
+    }
+
+    const existing = sessions.get(nextPath);
+    const nextState =
+      existing?.state.doc.toString() === nextSource
+        ? existing.state
+        : createEditorState(nextSource);
+    isProgrammaticChange = true;
+    view.setState(nextState);
+    isProgrammaticChange = false;
+    currentPath = nextPath;
+    view.dispatch({
+      effects: [
+        themeCompartment.reconfigure(
+          editorTheme(theme.theme === "dark", settings.editor.fontSize),
+        ),
+        editorSettingsCompartment.reconfigure(editorSettingsExtensions()),
+      ],
+    });
+
+    requestAnimationFrame(() => {
+      if (!view || currentPath !== nextPath) return;
+      view.scrollDOM.scrollTop = existing?.scrollTop ?? 0;
+      view.scrollDOM.scrollLeft = existing?.scrollLeft ?? 0;
+      view.focus();
+    });
   });
 
   $effect(() => {
@@ -209,9 +288,24 @@
 
   $effect(() => {
     const isDark = theme.theme === "dark";
+    const fontSize = settings.editor.fontSize;
     if (view) {
       view.dispatch({
-        effects: themeCompartment.reconfigure(editorTheme(isDark)),
+        effects: themeCompartment.reconfigure(
+          editorTheme(isDark, fontSize),
+        ),
+      });
+    }
+  });
+
+  $effect(() => {
+    settings.editor.lineNumbers;
+    settings.editor.wordWrap;
+    if (view) {
+      view.dispatch({
+        effects: editorSettingsCompartment.reconfigure(
+          editorSettingsExtensions(),
+        ),
       });
     }
   });

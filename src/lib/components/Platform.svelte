@@ -13,10 +13,12 @@
     Menu,
     PanelLeftClose,
     PanelLeftOpen,
+    Search,
     Settings,
     X,
   } from "lucide-svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
+  import SearchPanel from "$lib/components/SearchPanel.svelte";
   import OutlinePanel from "$lib/components/OutlinePanel.svelte";
   import SettingsPage from "$lib/components/SettingsPage.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
@@ -31,6 +33,13 @@
 
   let mobileTab = $state<"editor" | "preview">("editor");
   let mobileSidebarOpen = $state(false);
+  let sidebarTitle = $derived(
+    ui.sidebarView === "files"
+      ? "Explorer"
+      : ui.sidebarView === "search"
+        ? "Search"
+        : "Outline",
+  );
 
   $effect(() => {
     vault.activeTabPath;
@@ -43,12 +52,12 @@
     localStorage.setItem("vellum-sidebar-collapsed", String(collapsed));
   }
 
-  function setSidebarView(view: "files" | "outline") {
+  function setSidebarView(view: "files" | "search" | "outline") {
     ui.sidebarView = view;
     localStorage.setItem("vellum-sidebar-view", view);
   }
 
-  function openSidebar(view: "files" | "outline") {
+  function openSidebar(view: "files" | "search" | "outline") {
     ui.currentView = "editor";
     setSidebarView(view);
     setSidebarCollapsed(false);
@@ -82,6 +91,16 @@
             aria-label="Document outline"
           >
             <ListTree class="ui-icon ui-icon--lg" />
+          </button>
+        </li>
+        <li class="tooltip tooltip-right" data-tip="Search (⌘⇧F)">
+          <button
+            class="btn btn-ghost ui-icon-button ui-interactive"
+            class:btn-active={ui.currentView === "editor" && !ui.sidebarCollapsed && ui.sidebarView === "search"}
+            onclick={() => openSidebar("search")}
+            aria-label="Search in vault"
+          >
+            <Search class="ui-icon ui-icon--lg" />
           </button>
         </li>
         <li class="tooltip tooltip-right" data-tip="Command palette (⌘P)">
@@ -144,7 +163,7 @@
       >
         <header class="ui-panel-header">
           <span class="ui-panel-title">
-            {ui.sidebarView === "files" ? "Explorer" : "Outline"}
+            {sidebarTitle}
           </span>
           <button
             class="btn btn-ghost ui-icon-button ui-icon-button--compact ui-interactive"
@@ -157,6 +176,8 @@
         <div class="min-h-0 flex-1">
           {#if ui.sidebarView === "files"}
             <Sidebar />
+          {:else if ui.sidebarView === "search"}
+            <SearchPanel />
           {:else}
             <OutlinePanel />
           {/if}
@@ -269,6 +290,48 @@
           </section>
         </div>
 
+        {#if vault.tabs.length > 1}
+          <div
+            class="flex h-9 shrink-0 overflow-x-auto border-b border-base-300 bg-base-200/45 lg:hidden"
+            role="tablist"
+            aria-label="Open documents"
+          >
+            {#each vault.tabs as tab}
+              <div
+                class="flex min-w-28 max-w-44 shrink-0 items-center gap-1.5 border-r border-base-300 px-2 text-xs {tab.path === vault.activeTabPath ? 'bg-base-100' : 'text-base-content/55'}"
+                role="tab"
+                tabindex="0"
+                aria-selected={tab.path === vault.activeTabPath}
+                onclick={() => vault.switchTab(tab.path)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    vault.switchTab(tab.path);
+                  }
+                }}
+              >
+                {#if tab.dirty}
+                  <Circle class="size-2 shrink-0 fill-current text-warning" />
+                {/if}
+                <span class="min-w-0 flex-1 truncate">{tab.name}</span>
+                {#if tab.path === vault.activeTabPath}
+                  <button
+                    type="button"
+                    class="btn btn-ghost ui-icon-button ui-icon-button--compact rounded-full"
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      vault.closeTab(tab.path);
+                    }}
+                    aria-label={`Close ${tab.name}`}
+                  >
+                    <X class="ui-icon ui-icon--sm" />
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
           <div role="tablist" class="tabs tabs-box tabs-sm mx-3 mt-3 grid shrink-0 grid-cols-2">
             <button
@@ -337,7 +400,7 @@
       <aside class="flex min-h-full w-[min(84vw,20rem)] flex-col border-r border-base-300 bg-base-100">
         <header class="ui-panel-header h-12!">
           <span class="ui-panel-title">
-            {ui.sidebarView === "files" ? "Explorer" : "Outline"}
+            {sidebarTitle}
           </span>
           <button
             class="btn btn-ghost ui-icon-button ui-touch-target ui-interactive"
@@ -355,6 +418,14 @@
           >
             <ListTree class="ui-icon" />
           </button>
+          <button
+            class="btn btn-ghost ui-icon-button ui-touch-target ui-interactive"
+            class:btn-active={ui.sidebarView === "search"}
+            onclick={() => setSidebarView("search")}
+            aria-label="Search in vault"
+          >
+            <Search class="ui-icon" />
+          </button>
           <label
             for="mobile-drawer"
             class="btn btn-ghost ui-icon-button ui-touch-target ui-interactive"
@@ -366,6 +437,8 @@
         <div class="min-h-0 flex-1">
           {#if ui.sidebarView === "files"}
             <Sidebar />
+          {:else if ui.sidebarView === "search"}
+            <SearchPanel onnavigate={() => (mobileSidebarOpen = false)} />
           {:else}
             <OutlinePanel onnavigate={() => (mobileSidebarOpen = false)} />
           {/if}

@@ -1,6 +1,6 @@
 mod world;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::path::Path;
 use tauri::Manager;
@@ -77,62 +77,68 @@ fn format_diagnostic(world: &world::TypstWorld, diag: &SourceDiagnostic) -> Comp
 }
 
 #[tauri::command]
-fn compile_typst_pdf(
+async fn compile_typst_pdf(
     source: String,
     vault_path: String,
     main_file: String,
 ) -> Result<Vec<u8>, String> {
-    let expanded = expand_wikilinks(&source);
-    let world = world::TypstWorld::new(expanded, vault_path, main_file);
-    let warned = typst::compile::<typst_layout::PagedDocument>(&world);
-    let document = warned.output.map_err(|errors| {
-        errors
-            .iter()
-            .map(|e| e.message.to_string())
-            .collect::<Vec<_>>()
-            .join("; ")
-    })?;
-    let pdf = typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
-        .map_err(|e| format!("{:?}", e))?;
-    Ok(pdf)
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        let expanded = expand_wikilinks(&source);
+        let world = world::TypstWorld::new(expanded, vault_path, main_file);
+        let warned = typst::compile::<typst_layout::PagedDocument>(&world);
+        let document = warned.output.map_err(|errors| {
+            errors
+                .iter()
+                .map(|e| e.message.to_string())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })?;
+        typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default()).map_err(|e| format!("{:?}", e))
+    })
+    .await
+    .map_err(|error| format!("PDF compile task failed: {error}"))?
 }
 
 #[tauri::command]
-fn compile_typst_svg(
+async fn compile_typst_svg(
     source: String,
     vault_path: String,
     main_file: String,
 ) -> Result<CompileSvgResult, String> {
-    let expanded = expand_wikilinks(&source);
-    let world = world::TypstWorld::new(expanded, vault_path, main_file);
-    let warned = typst::compile::<typst_layout::PagedDocument>(&world);
+    tauri::async_runtime::spawn_blocking(move || {
+        let expanded = expand_wikilinks(&source);
+        let world = world::TypstWorld::new(expanded, vault_path, main_file);
+        let warned = typst::compile::<typst_layout::PagedDocument>(&world);
 
-    let mut diagnostics: Vec<CompileDiagnostic> = warned
-        .warnings
-        .iter()
-        .map(|d| format_diagnostic(&world, d))
-        .collect();
+        let mut diagnostics: Vec<CompileDiagnostic> = warned
+            .warnings
+            .iter()
+            .map(|d| format_diagnostic(&world, d))
+            .collect();
 
-    match warned.output {
-        Ok(document) => {
-            let svg = typst_svg::svg_merged(
-                &document,
-                &typst_svg::SvgOptions::default(),
-                typst::layout::Abs::zero(),
-            );
-            Ok(CompileSvgResult {
-                svg: Some(svg),
-                diagnostics,
-            })
+        match warned.output {
+            Ok(document) => {
+                let svg = typst_svg::svg_merged(
+                    &document,
+                    &typst_svg::SvgOptions::default(),
+                    typst::layout::Abs::zero(),
+                );
+                Ok(CompileSvgResult {
+                    svg: Some(svg),
+                    diagnostics,
+                })
+            }
+            Err(errors) => {
+                diagnostics.extend(errors.iter().map(|d| format_diagnostic(&world, d)));
+                Ok(CompileSvgResult {
+                    svg: None,
+                    diagnostics,
+                })
+            }
         }
-        Err(errors) => {
-            diagnostics.extend(errors.iter().map(|d| format_diagnostic(&world, d)));
-            Ok(CompileSvgResult {
-                svg: None,
-                diagnostics,
-            })
-        }
-    }
+    })
+    .await
+    .map_err(|error| format!("SVG compile task failed: {error}"))?
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -179,6 +185,78 @@ fn build_tree(path: &Path) -> Vec<TreeNode> {
 #[tauri::command]
 fn list_vault_tree(path: String) -> Result<Vec<TreeNode>, String> {
     Ok(build_tree(Path::new(&path)))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchMatch {
+    path: String,
+    relative_path: String,
+    line: u32,
+    column: u32,
+    preview: String,
+}
+
+fn search_vault_sync(vault_path: &str, query: &str) -> Result<Vec<SearchMatch>, String> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let vault = Path::new(vault_path)
+        .canonicalize()
+        .map_err(|error| format!("Invalid vault path: {error}"))?;
+    let matcher = RegexBuilder::new(&regex::escape(query))
+        .case_insensitive(true)
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut matches = Vec::new();
+
+    for entry in WalkDir::new(&vault).into_iter().filter_entry(|entry| {
+        entry.depth() == 0 || !entry.file_name().to_string_lossy().starts_with('.')
+    }) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|value| value.to_str()) != Some("typ") {
+            continue;
+        }
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        let relative_path = path
+            .strip_prefix(&vault)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+
+        for (line_index, line) in content.lines().enumerate() {
+            for found in matcher.find_iter(line) {
+                matches.push(SearchMatch {
+                    path: path.to_string_lossy().to_string(),
+                    relative_path: relative_path.clone(),
+                    line: (line_index + 1) as u32,
+                    column: (line[..found.start()].chars().count() + 1) as u32,
+                    preview: line.trim().chars().take(240).collect(),
+                });
+                if matches.len() >= 200 {
+                    return Ok(matches);
+                }
+            }
+        }
+    }
+
+    Ok(matches)
+}
+
+#[tauri::command]
+async fn search_vault(vault_path: String, query: String) -> Result<Vec<SearchMatch>, String> {
+    tauri::async_runtime::spawn_blocking(move || search_vault_sync(&vault_path, &query))
+        .await
+        .map_err(|error| format!("Search task failed: {error}"))?
 }
 
 fn ensure_within_vault(path: &str, vault_path: &str) -> Result<std::path::PathBuf, String> {
@@ -369,6 +447,7 @@ pub fn run() {
             compile_typst_pdf,
             compile_typst_svg,
             list_vault_tree,
+            search_vault,
             read_file,
             write_file,
             create_file,
@@ -455,6 +534,31 @@ mod tests {
             vault.to_string_lossy().as_ref(),
         )
         .is_err());
+
+        std::fs::remove_dir_all(root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn vault_search_returns_file_locations_and_skips_hidden_files() {
+        let root = test_directory();
+        let vault = root.join("vault");
+        let hidden = vault.join(".private");
+        std::fs::create_dir_all(&hidden).expect("search fixture should be created");
+        std::fs::write(
+            vault.join("notes.typ"),
+            "= Intro\nTypst makes local writing fast.\n",
+        )
+        .expect("search fixture should be written");
+        std::fs::write(hidden.join("secret.typ"), "Typst secret")
+            .expect("hidden fixture should be written");
+
+        let matches = search_vault_sync(vault.to_string_lossy().as_ref(), "typst")
+            .expect("vault search should succeed");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].relative_path, "notes.typ");
+        assert_eq!(matches[0].line, 2);
+        assert_eq!(matches[0].column, 1);
 
         std::fs::remove_dir_all(root).expect("test directory should be removed");
     }
