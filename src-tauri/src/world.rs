@@ -21,46 +21,42 @@ impl TypstWorld {
             .flat_map(|data| Font::new(Bytes::new(data), 0))
             .collect();
         let book = FontBook::from_fonts(&fonts);
-
-        let rel = main_file
+        let relative = main_file
             .strip_prefix(&vault_path)
             .unwrap_or(&main_file)
-            .trim_start_matches('/');
-        let main_vpath = VirtualPath::new(format!("/{}", rel))
-            .unwrap_or_else(|_| VirtualPath::new("/main.typ").unwrap());
-        let id = FileId::new(RootedPath::new(VirtualRoot::Project, main_vpath.clone()));
-        let source = Source::new(id, source);
+            .trim_start_matches(|character| character == '/' || character == '\\');
+        let main_vpath = VirtualPath::new(format!("/{}", relative.replace('\\', "/")))
+            .unwrap_or_else(|_| VirtualPath::new("/main.typ").expect("valid fallback path"));
+        let main = FileId::new(RootedPath::new(VirtualRoot::Project, main_vpath.clone()));
 
         Self {
             library: LazyHash::new(library),
             book: LazyHash::new(book),
             fonts,
-            main: id,
-            source,
+            main,
+            source: Source::new(main, source),
             vault_path,
             main_vpath,
         }
     }
 
     fn resolve_to_disk(&self, id: FileId) -> Result<std::path::PathBuf, typst::diag::FileError> {
-        let rel = if id == self.main {
+        let relative = if id == self.main {
             std::path::Path::new(self.main_vpath.get_without_slash())
         } else {
             std::path::Path::new(id.vpath().get_without_slash())
         };
-        let resolved = std::path::Path::new(&self.vault_path).join(rel);
-        let canonical = resolved
+        let requested = std::path::Path::new(&self.vault_path).join(relative);
+        let resolved = requested
             .canonicalize()
-            .map_err(|_| typst::diag::FileError::NotFound(resolved.clone()))?;
-        let vault_canonical = std::path::Path::new(&self.vault_path)
+            .map_err(|_| typst::diag::FileError::NotFound(requested.clone()))?;
+        let vault = std::path::Path::new(&self.vault_path)
             .canonicalize()
-            .map_err(|_| {
-                typst::diag::FileError::NotFound(std::path::PathBuf::from(&self.vault_path))
-            })?;
-        if !canonical.starts_with(&vault_canonical) {
-            return Err(typst::diag::FileError::NotFound(resolved));
+            .map_err(|_| typst::diag::FileError::NotFound(self.vault_path.clone().into()))?;
+        if !resolved.starts_with(vault) {
+            return Err(typst::diag::FileError::NotFound(requested));
         }
-        Ok(canonical)
+        Ok(resolved)
     }
 }
 
@@ -68,30 +64,36 @@ impl World for TypstWorld {
     fn library(&self) -> &LazyHash<Library> {
         &self.library
     }
+
     fn book(&self) -> &LazyHash<FontBook> {
         &self.book
     }
+
     fn main(&self) -> FileId {
         self.main
     }
+
     fn source(&self, id: FileId) -> Result<Source, typst::diag::FileError> {
         if id == self.main {
             return Ok(self.source.clone());
         }
         let path = self.resolve_to_disk(id)?;
-        let content =
-            std::fs::read_to_string(&path).map_err(|_| typst::diag::FileError::NotFound(path))?;
+        let content = std::fs::read_to_string(&path)
+            .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
         Ok(Source::new(id, content))
     }
+
     fn file(&self, id: FileId) -> Result<Bytes, typst::diag::FileError> {
         let path = self.resolve_to_disk(id)?;
-        let data =
+        let bytes =
             std::fs::read(&path).map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
-        Ok(Bytes::new(data))
+        Ok(Bytes::new(bytes))
     }
+
     fn font(&self, index: usize) -> Option<Font> {
         self.fonts.get(index).cloned()
     }
+
     fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
         None
     }

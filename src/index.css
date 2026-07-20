@@ -1,0 +1,204 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.965 0.006 145);
+  --foreground: oklch(0.205 0.012 145);
+  --card: oklch(0.985 0.004 145);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.985 0.004 145);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.46 0.095 151);
+  --primary-foreground: oklch(0.985 0.004 145);
+  --secondary: oklch(0.925 0.008 145);
+  --secondary-foreground: oklch(0.245 0.012 145);
+  --muted: oklch(0.925 0.008 145);
+  --muted-foreground: oklch(0.51 0.015 145);
+  --accent: oklch(0.91 0.014 150);
+  --accent-foreground: oklch(0.245 0.012 145);
+  --destructive: oklch(0.58 0.17 27);
+  --border: oklch(0.86 0.01 145);
+  --input: oklch(0.9 0.009 145);
+  --ring: oklch(0.55 0.09 151);
+  --radius: 0.55rem;
+  --sidebar: oklch(0.935 0.009 145);
+  --sidebar-foreground: oklch(0.22 0.012 145);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.895 0.015 150);
+  --sidebar-accent-foreground: oklch(0.22 0.012 145);
+  --sidebar-border: oklch(0.835 0.012 145);
+  --sidebar-ring: var(--ring);
+  --signal: oklch(0.55 0.11 151);
+  --signal-foreground: oklch(0.985 0.004 145);
+  --preview-field: oklch(0.885 0.012 145);
+  --shadow-float: 0 24px 80px -30px oklch(0.18 0.02 145 / 0.55);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.175 0.009 145);
+  --foreground: oklch(0.92 0.007 145);
+  --card: oklch(0.205 0.01 145);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.215 0.011 145);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.69 0.105 151);
+  --primary-foreground: oklch(0.16 0.012 145);
+  --secondary: oklch(0.245 0.012 145);
+  --secondary-foreground: oklch(0.9 0.007 145);
+  --muted: oklch(0.235 0.011 145);
+  --muted-foreground: oklch(0.63 0.012 145);
+  --accent: oklch(0.26 0.017 150);
+  --accent-foreground: oklch(0.93 0.007 145);
+  --destructive: oklch(0.66 0.18 28);
+  --border: oklch(0.31 0.012 145);
+  --input: oklch(0.25 0.012 145);
+  --ring: oklch(0.64 0.095 151);
+  --sidebar: oklch(0.155 0.009 145);
+  --sidebar-foreground: oklch(0.86 0.009 145);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.22 0.016 150);
+  --sidebar-accent-foreground: oklch(0.91 0.008 145);
+  --sidebar-border: oklch(0.275 0.012 145);
+  --sidebar-ring: var(--ring);
+  --signal: oklch(0.71 0.105 151);
+  --signal-foreground: oklch(0.16 0.012 145);
+  --preview-field: oklch(0.125 0.009 145);
+  --shadow-float: 0 28px 90px -28px oklch(0.06 0.012 145 / 0.86);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.7);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.25);
+  --radius-xl: calc(var(--radius) * 1.7);
+  --radius-2xl: calc(var(--radius) * 2.1);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    background: var(--background);
+  }
+
+  body {
+    @apply m-0 overflow-hidden bg-background font-sans text-foreground antialiased;
+    min-width: 320px;
+    min-height: 100dvh;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--signal) 28%, transparent);
+  }
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-grid {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in oklab, var(--foreground) 10%, transparent) 1px,
+    transparent 0
+  );
+  background-size: 18px 18px;
+}
+
+.compile-scan {
+  animation: compile-scan 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes compile-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  16% {
+    opacity: 0.7;
+  }
+  84% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(70vh);
+    opacity: 0;
+  }
+}
+
+* {
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+@media (min-width: 1024px) {
+  .workspace-grid {
+    grid-template-columns: minmax(24rem, 1.08fr) minmax(23rem, 0.92fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

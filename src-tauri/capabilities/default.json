@@ -1,13 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Vellum desktop permissions for the main window",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "dialog:default",
-    "fs:default",
-    "fs:write-files"
-  ]
+  "permissions": ["core:default", "dialog:default", "fs:default", "fs:write-files"]
 }
