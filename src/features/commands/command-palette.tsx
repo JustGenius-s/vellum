@@ -96,7 +96,7 @@ export function CommandPalette() {
       onOpenChange={setPaletteOpen}
       title={paletteMode === "files" ? "Quick open" : "Command palette"}
       description="Search commands and local Typst files"
-      className="max-w-xl border border-border/80 bg-popover/96 shadow-[var(--shadow-float)] backdrop-blur-xl"
+      className="max-w-2xl border bg-popover shadow-lg"
     >
       <Command className="rounded-xl bg-transparent">
         <CommandInput
@@ -106,7 +106,7 @@ export function CommandPalette() {
             paletteMode === "files" ? "Open a document..." : "Run a command or open a file..."
           }
         />
-        <CommandList className="max-h-[min(26rem,62dvh)] p-1">
+        <CommandList className="max-h-[min(29rem,66dvh)] px-1.5 pb-1.5">
           <CommandEmpty>
             <div className="mx-auto flex max-w-56 flex-col items-center gap-2 py-4 text-muted-foreground">
               <MagnifyingGlassIcon className="size-5" />
@@ -121,9 +121,9 @@ export function CommandPalette() {
                   key={file.path}
                   value={`file ${file.name} ${file.path}`}
                   onSelect={() => openFile(file.path)}
-                  className="min-h-9"
+                  className="min-h-10"
                 >
-                  <FileTextIcon className="text-[var(--signal)]" />
+                  <FileTextIcon className="text-muted-foreground" />
                   <span className="truncate">{file.name.replace(/\.typ$/i, "")}</span>
                   <span className="ml-auto max-w-52 truncate font-mono text-[10px] text-muted-foreground">
                     {file.path.replace(state.vaultPath, "").replace(/^[/\\]/, "")}
@@ -150,7 +150,7 @@ export function CommandPalette() {
                           key={command.id}
                           value={`${command.title} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`}
                           onSelect={() => run(command.id)}
-                          className="min-h-9"
+                          className="min-h-10"
                         >
                           <Icon className="text-muted-foreground" />
                           <span className="min-w-0 flex-1">
@@ -175,11 +175,6 @@ export function CommandPalette() {
             : null}
         </CommandList>
       </Command>
-      <div className="flex items-center gap-3 border-t border-border/60 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-        <span>Enter to run</span>
-        <span>Esc to close</span>
-        <span className="ml-auto">{availableCommands.length} commands</span>
-      </div>
     </CommandDialog>
   );
 }

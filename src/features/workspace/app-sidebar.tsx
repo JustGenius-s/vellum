@@ -4,7 +4,6 @@ import {
   BooksIcon,
   CaretDownIcon,
   CaretRightIcon,
-  DotsThreeIcon,
   FilePlusIcon,
   FileTextIcon,
   FolderIcon,
@@ -19,8 +18,14 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspace } from "@/app/workspace-context";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -29,33 +34,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupAction,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
-  SidebarRail,
-  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SidebarView } from "@/application/workspace-controller";
 import { fileName, fileStem, type TreeNode } from "@/domain/workspace";
 
@@ -87,11 +75,11 @@ function EmptySidebar({
 }) {
   return (
     <div className="flex min-h-56 flex-col items-start justify-center px-4 py-8 group-data-[collapsible=icon]:hidden">
-      <div className="mb-4 flex size-9 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground/72">
-        <Icon className="size-4" />
+      <div className="mb-4 flex size-9 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-foreground">
+        <Icon className="size-4.5" />
       </div>
-      <p className="text-sm font-medium text-sidebar-foreground">{title}</p>
-      <p className="mt-1 max-w-48 text-xs leading-5 text-sidebar-foreground/52">{description}</p>
+      <p className="text-sm font-semibold tracking-[-0.01em] text-sidebar-foreground">{title}</p>
+      <p className="mt-1.5 max-w-52 text-xs leading-5 text-sidebar-foreground/55">{description}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
@@ -109,79 +97,81 @@ function TreeRow({
   onRename(target: TreeNode): void;
 }) {
   const { controller, state } = useWorkspace();
+  const { setOpenMobile } = useSidebar();
   const [expanded, setExpanded] = useState(depth < 1);
   const isActive = state.activePath === node.path;
   const Icon = node.isDir ? (expanded ? FolderOpenIcon : FolderIcon) : FileTextIcon;
 
   return (
     <div>
-      <div
-        className="group/tree-row flex min-h-8 items-center rounded-md pr-1 hover:bg-sidebar-accent/70"
-        style={{ paddingLeft: `${0.35 + depth * 0.75}rem` }}
-      >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          data-active={isActive}
-          onClick={() =>
-            node.isDir ? setExpanded((value) => !value) : void controller.openFile(node.path)
-          }
-        >
-          {node.isDir ? (
-            expanded ? (
-              <CaretDownIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
-            ) : (
-              <CaretRightIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
-            )
-          ) : (
-            <span className="w-3 shrink-0" />
-          )}
-          <Icon
-            className={`size-3.5 shrink-0 ${isActive ? "text-[var(--signal)]" : "text-sidebar-foreground/55"}`}
-          />
-          <span
-            className={`truncate ${isActive ? "font-medium text-sidebar-foreground" : "text-sidebar-foreground/76"}`}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            className={`flex min-h-9 items-center rounded-md transition-colors ${
+              isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
+            }`}
+            style={{ paddingLeft: `${0.4 + depth * 0.78}rem` }}
           >
-            {node.name.replace(/\.typ$/i, "")}
-          </span>
-          {isActive ? <span className="ml-auto size-1.5 rounded-full bg-[var(--signal)]" /> : null}
-        </button>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-2 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              data-active={isActive}
+              onClick={() => {
+                if (node.isDir) {
+                  setExpanded((value) => !value);
+                  return;
+                }
+                void controller.openFile(node.path);
+                setOpenMobile(false);
+              }}
+            >
+              {node.isDir ? (
+                expanded ? (
+                  <CaretDownIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
+                ) : (
+                  <CaretRightIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
+                )
+              ) : (
+                <span className="w-3 shrink-0" />
+              )}
+              <Icon
+                className={`size-3.5 shrink-0 ${
+                  isActive ? "text-sidebar-primary" : "text-sidebar-foreground/48"
+                }`}
+                weight={isActive ? "duotone" : "regular"}
+              />
+              <span
+                className={`truncate ${isActive ? "font-medium text-sidebar-foreground" : "text-sidebar-foreground/76"}`}
+              >
+                {node.name.replace(/\.typ$/i, "")}
+              </span>
+            </button>
+          </div>
+        </ContextMenuTrigger>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="opacity-0 group-hover/tree-row:opacity-100 data-open:opacity-100"
-              aria-label={`Actions for ${node.name}`}
-            >
-              <DotsThreeIcon weight="bold" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-40">
-            {node.isDir ? (
-              <>
-                <DropdownMenuItem onSelect={() => onCreate(node.path, "file")}>
-                  <FilePlusIcon /> New document
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onCreate(node.path, "folder")}>
-                  <FolderPlusIcon /> New folder
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            ) : null}
-            <DropdownMenuItem onSelect={() => onRename(node)}>
-              <PencilSimpleIcon /> Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => void controller.deleteEntry(node.path)}
-            >
-              <TrashIcon /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+        <ContextMenuContent className="min-w-40">
+          {node.isDir ? (
+            <>
+              <ContextMenuItem onSelect={() => onCreate(node.path, "file")}>
+                <FilePlusIcon /> New document
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => onCreate(node.path, "folder")}>
+                <FolderPlusIcon /> New folder
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+            </>
+          ) : null}
+          <ContextMenuItem onSelect={() => onRename(node)}>
+            <PencilSimpleIcon /> Rename
+          </ContextMenuItem>
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => void controller.deleteEntry(node.path)}
+          >
+            <TrashIcon /> Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {node.isDir && expanded ? (
         <div className="animate-in fade-in slide-in-from-top-1 duration-150">
@@ -265,6 +255,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
 
 function SearchPanel() {
   const { controller, state } = useWorkspace();
+  const { setOpenMobile } = useSidebar();
   const [query, setQuery] = useState(state.searchQuery);
 
   useEffect(() => {
@@ -274,14 +265,14 @@ function SearchPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-      <div className="px-2 pb-2">
+      <div className="px-2 pb-3 pt-1">
         <div className="relative">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/38" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search this vault"
-            className="h-8 border-sidebar-border bg-sidebar-accent/35 pl-8 text-xs shadow-none"
+            placeholder="Search workspace"
+            className="h-9 rounded-md border-sidebar-border bg-background pl-8 text-xs shadow-none"
           />
         </div>
       </div>
@@ -301,15 +292,15 @@ function SearchPanel() {
             <button
               key={`${result.path}:${result.line}:${result.column}`}
               type="button"
-              className="w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/70 active:translate-y-px"
-              onClick={() => void controller.openSearchMatch(result)}
+              className="w-full rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-sidebar-accent/65 active:translate-y-px"
+              onClick={() => {
+                void controller.openSearchMatch(result);
+                setOpenMobile(false);
+              }}
             >
               <span className="flex items-center gap-2 text-[11px] font-medium text-sidebar-foreground/78">
-                <FileTextIcon className="size-3 text-[var(--signal)]" />
+                <FileTextIcon className="size-3 text-sidebar-primary" />
                 <span className="truncate">{result.relativePath}</span>
-                <span className="ml-auto font-mono text-[9px] text-sidebar-foreground/35">
-                  {result.line}
-                </span>
               </span>
               <span className="mt-1 line-clamp-2 block text-[10px] leading-4 text-sidebar-foreground/48">
                 {result.preview}
@@ -334,6 +325,7 @@ function SearchPanel() {
 
 function OutlinePanel() {
   const { controller, state } = useWorkspace();
+  const { setOpenMobile } = useSidebar();
   const outline = controller.outline;
   const backlinks = controller.activeBacklinks;
 
@@ -348,9 +340,9 @@ function OutlinePanel() {
   }
 
   return (
-    <div className="space-y-5 px-2 pb-6 group-data-[collapsible=icon]:hidden">
+    <div className="space-y-4 px-2 pb-6 group-data-[collapsible=icon]:hidden">
       <section>
-        <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/38">
+        <p className="px-2 pb-1.5 text-xs font-medium text-sidebar-foreground/60">
           Document outline
         </p>
         {outline.length ? (
@@ -359,17 +351,14 @@ function OutlinePanel() {
               <button
                 key={`${heading.line}:${heading.title}`}
                 type="button"
-                className="flex min-h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-xs text-sidebar-foreground/68 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+                className="flex min-h-9 w-full items-center gap-2 rounded-lg pr-2 text-left text-xs text-sidebar-foreground/68 hover:bg-sidebar-accent/65 hover:text-sidebar-foreground"
                 style={{ paddingLeft: `${0.5 + (heading.level - 1) * 0.7}rem` }}
-                onClick={() => controller.revealLine(heading.line)}
+                onClick={() => {
+                  controller.revealLine(heading.line);
+                  setOpenMobile(false);
+                }}
               >
-                <span className="flex size-5 shrink-0 items-center justify-center rounded border border-sidebar-border font-mono text-[9px] text-sidebar-foreground/36">
-                  {heading.level}
-                </span>
                 <span className="truncate">{heading.title}</span>
-                <span className="ml-auto font-mono text-[9px] text-sidebar-foreground/28">
-                  {heading.line}
-                </span>
               </button>
             ))}
           </div>
@@ -381,22 +370,22 @@ function OutlinePanel() {
         )}
       </section>
 
-      <section className="border-t border-sidebar-border pt-4">
-        <p className="flex items-center gap-2 px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/38">
+      <section>
+        <p className="flex items-center gap-2 px-2 pb-1.5 text-xs font-medium text-sidebar-foreground/60">
           <LinkSimpleIcon className="size-3" /> Linked mentions
-          <Badge variant="outline" className="ml-auto h-4 px-1 font-mono text-[8px]">
-            {backlinks.length}
-          </Badge>
         </p>
         {backlinks.length ? (
           backlinks.map((stem) => (
             <button
               key={stem}
               type="button"
-              className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-sidebar-foreground/68 hover:bg-sidebar-accent/70"
-              onClick={() => void controller.openByStem(stem)}
+              className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-sidebar-foreground/68 hover:bg-sidebar-accent/65"
+              onClick={() => {
+                void controller.openByStem(stem);
+                setOpenMobile(false);
+              }}
             >
-              <FileTextIcon className="size-3.5 text-[var(--signal)]" />
+              <FileTextIcon className="size-3.5 text-sidebar-primary" />
               <span className="truncate">{stem}</span>
             </button>
           ))
@@ -483,113 +472,105 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
 
 export function AppSidebar() {
   const { controller, state } = useWorkspace();
-  const { setOpenMobile } = useSidebar();
   const [dialog, setDialog] = useState<EntryDialogState>(null);
   const vaultName = useMemo(
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
     [state.vaultPath],
   );
+  const activeView = sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
     controller.setSidebarView(view);
-    setOpenMobile(true);
   }
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-sidebar-border bg-sidebar">
-        <SidebarHeader className="px-2.5 pb-1 pt-3">
-          <div className="flex min-h-9 items-center gap-2 px-1">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[var(--signal)] text-[var(--signal-foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
-              <BooksIcon className="size-4" weight="fill" />
-            </div>
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-xs font-semibold tracking-[-0.01em] text-sidebar-foreground">
-                Vellum
-              </p>
-              <p className="truncate font-mono text-[9px] text-sidebar-foreground/38">
-                {vaultName}
-              </p>
-            </div>
-          </div>
-        </SidebarHeader>
-
-        <SidebarGroup className="pt-1">
-          <SidebarMenu>
-            {sidebarViews.map(({ id, label, icon: Icon }) => (
-              <SidebarMenuItem key={id}>
-                <SidebarMenuButton
-                  isActive={state.sidebarView === id}
-                  tooltip={label}
-                  onClick={() => selectView(id)}
+      <Sidebar collapsible="offcanvas" className="bg-sidebar">
+        <div className="flex size-full min-h-0">
+          <nav
+            className="flex w-12 shrink-0 flex-col items-center bg-sidebar-accent/50 py-2"
+            aria-label="Workspace views"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
+                  aria-label="Vellum"
                 >
-                  <Icon />
-                  <span>{label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+                  <BooksIcon className="size-4.5" weight="duotone" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">Vellum</TooltipContent>
+            </Tooltip>
 
-        <SidebarSeparator />
-
-        <SidebarContent>
-          <SidebarGroup className="min-h-0 flex-1 px-1.5 pt-2">
-            <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.15em]">
-              {state.sidebarView === "files"
-                ? "Vault"
-                : state.sidebarView === "search"
-                  ? "Full-text search"
-                  : "Document map"}
-            </SidebarGroupLabel>
-            {state.sidebarView === "files" && state.vaultPath ? (
-              <SidebarGroupAction
-                onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
-                aria-label="Create document"
-              >
-                <PlusIcon />
-              </SidebarGroupAction>
-            ) : null}
-            <SidebarGroupContent className="min-h-0 flex-1">
-              <ScrollArea className="h-[calc(100dvh-13rem)] md:h-[calc(100svh-13rem)]">
-                {state.sidebarView === "files" ? (
-                  <FilesPanel onDialog={setDialog} />
-                ) : state.sidebarView === "search" ? (
-                  <SearchPanel />
-                ) : (
-                  <OutlinePanel />
-                )}
-              </ScrollArea>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-
-        <SidebarFooter className="border-t border-sidebar-border px-2.5 py-2">
-          <div className="flex min-h-8 items-center gap-2 px-1 group-data-[collapsible=icon]:justify-center">
-            <span
-              className={`size-2 rounded-full ${state.mode === "desktop" ? "bg-[var(--signal)]" : "bg-amber-400"}`}
-              aria-hidden="true"
-            />
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-[10px] font-medium text-sidebar-foreground/68">
-                {state.mode === "desktop" ? "Desktop engine" : "Browser demo"}
-              </p>
-              <p className="truncate font-mono text-[8px] text-sidebar-foreground/32">
-                {state.mode === "desktop" ? "Typst 0.15" : "UI preview adapter"}
-              </p>
+            <div className="mt-3 flex flex-col gap-1">
+              {sidebarViews.map(({ id, label, icon: Icon }) => (
+                <Tooltip key={id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`size-9 ${
+                        state.sidebarView === id
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                      }`}
+                      onClick={() => selectView(id)}
+                      aria-label={label}
+                      aria-pressed={state.sidebarView === id}
+                    >
+                      <Icon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{label}</TooltipContent>
+                </Tooltip>
+              ))}
             </div>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ml-auto group-data-[collapsible=icon]:hidden"
-              onClick={() => void controller.refreshTree()}
-              aria-label="Refresh workspace"
-            >
-              <ArrowClockwiseIcon />
-            </Button>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mt-auto size-9 text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                  onClick={() => void controller.refreshTree()}
+                  aria-label="Refresh workspace"
+                >
+                  <ArrowClockwiseIcon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Refresh</TooltipContent>
+            </Tooltip>
+          </nav>
+
+          <div className="flex min-w-0 flex-1 flex-col bg-sidebar">
+            <header className="flex h-12 shrink-0 items-center px-3">
+              <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
+                {state.sidebarView === "files" ? vaultName : activeView.label}
+              </h2>
+              {state.sidebarView === "files" && state.vaultPath ? (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
+                  aria-label="Create document"
+                >
+                  <PlusIcon />
+                </Button>
+              ) : null}
+            </header>
+
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+              {state.sidebarView === "files" ? (
+                <FilesPanel onDialog={setDialog} />
+              ) : state.sidebarView === "search" ? (
+                <SearchPanel />
+              ) : (
+                <OutlinePanel />
+              )}
+            </div>
           </div>
-        </SidebarFooter>
-        <SidebarRail />
+        </div>
       </Sidebar>
 
       <EntryDialog state={dialog} onClose={() => setDialog(null)} />

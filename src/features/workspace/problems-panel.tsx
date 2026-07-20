@@ -10,21 +10,13 @@ export function ProblemsPanel() {
 
   return (
     <section
-      className="absolute inset-x-2 bottom-9 z-30 flex h-[min(19rem,42dvh)] flex-col overflow-hidden rounded-lg border border-border/80 bg-popover/96 shadow-[var(--shadow-float)] backdrop-blur-xl md:inset-x-3"
+      className="absolute inset-x-0 bottom-0 z-30 flex h-[min(20rem,46dvh)] flex-col overflow-hidden border-t bg-background"
       aria-label="Compile problems"
     >
-      <header className="flex min-h-10 items-center gap-2 border-b border-border/70 px-3">
-        <span className="relative flex size-2">
-          {state.compilePhase === "compiling" ? (
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--signal)] opacity-45" />
-          ) : null}
-          <span className="relative inline-flex size-2 rounded-full bg-[var(--signal)]" />
-        </span>
-        <WarningCircleIcon className="size-4 text-[var(--signal)]" />
-        <h2 className="text-xs font-semibold uppercase tracking-[0.12em]">Problems</h2>
-        <span className="font-mono text-[9px] text-muted-foreground">
-          {state.diagnostics.length} diagnostics
-        </span>
+      <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+        <WarningCircleIcon className="size-4 text-muted-foreground" />
+        <h2 className="text-xs font-semibold">Problems</h2>
+        <span className="text-xs text-muted-foreground">{state.diagnostics.length}</span>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -38,12 +30,12 @@ export function ProblemsPanel() {
 
       <ScrollArea className="min-h-0 flex-1">
         {state.diagnostics.length ? (
-          <div className="divide-y divide-border/55 p-1.5">
+          <div className="divide-y divide-border/55 px-2 py-1.5 sm:px-3">
             {state.diagnostics.map((diagnostic, index) => (
               <button
                 key={`${diagnostic.path}:${diagnostic.line}:${diagnostic.message}:${index}`}
                 type="button"
-                className="flex min-h-12 w-full items-start gap-3 rounded-md px-2.5 py-2 text-left hover:bg-muted/70 active:translate-y-px"
+                className="flex min-h-14 w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left hover:bg-muted/70 active:translate-y-px"
                 onClick={() => void controller.openDiagnostic(diagnostic)}
               >
                 <WarningCircleIcon
@@ -75,11 +67,8 @@ export function ProblemsPanel() {
           </div>
         ) : (
           <div className="flex h-full min-h-36 flex-col items-center justify-center gap-2 text-center">
-            <CheckCircleIcon className="size-6 text-[var(--signal)]" weight="fill" />
-            <p className="text-sm font-medium">The document compiles cleanly</p>
-            <p className="text-xs text-muted-foreground">
-              Warnings and errors will appear here with source locations.
-            </p>
+            <CheckCircleIcon className="size-7 text-muted-foreground" weight="duotone" />
+            <p className="text-sm font-semibold">No problems found</p>
           </div>
         )}
       </ScrollArea>

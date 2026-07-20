@@ -11,7 +11,6 @@ import {
 import { useCommandRegistration, useCommands } from "@/app/command-context";
 import { useWorkspace } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName, flattenFiles } from "@/domain/workspace";
@@ -23,9 +22,32 @@ const TypstEditor = lazy(() =>
   import("@/features/editor/typst-editor").then((module) => ({ default: module.TypstEditor })),
 );
 
+function CompactSurfaceSwitch() {
+  const { controller, state } = useWorkspace();
+
+  return (
+    <div className="flex h-8 items-center rounded-lg bg-muted p-0.5 min-[1180px]:hidden">
+      {(["editor", "preview"] as const).map((surface) => (
+        <button
+          key={surface}
+          type="button"
+          className={`h-7 rounded-md px-2.5 text-[11px] font-medium capitalize transition-[background-color,color,box-shadow] duration-150 active:translate-y-px sm:px-3 sm:text-xs ${
+            state.compactSurface === surface
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => controller.setCompactSurface(surface)}
+        >
+          {surface}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function WorkspaceTopbar() {
   const { controller, state } = useWorkspace();
-  const { openPalette, primaryModifier } = useCommands();
+  const { openPalette } = useCommands();
   const { toggleSidebar } = useSidebar();
   const toggleSidebarCommand = useMemo(
     () => ({
@@ -41,68 +63,46 @@ function WorkspaceTopbar() {
   );
   useCommandRegistration(toggleSidebarCommand);
 
-  const primaryLabel = primaryModifier === "Cmd" ? "⌘" : "Ctrl";
   const active = controller.activeTab;
+  const compileFailed = state.compilePhase === "failed";
 
   return (
-    <header className="flex min-h-11 shrink-0 items-center gap-1.5 border-b border-border/70 bg-background/78 px-2 backdrop-blur-xl sm:px-3">
+    <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
       <SidebarTrigger className="shrink-0" />
-      <Separator orientation="vertical" className="mx-1 h-4" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-xs font-medium text-foreground">
-            {active?.name.replace(/\.typ$/i, "") ??
-              (state.vaultPath ? fileName(state.vaultPath) : "Vellum")}
-          </p>
-          {active?.dirty ? (
-            <span className="size-1.5 shrink-0 rounded-full bg-amber-400" aria-label="Unsaved" />
-          ) : null}
-        </div>
-        <p className="hidden truncate font-mono text-[8px] text-muted-foreground sm:block">
-          {controller.activeRelativePath() ||
-            (state.vaultPath ? "No document open" : "Local-first Typst workspace")}
-        </p>
+
+      <div className="hidden min-w-0 flex-1 min-[1180px]:block">
+        <DocumentTabs />
       </div>
 
-      <div className="mr-1 flex items-center rounded-md border border-border/70 bg-muted/40 p-0.5 lg:hidden">
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${state.compactSurface === "editor" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-          onClick={() => controller.setCompactSurface("editor")}
-        >
-          Editor
-        </button>
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${state.compactSurface === "preview" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-          onClick={() => controller.setCompactSurface("preview")}
-        >
-          Preview
-        </button>
-      </div>
+      <span className="min-w-0 flex-1 truncate px-1 text-sm font-medium min-[1180px]:hidden">
+        {active?.name.replace(/\.typ$/i, "") ?? "Workspace"}
+        {active?.dirty ? " *" : ""}
+      </span>
+
+      <CompactSurfaceSwitch />
 
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="outline"
             size="sm"
-            className="hidden h-7 min-w-28 justify-start border-border/70 bg-muted/25 text-[10px] text-muted-foreground shadow-none md:flex"
+            className="hidden h-8 text-xs lg:flex"
             onClick={() => openPalette("commands")}
           >
-            <CommandIcon /> Commands
-            <span className="ml-auto font-mono text-[9px]">{primaryLabel}K</span>
+            <CommandIcon />
+            <span>Commands</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent>Open command palette</TooltipContent>
       </Tooltip>
 
-      <div className="hidden items-center gap-1.5 sm:flex">
-        <span
-          className={`size-1.5 rounded-full ${state.compilePhase === "failed" ? "bg-destructive" : "bg-[var(--signal)]"}`}
-        />
-        <span className="max-w-28 truncate font-mono text-[8px] uppercase tracking-[0.08em] text-muted-foreground">
-          {state.compilePhase}
-        </span>
+      <div
+        className={`hidden px-2 text-xs capitalize sm:block ${
+          compileFailed ? "text-destructive" : "text-muted-foreground"
+        }`}
+        aria-label={`Compile status: ${state.compilePhase}`}
+      >
+        {state.compilePhase}
       </div>
 
       <Tooltip>
@@ -110,13 +110,14 @@ function WorkspaceTopbar() {
           <Button
             variant="ghost"
             size="icon-sm"
+            className="relative hidden text-muted-foreground hover:text-foreground min-[360px]:inline-flex"
             onClick={() => controller.setProblemsOpen(!state.problemsOpen)}
             disabled={!active}
             aria-label="Toggle problems"
           >
             <WarningCircleIcon />
             {state.diagnostics.length ? (
-              <span className="absolute right-0 top-0 flex min-w-3.5 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-destructive px-0.5 font-mono text-[7px] text-white">
+              <span className="absolute -right-0.5 -top-0.5 text-[9px] font-medium text-destructive">
                 {state.diagnostics.length}
               </span>
             ) : null}
@@ -125,25 +126,21 @@ function WorkspaceTopbar() {
         <TooltipContent>Problems</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => void controller.exportPdf()}
-            disabled={!active}
-            aria-label="Export PDF"
-          >
-            <DownloadSimpleIcon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Export PDF</TooltipContent>
-      </Tooltip>
+      <Button
+        size="sm"
+        className="h-8"
+        onClick={() => void controller.exportPdf()}
+        disabled={!active}
+        aria-label="Export PDF"
+      >
+        <DownloadSimpleIcon />
+        <span className="hidden md:inline">Export</span>
+      </Button>
 
       <Button
         variant="ghost"
         size="icon-sm"
-        className="md:hidden"
+        className="lg:hidden"
         onClick={() => openPalette("commands")}
         aria-label="Open commands"
       >
@@ -158,29 +155,32 @@ function DocumentTabs() {
   if (!state.tabs.length) return null;
 
   return (
-    <div className="no-scrollbar flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-border/60 bg-background/62 px-1.5">
+    <div className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
       {state.tabs.map((tab) => {
         const active = tab.path === state.activePath;
         return (
           <div
             key={tab.path}
-            className={`group/tab relative flex min-w-28 max-w-52 items-center border-r border-border/40 ${active ? "bg-muted/45 text-foreground" : "text-muted-foreground hover:bg-muted/25 hover:text-foreground"}`}
+            className={`group/tab relative flex min-w-28 max-w-52 items-center rounded-md transition-colors ${
+              active
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            }`}
           >
-            {active ? <span className="absolute inset-x-2 top-0 h-px bg-[var(--signal)]" /> : null}
             <button
               type="button"
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-2 text-left text-[10px]"
+              className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs active:translate-y-px"
               onClick={() => controller.switchTab(tab.path)}
             >
-              <FileTextIcon
-                className={`size-3 shrink-0 ${active ? "text-[var(--signal)]" : "text-muted-foreground"}`}
-              />
+              <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate">{tab.name.replace(/\.typ$/i, "")}</span>
-              {tab.dirty ? <span className="size-1 shrink-0 rounded-full bg-amber-400" /> : null}
+              {tab.dirty ? <span className="text-muted-foreground">*</span> : null}
             </button>
             <button
               type="button"
-              className="mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover/tab:opacity-100 focus:opacity-100"
+              className={`mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[opacity,background-color,color] hover:bg-muted hover:text-foreground focus:opacity-100 ${
+                active ? "opacity-65" : "opacity-0 group-hover/tab:opacity-65"
+              }`}
               onClick={() => controller.closeTab(tab.path)}
               aria-label={`Close ${tab.name}`}
             >
@@ -195,29 +195,29 @@ function DocumentTabs() {
 
 function EmptyWorkspace() {
   const { controller, state } = useWorkspace();
+
   return (
-    <div className="flex h-full min-h-0 flex-col items-start justify-center px-8 sm:px-[12vw]">
-      <div className="mb-5 flex size-11 items-center justify-center rounded-lg border border-border bg-muted/35 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <FolderOpenIcon className="size-5" />
+    <div className="flex h-full min-h-0 items-center justify-center px-5 py-10 sm:px-10">
+      <div className="w-full max-w-lg">
+        <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <FolderOpenIcon className="size-5" weight="duotone" />
+        </div>
+        <h1 className="max-w-md text-2xl font-semibold tracking-tight sm:text-3xl">
+          {state.vaultPath
+            ? "Choose a document from your library."
+            : "A quieter place to write and typeset."}
+        </h1>
+        <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+          {state.vaultPath
+            ? "Your Typst files remain local and portable. Open one to edit source and preview the compiled page side by side."
+            : "Open a folder to create a workspace around plain Typst files, native compilation, and fast keyboard commands."}
+        </p>
+        {!state.vaultPath ? (
+          <Button className="mt-6" size="lg" onClick={() => void controller.openVault()}>
+            <FolderOpenIcon data-icon="inline-start" /> Open workspace
+          </Button>
+        ) : null}
       </div>
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--signal)]">
-        {state.vaultPath ? "Workspace ready" : "Local files first"}
-      </p>
-      <h1 className="mt-2 max-w-md text-2xl font-semibold tracking-[-0.04em] text-foreground sm:text-3xl">
-        {state.vaultPath
-          ? "Open a Typst document from the sidebar."
-          : "Writing and typesetting, in the same room."}
-      </h1>
-      <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-        {state.vaultPath
-          ? "Files remain plain .typ documents. The editor, compiler, search, and commands build around that durable source."
-          : "Choose a folder to create a vault. Vellum edits local Typst source and compiles it through the native desktop engine."}
-      </p>
-      {!state.vaultPath ? (
-        <Button className="mt-6" onClick={() => void controller.openVault()}>
-          <FolderOpenIcon data-icon="inline-start" /> Open vault
-        </Button>
-      ) : null}
     </div>
   );
 }
@@ -230,26 +230,12 @@ function EditorPane() {
   );
 
   return (
-    <section
-      className="flex h-full min-h-0 w-full flex-col bg-background"
-      aria-label="Document editor"
-    >
-      <header className="flex min-h-10 items-center gap-2 border-b border-border/65 px-3">
-        <FileTextIcon className="size-3.5 text-[var(--signal)]" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Source
-        </span>
-        {active ? (
-          <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.08em] text-muted-foreground">
-            {active.content.split("\n").length} lines
-          </span>
-        ) : null}
-      </header>
+    <section className="flex h-full min-h-0 w-full flex-col bg-card" aria-label="Document editor">
       <div className="min-h-0 flex-1">
         {active ? (
           <Suspense
             fallback={
-              <div className="space-y-3 px-12 py-14">
+              <div className="space-y-3 px-[clamp(2rem,6vw,5rem)] py-14">
                 <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
                 <div className="h-3 w-full animate-pulse rounded bg-muted" />
                 <div className="h-3 w-5/6 animate-pulse rounded bg-muted" />
@@ -274,22 +260,6 @@ function EditorPane() {
   );
 }
 
-function StatusBar() {
-  const { state } = useWorkspace();
-  return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-border/65 bg-background/86 px-3 font-mono text-[8px] uppercase tracking-[0.09em] text-muted-foreground backdrop-blur-xl">
-      <span className="flex items-center gap-1.5">
-        <span
-          className={`size-1.5 rounded-full ${state.compilePhase === "failed" ? "bg-destructive" : "bg-[var(--signal)]"}`}
-        />
-        {state.statusText}
-      </span>
-      <span className="ml-auto hidden sm:inline">Typst / SVG</span>
-      <span>{state.mode === "desktop" ? "Native" : "Demo"}</span>
-    </footer>
-  );
-}
-
 export function WorkspaceShell() {
   const { state } = useWorkspace();
 
@@ -298,23 +268,26 @@ export function WorkspaceShell() {
       <AppSidebar />
       <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
         <WorkspaceTopbar />
-        <DocumentTabs />
+        {state.tabs.length ? (
+          <div className="shrink-0 border-b bg-background px-2 py-1 min-[1180px]:hidden">
+            <DocumentTabs />
+          </div>
+        ) : null}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="workspace-grid h-full min-h-0">
             <div
-              className={`${state.compactSurface === "editor" ? "flex" : "hidden"} min-h-0 min-w-0 lg:flex`}
+              className={`${state.compactSurface === "editor" ? "flex" : "hidden"} min-h-0 min-w-0 min-[1180px]:flex`}
             >
               <EditorPane />
             </div>
             <div
-              className={`${state.compactSurface === "preview" ? "flex" : "hidden"} min-h-0 min-w-0 border-l border-border/70 lg:flex`}
+              className={`${state.compactSurface === "preview" ? "flex" : "hidden"} min-h-0 min-w-0 min-[1180px]:flex`}
             >
               <PreviewPane />
             </div>
           </div>
           <ProblemsPanel />
         </div>
-        <StatusBar />
       </SidebarInset>
     </div>
   );

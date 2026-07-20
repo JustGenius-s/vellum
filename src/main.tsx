@@ -7,8 +7,6 @@ import { WorkspaceController } from "@/application/workspace-controller";
 import { createWorkspaceGateway } from "@/infrastructure/runtime";
 import "@/index.css";
 
-document.documentElement.classList.add("dark");
-
 const controller = new WorkspaceController(createWorkspaceGateway());
 
 createRoot(document.getElementById("root")!).render(
