@@ -8,13 +8,10 @@ import {
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
-  FolderPlusIcon,
   LinkSimpleIcon,
   ListBulletsIcon,
   MagnifyingGlassIcon,
-  PencilSimpleIcon,
   PlusIcon,
-  TrashIcon,
 } from "@phosphor-icons/react";
 
 import { useWorkspace } from "@/app/workspace-context";
@@ -111,6 +108,7 @@ function TreeRow({
               isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
             }`}
             style={{ paddingLeft: `${0.4 + depth * 0.78}rem` }}
+            onContextMenu={(event) => event.stopPropagation()}
           >
             <button
               type="button"
@@ -153,22 +151,20 @@ function TreeRow({
           {node.isDir ? (
             <>
               <ContextMenuItem onSelect={() => onCreate(node.path, "file")}>
-                <FilePlusIcon /> New document
+                New document
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => onCreate(node.path, "folder")}>
-                <FolderPlusIcon /> New folder
+                New folder
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           ) : null}
-          <ContextMenuItem onSelect={() => onRename(node)}>
-            <PencilSimpleIcon /> Rename
-          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onRename(node)}>Rename</ContextMenuItem>
           <ContextMenuItem
             variant="destructive"
             onSelect={() => void controller.deleteEntry(node.path)}
           >
-            <TrashIcon /> Delete
+            Delete
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -223,33 +219,50 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
     );
   }
 
-  if (state.tree.length === 0) {
-    return (
-      <EmptySidebar
-        icon={FilePlusIcon}
-        title="The vault is empty"
-        description="Create the first Typst document and start with a durable local file."
-        action={
-          <Button size="sm" onClick={() => onDialog({ kind: "file", parent: state.vaultPath })}>
-            <PlusIcon data-icon="inline-start" /> New document
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
-    <div className="px-1 pb-6 group-data-[collapsible=icon]:hidden">
-      {state.tree.map((node) => (
-        <TreeRow
-          key={node.path}
-          node={node}
-          depth={0}
-          onCreate={(parent, kind) => onDialog({ kind, parent })}
-          onRename={(target) => onDialog({ kind: "rename", target })}
-        />
-      ))}
-    </div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="min-h-full group-data-[collapsible=icon]:hidden">
+          {state.tree.length === 0 ? (
+            <EmptySidebar
+              icon={FilePlusIcon}
+              title="The vault is empty"
+              description="Create the first Typst document and start with a durable local file."
+              action={
+                <Button
+                  size="sm"
+                  onClick={() => onDialog({ kind: "file", parent: state.vaultPath })}
+                >
+                  <PlusIcon data-icon="inline-start" /> New document
+                </Button>
+              }
+            />
+          ) : (
+            <div className="px-1 pb-6">
+              {state.tree.map((node) => (
+                <TreeRow
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  onCreate={(parent, kind) => onDialog({ kind, parent })}
+                  onRename={(target) => onDialog({ kind: "rename", target })}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-40">
+        <ContextMenuItem onSelect={() => onDialog({ kind: "file", parent: state.vaultPath })}>
+          New document
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onDialog({ kind: "folder", parent: state.vaultPath })}>
+          New folder
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => void controller.refreshTree()}>Refresh</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

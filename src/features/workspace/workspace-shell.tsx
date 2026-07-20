@@ -62,7 +62,6 @@ function WorkspaceTopbar() {
       title: "Toggle sidebar panel",
       description: "Show or hide the sidebar content",
       group: "View" as const,
-      icon: "sidebar" as const,
       keybinding: "Mod+B",
       handler: toggleSidebar,
     }),

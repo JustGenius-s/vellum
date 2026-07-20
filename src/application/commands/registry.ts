@@ -1,24 +1,10 @@
 export type CommandGroup = "Workspace" | "Document" | "View" | "Navigate" | "Developer";
 
-export type CommandIcon =
-  | "command"
-  | "compile"
-  | "document"
-  | "export"
-  | "folder"
-  | "outline"
-  | "panel"
-  | "problems"
-  | "save"
-  | "search"
-  | "sidebar";
-
 export interface Command {
   id: string;
   title: string;
   description?: string;
   group: CommandGroup;
-  icon: CommandIcon;
   keywords?: string[];
   keybinding?: string;
   when?: string | null;

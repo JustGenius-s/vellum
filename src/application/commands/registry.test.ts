@@ -10,7 +10,6 @@ describe("command registry", () => {
       id: "document.save",
       title: "Save",
       group: "Document",
-      icon: "save",
       handler,
     });
 
