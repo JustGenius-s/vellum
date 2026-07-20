@@ -143,11 +143,6 @@
   }
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
 * {
   scrollbar-color: var(--border) transparent;
   scrollbar-width: thin;
@@ -160,12 +155,6 @@
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-@media (min-width: 1180px) {
-  .workspace-grid {
-    grid-template-columns: minmax(29rem, 1.08fr) minmax(27rem, 0.92fr);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

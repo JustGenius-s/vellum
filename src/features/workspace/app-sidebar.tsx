@@ -472,6 +472,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
 
 export function AppSidebar() {
   const { controller, state } = useWorkspace();
+  const { state: sidebarState, setOpen, isMobile } = useSidebar();
   const [dialog, setDialog] = useState<EntryDialogState>(null);
   const vaultName = useMemo(
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
@@ -480,12 +481,21 @@ export function AppSidebar() {
   const activeView = sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
+    if (!isMobile && state.sidebarView === view) {
+      setOpen(sidebarState === "collapsed");
+      return;
+    }
+
     controller.setSidebarView(view);
+
+    if (!isMobile) {
+      setOpen(true);
+    }
   }
 
   return (
     <>
-      <Sidebar collapsible="offcanvas" className="bg-sidebar">
+      <Sidebar collapsible="icon" className="bg-sidebar">
         <div className="flex size-full min-h-0">
           <nav
             className="flex w-12 shrink-0 flex-col items-center bg-sidebar-accent/50 py-2"
@@ -543,7 +553,7 @@ export function AppSidebar() {
             </Tooltip>
           </nav>
 
-          <div className="flex min-w-0 flex-1 flex-col bg-sidebar">
+          <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
             <header className="flex h-12 shrink-0 items-center px-3">
               <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
                 {state.sidebarView === "files" ? vaultName : activeView.label}

@@ -11,12 +11,19 @@ import {
 import { useCommandRegistration, useCommands } from "@/app/command-context";
 import { useWorkspace } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
-import { SidebarInset, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  useDefaultLayout,
+} from "@/components/ui/resizable";
+import { SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
 import { ProblemsPanel } from "@/features/workspace/problems-panel";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 const TypstEditor = lazy(() =>
   import("@/features/editor/typst-editor").then((module) => ({ default: module.TypstEditor })),
@@ -52,8 +59,8 @@ function WorkspaceTopbar() {
   const toggleSidebarCommand = useMemo(
     () => ({
       id: "view.toggle-sidebar",
-      title: "Toggle sidebar",
-      description: "Expand or collapse the workspace navigation",
+      title: "Toggle sidebar panel",
+      description: "Show or hide the sidebar content",
       group: "View" as const,
       icon: "sidebar" as const,
       keybinding: "Mod+B",
@@ -68,8 +75,6 @@ function WorkspaceTopbar() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
-      <SidebarTrigger className="shrink-0" />
-
       <div className="hidden min-w-0 flex-1 min-[1180px]:block">
         <DocumentTabs />
       </div>
@@ -260,35 +265,76 @@ function EditorPane() {
   );
 }
 
-export function WorkspaceShell() {
+function WideWorkspaceSurfaces() {
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "vellum-workspace-surfaces",
+    panelIds: ["workspace-editor", "workspace-preview"],
+    onlySaveAfterUserInteractions: true,
+  });
+
+  return (
+    <ResizablePanelGroup
+      id="vellum-workspace-surfaces"
+      orientation="horizontal"
+      defaultLayout={defaultLayout}
+      onLayoutChanged={onLayoutChanged}
+      resizeTargetMinimumSize={{ fine: 8, coarse: 24 }}
+      className="min-h-0"
+    >
+      <ResizablePanel
+        id="workspace-editor"
+        defaultSize="54"
+        minSize="360px"
+        className="min-h-0 min-w-0"
+      >
+        <EditorPane />
+      </ResizablePanel>
+      <ResizableHandle aria-label="Resize editor and preview" />
+      <ResizablePanel
+        id="workspace-preview"
+        defaultSize="46"
+        minSize="320px"
+        className="min-h-0 min-w-0"
+      >
+        <PreviewPane />
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+function WorkspaceSurfaces() {
+  const { state } = useWorkspace();
+  const isWide = useMediaQuery("(min-width: 1180px)");
+
+  if (isWide) return <WideWorkspaceSurfaces />;
+
+  return state.compactSurface === "editor" ? <EditorPane /> : <PreviewPane />;
+}
+
+function WorkspaceMain() {
   const { state } = useWorkspace();
 
   return (
+    <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
+      <WorkspaceTopbar />
+      {state.tabs.length ? (
+        <div className="shrink-0 border-b bg-background px-2 py-1 min-[1180px]:hidden">
+          <DocumentTabs />
+        </div>
+      ) : null}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <WorkspaceSurfaces />
+        <ProblemsPanel />
+      </div>
+    </SidebarInset>
+  );
+}
+
+export function WorkspaceShell() {
+  return (
     <div className="flex min-h-[100dvh] w-full overflow-hidden bg-background">
       <AppSidebar />
-      <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
-        <WorkspaceTopbar />
-        {state.tabs.length ? (
-          <div className="shrink-0 border-b bg-background px-2 py-1 min-[1180px]:hidden">
-            <DocumentTabs />
-          </div>
-        ) : null}
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          <div className="workspace-grid h-full min-h-0">
-            <div
-              className={`${state.compactSurface === "editor" ? "flex" : "hidden"} min-h-0 min-w-0 min-[1180px]:flex`}
-            >
-              <EditorPane />
-            </div>
-            <div
-              className={`${state.compactSurface === "preview" ? "flex" : "hidden"} min-h-0 min-w-0 min-[1180px]:flex`}
-            >
-              <PreviewPane />
-            </div>
-          </div>
-          <ProblemsPanel />
-        </div>
-      </SidebarInset>
+      <WorkspaceMain />
     </div>
   );
 }
