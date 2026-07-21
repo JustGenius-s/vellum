@@ -13,5 +13,5 @@
 
 ## Verification
 
-- Run `pnpm exec vp check`, `pnpm exec vp test`, `pnpm run build`, and `git diff --check` after frontend changes.
-- For interaction or responsive-layout changes, verify the behavior in the running application at the relevant breakpoints.
+- After code changes, run only `pnpm run build` and `pnpm exec vp test` by default.
+- Do not start a development server or perform browser/UI automation, screenshots, or other interactive verification unless the user explicitly requests it.

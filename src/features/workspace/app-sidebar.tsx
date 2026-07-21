@@ -8,6 +8,7 @@ import {
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
+  GearSixIcon,
   LinkSimpleIcon,
   ListBulletsIcon,
   MagnifyingGlassIcon,
@@ -58,6 +59,8 @@ const sidebarViews: Array<{
   { id: "search", label: "Search", icon: MagnifyingGlassIcon },
   { id: "outline", label: "Structure", icon: ListBulletsIcon },
 ];
+
+const settingsView = { id: "settings", label: "Settings", icon: GearSixIcon } as const;
 
 function EmptySidebar({
   icon: Icon,
@@ -412,6 +415,36 @@ function OutlinePanel() {
   );
 }
 
+function SettingsPanel() {
+  const { controller, state } = useWorkspace();
+
+  return (
+    <div className="space-y-4 px-1 pb-6 group-data-[collapsible=icon]:hidden">
+      <section>
+        <div className="px-2 pb-2">
+          <p className="text-xs font-medium text-sidebar-foreground/60">Workspace</p>
+          <p
+            className="mt-1 truncate text-xs text-sidebar-foreground/42"
+            title={state.vaultPath || undefined}
+          >
+            {state.vaultPath || "No local workspace is open"}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-full justify-start px-2 text-xs font-normal text-sidebar-foreground/68"
+          onClick={() => void controller.refreshTree()}
+          disabled={!state.vaultPath}
+        >
+          <ArrowClockwiseIcon data-icon="inline-start" />
+          Refresh workspace
+        </Button>
+      </section>
+    </div>
+  );
+}
+
 function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): void }) {
   const { controller } = useWorkspace();
   const [name, setName] = useState("");
@@ -491,7 +524,10 @@ export function AppSidebar() {
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
     [state.vaultPath],
   );
-  const activeView = sidebarViews.find((view) => view.id === state.sidebarView)!;
+  const activeView =
+    state.sidebarView === settingsView.id
+      ? settingsView
+      : sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
     if (!isMobile && state.sidebarView === view) {
@@ -555,14 +591,19 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="mt-auto size-9 text-sidebar-foreground/60 hover:text-sidebar-foreground"
-                  onClick={() => void controller.refreshTree()}
-                  aria-label="Refresh workspace"
+                  className={`mt-auto size-9 ${
+                    state.sidebarView === settingsView.id
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                  }`}
+                  onClick={() => selectView(settingsView.id)}
+                  aria-label={settingsView.label}
+                  aria-pressed={state.sidebarView === settingsView.id}
                 >
-                  <ArrowClockwiseIcon />
+                  <GearSixIcon />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">Refresh</TooltipContent>
+              <TooltipContent side="right">{settingsView.label}</TooltipContent>
             </Tooltip>
           </nav>
 
@@ -588,8 +629,10 @@ export function AppSidebar() {
                 <FilesPanel onDialog={setDialog} />
               ) : state.sidebarView === "search" ? (
                 <SearchPanel />
-              ) : (
+              ) : state.sidebarView === "outline" ? (
                 <OutlinePanel />
+              ) : (
+                <SettingsPanel />
               )}
             </div>
           </div>

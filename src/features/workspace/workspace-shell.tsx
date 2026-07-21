@@ -4,7 +4,6 @@ import {
   DownloadSimpleIcon,
   FileTextIcon,
   FolderOpenIcon,
-  WarningCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
 
@@ -108,27 +107,6 @@ function WorkspaceTopbar() {
       >
         {state.compilePhase}
       </div>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="relative hidden text-muted-foreground hover:text-foreground min-[360px]:inline-flex"
-            onClick={() => controller.setProblemsOpen(!state.problemsOpen)}
-            disabled={!active}
-            aria-label="Toggle problems"
-          >
-            <WarningCircleIcon />
-            {state.diagnostics.length ? (
-              <span className="absolute -right-0.5 -top-0.5 text-[9px] font-medium text-destructive">
-                {state.diagnostics.length}
-              </span>
-            ) : null}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Problems</TooltipContent>
-      </Tooltip>
 
       <Button
         size="sm"
@@ -321,8 +299,10 @@ function WorkspaceMain() {
           <DocumentTabs />
         </div>
       ) : null}
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        <WorkspaceSurfaces />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <WorkspaceSurfaces />
+        </div>
         <ProblemsPanel />
       </div>
     </SidebarInset>

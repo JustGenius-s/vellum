@@ -38,7 +38,7 @@ pub struct CompileDiagnostic {
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileSvgResult {
-    svg: Option<String>,
+    pages: Option<Vec<String>>,
     diagnostics: Vec<CompileDiagnostic>,
 }
 
@@ -96,18 +96,22 @@ pub async fn compile_typst_svg(
             .collect();
 
         match warned.output {
-            Ok(document) => Ok(CompileSvgResult {
-                svg: Some(typst_svg::svg_merged(
-                    &document,
-                    &typst_svg::SvgOptions::default(),
-                    typst::layout::Abs::zero(),
-                )),
-                diagnostics,
-            }),
+            Ok(document) => {
+                let options = typst_svg::SvgOptions::default();
+                let pages = document
+                    .pages()
+                    .iter()
+                    .map(|page| typst_svg::svg(page, &options))
+                    .collect();
+                Ok(CompileSvgResult {
+                    pages: Some(pages),
+                    diagnostics,
+                })
+            }
             Err(errors) => {
                 diagnostics.extend(errors.iter().map(|item| format_diagnostic(&world, item)));
                 Ok(CompileSvgResult {
-                    svg: None,
+                    pages: None,
                     diagnostics,
                 })
             }

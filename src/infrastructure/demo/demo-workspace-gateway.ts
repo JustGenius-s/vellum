@@ -192,7 +192,7 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
           },
         ]
       : [];
-    return { svg: diagnostics.length ? null : renderDemoSvg(request.source), diagnostics };
+    return { pages: diagnostics.length ? null : [renderDemoSvg(request.source)], diagnostics };
   }
 
   async exportPdf() {

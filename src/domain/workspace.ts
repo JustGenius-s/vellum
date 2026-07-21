@@ -24,7 +24,7 @@ export interface CompileDiagnostic {
 }
 
 export interface CompileSvgResult {
-  svg: string | null;
+  pages: string[] | null;
   diagnostics: CompileDiagnostic[];
 }
 

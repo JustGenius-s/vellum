@@ -13,7 +13,7 @@ import {
   type TreeNode,
 } from "@/domain/workspace";
 
-export type SidebarView = "files" | "search" | "outline";
+export type SidebarView = "files" | "search" | "outline" | "settings";
 export type CompactSurface = "editor" | "preview";
 export type CompilePhase = "idle" | "queued" | "compiling" | "ready" | "failed";
 export type WorkspacePhase = "booting" | "ready" | "error";
@@ -25,7 +25,7 @@ export interface WorkspaceState {
   tree: TreeNode[];
   tabs: DocumentTab[];
   activePath: string;
-  previewSvg: string;
+  previewPages: string[];
   diagnostics: CompileDiagnostic[];
   backlinks: BacklinkIndex["links"];
   compilePhase: CompilePhase;
@@ -47,7 +47,7 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   tree: [],
   tabs: [],
   activePath: "",
-  previewSvg: "",
+  previewPages: [],
   diagnostics: [],
   backlinks: {},
   compilePhase: "idle",
@@ -162,7 +162,7 @@ export class WorkspaceController {
       tree: [],
       tabs: [],
       activePath: "",
-      previewSvg: "",
+      previewPages: [],
       diagnostics: [],
       statusText: "Indexing workspace",
     });
@@ -264,7 +264,7 @@ export class WorkspaceController {
     this.update({
       tabs,
       activePath,
-      previewSvg: activePath ? this.state.previewSvg : "",
+      previewPages: activePath ? this.state.previewPages : [],
       diagnostics: activePath ? this.state.diagnostics : [],
       statusText: `Closed ${closing.name}`,
     });
@@ -316,7 +316,7 @@ export class WorkspaceController {
     }
     const tab = this.activeTab;
     if (!tab || !this.state.vaultPath) {
-      this.update({ compilePhase: "idle", previewSvg: "", diagnostics: [] });
+      this.update({ compilePhase: "idle", previewPages: [], diagnostics: [] });
       return;
     }
 
@@ -333,7 +333,7 @@ export class WorkspaceController {
       const errorCount = result.diagnostics.filter((item) => item.severity === "error").length;
       const warningCount = result.diagnostics.length - errorCount;
       this.update({
-        previewSvg: result.svg ?? this.state.previewSvg,
+        previewPages: result.pages ?? this.state.previewPages,
         diagnostics: result.diagnostics,
         compilePhase: errorCount ? "failed" : "ready",
         problemsOpen: errorCount > 0 ? true : this.state.problemsOpen,
