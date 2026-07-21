@@ -27,8 +27,9 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
 typst = "0.15"
 typst-assets = { version = "0.15", features = ["fonts"] }
-typst-kit = { version = "0.15.0", features = ["system-packages", "system-downloader"] }
+typst-kit = { version = "0.15.0", features = ["datetime", "system-packages", "system-downloader"] }
 typst-layout = "0.15"
 typst-pdf = "0.15"
 typst-svg = "0.15"
+toml = "0.8.2"
 walkdir = "2"

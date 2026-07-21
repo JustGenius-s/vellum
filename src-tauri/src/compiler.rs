@@ -313,6 +313,8 @@ pub async fn compile_typst_svg(
     main_file: String,
     latin_font: String,
     cjk_font: String,
+    package_cache_path: Option<String>,
+    package_data_path: Option<String>,
 ) -> Result<CompileSvgResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let prepared = if main_file.to_ascii_lowercase().ends_with(".md") {
@@ -322,7 +324,13 @@ pub async fn compile_typst_svg(
         };
         let (prepared, main_line_offset) =
             apply_font_preferences(prepared, &latin_font, &cjk_font);
-        let world = TypstWorld::new(prepared, vault_path, main_file);
+        let world = TypstWorld::new(
+            prepared,
+            vault_path,
+            main_file,
+            package_cache_path,
+            package_data_path,
+        );
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
         let mut diagnostics: Vec<CompileDiagnostic> = warned
             .warnings
@@ -367,6 +375,8 @@ pub async fn compile_typst_pdf(
     main_file: String,
     latin_font: String,
     cjk_font: String,
+    package_cache_path: Option<String>,
+    package_data_path: Option<String>,
 ) -> Result<Vec<u8>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let prepared = if main_file.to_ascii_lowercase().ends_with(".md") {
@@ -375,7 +385,13 @@ pub async fn compile_typst_pdf(
             expand_wikilinks(&source)
         };
         let (prepared, _) = apply_font_preferences(prepared, &latin_font, &cjk_font);
-        let world = TypstWorld::new(prepared, vault_path, main_file);
+        let world = TypstWorld::new(
+            prepared,
+            vault_path,
+            main_file,
+            package_cache_path,
+            package_data_path,
+        );
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
         let document = warned.output.map_err(|errors| {
             errors

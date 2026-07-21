@@ -2,14 +2,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
-import type { CompileRequest, WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type {
+  CompileRequest,
+  TemplateProjectRequest,
+  WorkspaceGateway,
+} from "@/application/ports/workspace-gateway";
 import type {
   BacklinkIndex,
   CompileSvgResult,
   FontCatalog,
   PackageCatalog,
+  PackageDirectories,
+  PackageLocation,
   SavedSession,
   SearchMatch,
+  TemplateProjectPlan,
+  TemplateProjectResult,
+  TemplateThumbnail,
   TreeNode,
 } from "@/domain/workspace";
 
@@ -74,20 +83,65 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
     return invoke<FontCatalog>("list_font_families");
   }
 
-  listPackages() {
-    return invoke<PackageCatalog>("list_packages");
+  async choosePackageDirectory(location: PackageLocation) {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title:
+        location === "cache"
+          ? "Choose downloaded package folder"
+          : "Choose local package folder",
+    });
+    return typeof selected === "string" ? selected : null;
   }
 
-  installPackage(spec: string) {
-    return invoke<PackageCatalog>("install_package", { spec });
+  listPackages(directories: PackageDirectories) {
+    return invoke<PackageCatalog>("list_packages", { ...directories });
   }
 
-  removePackage(spec: string) {
-    return invoke<PackageCatalog>("remove_package", { spec });
+  installPackage(spec: string, directories: PackageDirectories) {
+    return invoke<PackageCatalog>("install_package", { spec, ...directories });
   }
 
-  clearPackageCache() {
-    return invoke<PackageCatalog>("clear_package_cache");
+  removePackage(
+    spec: string,
+    location: PackageLocation,
+    directories: PackageDirectories,
+  ) {
+    return invoke<PackageCatalog>("remove_package", { spec, location, ...directories });
+  }
+
+  clearPackageCache(directories: PackageDirectories) {
+    return invoke<PackageCatalog>("clear_package_cache", { ...directories });
+  }
+
+  async chooseTemplateParent() {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: "Choose project location",
+    });
+    return typeof selected === "string" ? selected : null;
+  }
+
+  preflightTemplateProject(request: TemplateProjectRequest) {
+    return invoke<TemplateProjectPlan>("preflight_template_project", { ...request });
+  }
+
+  createTemplateProject(request: TemplateProjectRequest, merge: boolean) {
+    return invoke<TemplateProjectResult>("create_template_project", { ...request, merge });
+  }
+
+  readTemplateThumbnail(
+    spec: string,
+    location: PackageLocation,
+    directories: PackageDirectories,
+  ) {
+    return invoke<TemplateThumbnail | null>("read_template_thumbnail", {
+      spec,
+      location,
+      ...directories,
+    });
   }
 
   compileSvg(request: CompileRequest) {
@@ -97,6 +151,8 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
       mainFile: request.mainFile,
       latinFont: request.latinFont,
       cjkFont: request.cjkFont,
+      packageCachePath: request.packageCachePath,
+      packageDataPath: request.packageDataPath,
     });
   }
 
@@ -107,6 +163,8 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
       mainFile: request.mainFile,
       latinFont: request.latinFont,
       cjkFont: request.cjkFont,
+      packageCachePath: request.packageCachePath,
+      packageDataPath: request.packageDataPath,
     });
     const target = await save({
       defaultPath: defaultName,

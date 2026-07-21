@@ -1,8 +1,14 @@
-import type { CompileRequest, WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type {
+  CompileRequest,
+  TemplateProjectRequest,
+  WorkspaceGateway,
+} from "@/application/ports/workspace-gateway";
 import type {
   CompileSvgResult,
   PackageCatalog,
+  PackageDirectories,
   PackageEntry,
+  PackageLocation,
   SavedSession,
   SearchMatch,
   TreeNode,
@@ -144,6 +150,8 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
       sizeBytes: 184_672,
       modifiedAtMs: Date.UTC(2026, 6, 18, 9, 42),
       removable: true,
+      description: "Barcode and QR code generation for Typst.",
+      template: null,
     },
     {
       spec: "@local/house-style:0.2.4",
@@ -154,7 +162,26 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
       path: `${DEMO_DATA_PATH}/local/house-style/0.2.4`,
       sizeBytes: 63_918,
       modifiedAtMs: Date.UTC(2026, 5, 27, 14, 16),
-      removable: false,
+      removable: true,
+      description: "A local document style shared across projects.",
+      template: null,
+    },
+    {
+      spec: "@preview/charged-ieee:0.1.4",
+      namespace: "preview",
+      name: "charged-ieee",
+      version: "0.1.4",
+      location: "cache",
+      path: `${DEMO_CACHE_PATH}/preview/charged-ieee/0.1.4`,
+      sizeBytes: 128_441,
+      modifiedAtMs: Date.UTC(2026, 6, 12, 11, 24),
+      removable: true,
+      description: "An IEEE-style paper template with bibliography support.",
+      template: {
+        path: "template",
+        entrypoint: "main.typ",
+        thumbnail: null,
+      },
     },
   ];
   private session: SavedSession = {
@@ -163,6 +190,8 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     activeTabPath: `${ROOT}/atlas.typ`,
     latinFont: "Georgia",
     cjkFont: "Songti SC",
+    packageCachePath: null,
+    packageDataPath: null,
   };
 
   async chooseVault() {
@@ -256,11 +285,17 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     };
   }
 
-  async listPackages() {
-    return this.packageCatalog();
+  async choosePackageDirectory(location: PackageLocation) {
+    return location === "cache"
+      ? `${ROOT}/Custom/Downloaded packages`
+      : `${ROOT}/Custom/Local packages`;
   }
 
-  async installPackage(input: string) {
+  async listPackages(directories: PackageDirectories) {
+    return this.packageCatalog(directories);
+  }
+
+  async installPackage(input: string, directories: PackageDirectories) {
     await new Promise((resolve) => setTimeout(resolve, 240));
     const match = /^@([a-z0-9_-]+)\/([a-z0-9_-]+)(?::(\d+\.\d+\.\d+))?$/i.exec(
       input.trim(),
@@ -283,22 +318,79 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
           sizeBytes: 91_000 + name.length * 1_337,
           modifiedAtMs: Date.now(),
           removable: true,
+          description: null,
+          template: null,
         },
       ];
     }
-    return this.packageCatalog();
+    return this.packageCatalog(directories);
   }
 
-  async removePackage(spec: string) {
+  async removePackage(
+    spec: string,
+    location: PackageLocation,
+    directories: PackageDirectories,
+  ) {
     this.packageEntries = this.packageEntries.filter(
-      (entry) => entry.spec !== spec || entry.location !== "cache",
+      (entry) => entry.spec !== spec || entry.location !== location,
     );
-    return this.packageCatalog();
+    return this.packageCatalog(directories);
   }
 
-  async clearPackageCache() {
+  async clearPackageCache(directories: PackageDirectories) {
     this.packageEntries = this.packageEntries.filter((entry) => entry.location !== "cache");
-    return this.packageCatalog();
+    return this.packageCatalog(directories);
+  }
+
+  async chooseTemplateParent() {
+    return `${ROOT}/Projects`;
+  }
+
+  async preflightTemplateProject(request: TemplateProjectRequest) {
+    const destination = `${request.parentPath.replace(/\/$/, "")}/${request.projectName}`;
+    const templateFiles = ["main.typ", "references.bib"];
+    const existingFiles = [...this.files.keys()].filter((path) =>
+      path.startsWith(`${destination}/`),
+    );
+    const conflicts = templateFiles.filter((path) => this.files.has(`${destination}/${path}`));
+    return {
+      destination,
+      entrypoint: `${destination}/main.typ`,
+      destinationExists: existingFiles.length > 0,
+      destinationFileCount: existingFiles.length,
+      templateFileCount: templateFiles.length,
+      filesToCreate: templateFiles.length - conflicts.length,
+      conflicts,
+      requiresMerge: existingFiles.length > 0,
+    };
+  }
+
+  async createTemplateProject(request: TemplateProjectRequest, merge: boolean) {
+    const plan = await this.preflightTemplateProject(request);
+    if (plan.requiresMerge && !merge) {
+      throw new Error("The project directory is not empty; confirm a merge first");
+    }
+    const templateFiles: Record<string, string> = {
+      "main.typ": `#set page(paper: "us-letter")\n\n= ${request.projectName}\n\nStart writing here.\n`,
+      "references.bib": "",
+    };
+    let createdFiles = 0;
+    for (const [path, content] of Object.entries(templateFiles)) {
+      const target = `${plan.destination}/${path}`;
+      if (this.files.has(target)) continue;
+      this.files.set(target, content);
+      createdFiles += 1;
+    }
+    return {
+      destination: plan.destination,
+      entrypoint: plan.entrypoint,
+      createdFiles,
+      skippedFiles: plan.templateFileCount - createdFiles,
+    };
+  }
+
+  async readTemplateThumbnail() {
+    return null;
   }
 
   async compileSvg(request: CompileRequest): Promise<CompileSvgResult> {
@@ -338,18 +430,26 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     this.session = structuredClone(session);
   }
 
-  private packageCatalog(): PackageCatalog {
-    const packages = structuredClone(this.packageEntries).sort((left, right) =>
-      left.name.localeCompare(right.name),
-    );
+  private packageCatalog(directories: PackageDirectories): PackageCatalog {
+    const cachePath = directories.cachePath ?? DEMO_CACHE_PATH;
+    const dataPath = directories.dataPath ?? DEMO_DATA_PATH;
+    const packages = structuredClone(this.packageEntries)
+      .map((entry) => ({
+        ...entry,
+        path: `${entry.location === "cache" ? cachePath : dataPath}/${entry.namespace}/${entry.name}/${entry.version}`,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
     const cached = packages.filter((entry) => entry.location === "cache");
+    const local = packages.filter((entry) => entry.location === "data");
     return {
       packages,
-      cachePath: DEMO_CACHE_PATH,
-      dataPath: DEMO_DATA_PATH,
+      cachePath,
+      dataPath,
       cacheSizeBytes: cached.reduce((total, entry) => total + entry.sizeBytes, 0),
+      dataSizeBytes: local.reduce((total, entry) => total + entry.sizeBytes, 0),
       cacheCount: cached.length,
-      dataCount: packages.length - cached.length,
+      dataCount: local.length,
+      templateCount: packages.filter((entry) => entry.template != null).length,
     };
   }
 }

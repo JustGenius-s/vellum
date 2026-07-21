@@ -11,8 +11,13 @@ import {
   type FontCatalog,
   type OutlineHeading,
   type PackageCatalog,
+  type PackageDirectories,
+  type PackageLocation,
   type RuntimeMode,
   type SearchMatch,
+  type TemplateProjectPlan,
+  type TemplateProjectResult,
+  type TemplateThumbnail,
   type TreeNode,
 } from "@/domain/workspace";
 
@@ -48,6 +53,8 @@ export interface WorkspaceState {
   packagesPending: boolean;
   packageMutationPending: boolean;
   packageError: string;
+  packageCachePath: string | null;
+  packageDataPath: string | null;
   revealLine: number | null;
   revision: number;
 }
@@ -79,13 +86,17 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
     cachePath: null,
     dataPath: null,
     cacheSizeBytes: 0,
+    dataSizeBytes: 0,
     cacheCount: 0,
     dataCount: 0,
+    templateCount: 0,
   },
   packagesLoaded: false,
   packagesPending: false,
   packageMutationPending: false,
   packageError: "",
+  packageCachePath: null,
+  packageDataPath: null,
   revealLine: null,
   revision: 0,
 });
@@ -163,6 +174,13 @@ export class WorkspaceController {
     return this.state.backlinks[this.activeStem] ?? [];
   }
 
+  private get packageDirectories(): PackageDirectories {
+    return {
+      cachePath: this.state.packageCachePath,
+      dataPath: this.state.packageDataPath,
+    };
+  }
+
   async initialize() {
     if (this.initialized) return;
     this.initialized = true;
@@ -184,7 +202,14 @@ export class WorkspaceController {
         "PingFang SC",
         "Noto Sans CJK SC",
       ]);
-      this.update({ fontCatalog, latinFont, cjkFont, fontsPending: false });
+      this.update({
+        fontCatalog,
+        latinFont,
+        cjkFont,
+        fontsPending: false,
+        packageCachePath: session.packageCachePath ?? null,
+        packageDataPath: session.packageDataPath ?? null,
+      });
       if (!session.vaultPath) {
         this.update({ phase: "ready", statusText: "Open a vault to begin" });
         return;
@@ -395,6 +420,8 @@ export class WorkspaceController {
         mainFile: tab.path,
         latinFont: this.state.latinFont,
         cjkFont: this.state.cjkFont,
+        packageCachePath: this.state.packageCachePath,
+        packageDataPath: this.state.packageDataPath,
       });
       if (token !== this.compileToken) return;
 
@@ -447,6 +474,8 @@ export class WorkspaceController {
           mainFile: tab.path,
           latinFont: this.state.latinFont,
           cjkFont: this.state.cjkFont,
+          packageCachePath: this.state.packageCachePath,
+          packageDataPath: this.state.packageDataPath,
         },
         `${fileStem(tab.name)}.pdf`,
       );
@@ -580,7 +609,7 @@ export class WorkspaceController {
     if (this.state.packagesPending) return;
     this.update({ packagesPending: true, packageError: "" });
     try {
-      const packageCatalog = await this.gateway.listPackages();
+      const packageCatalog = await this.gateway.listPackages(this.packageDirectories);
       this.update({
         packageCatalog,
         packagesLoaded: true,
@@ -600,7 +629,7 @@ export class WorkspaceController {
     if (this.state.packageMutationPending) return;
     this.update({ packageMutationPending: true, packageError: "" });
     try {
-      const packageCatalog = await this.gateway.installPackage(spec);
+      const packageCatalog = await this.gateway.installPackage(spec, this.packageDirectories);
       this.update({
         packageCatalog,
         packagesLoaded: true,
@@ -617,11 +646,15 @@ export class WorkspaceController {
     }
   }
 
-  async removePackage(spec: string) {
+  async removePackage(spec: string, location: PackageLocation) {
     if (this.state.packageMutationPending) return;
     this.update({ packageMutationPending: true, packageError: "" });
     try {
-      const packageCatalog = await this.gateway.removePackage(spec);
+      const packageCatalog = await this.gateway.removePackage(
+        spec,
+        location,
+        this.packageDirectories,
+      );
       this.update({ packageCatalog, statusText: `Removed ${spec}` });
     } catch (error) {
       this.update({
@@ -638,12 +671,12 @@ export class WorkspaceController {
     if (this.state.packageMutationPending) return;
     this.update({ packageMutationPending: true, packageError: "" });
     try {
-      const packageCatalog = await this.gateway.clearPackageCache();
-      this.update({ packageCatalog, statusText: "Typst package cache cleared" });
+      const packageCatalog = await this.gateway.clearPackageCache(this.packageDirectories);
+      this.update({ packageCatalog, statusText: "Downloaded packages cleared" });
     } catch (error) {
       this.update({
         packageError: String(error),
-        statusText: `Package cache clear failed: ${String(error)}`,
+        statusText: `Downloaded package clear failed: ${String(error)}`,
       });
       throw error;
     } finally {
@@ -651,8 +684,142 @@ export class WorkspaceController {
     }
   }
 
+  async chooseTemplateParent() {
+    try {
+      return await this.gateway.chooseTemplateParent();
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Could not choose project location: ${String(error)}`,
+      });
+      return null;
+    }
+  }
+
+  async preflightTemplateProject(
+    spec: string,
+    location: PackageLocation,
+    parentPath: string,
+    projectName: string,
+  ): Promise<TemplateProjectPlan> {
+    if (this.state.packageMutationPending) throw new Error("Another package operation is running");
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      return await this.gateway.preflightTemplateProject({
+        spec,
+        location,
+        parentPath,
+        projectName,
+        ...this.packageDirectories,
+      });
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Template validation failed: ${String(error)}`,
+      });
+      throw error;
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
+  }
+
+  async createTemplateProject(
+    spec: string,
+    location: PackageLocation,
+    parentPath: string,
+    projectName: string,
+    merge: boolean,
+  ): Promise<TemplateProjectResult> {
+    if (this.state.packageMutationPending) throw new Error("Another package operation is running");
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      const result = await this.gateway.createTemplateProject(
+        {
+          spec,
+          location,
+          parentPath,
+          projectName,
+          ...this.packageDirectories,
+        },
+        merge,
+      );
+      await this.loadVault(result.destination, [result.entrypoint], result.entrypoint);
+      if (this.state.phase !== "ready") {
+        throw new Error("The project was created, but Vellum could not open it");
+      }
+      this.update({
+        sidebarView: "files",
+        statusText: `Created ${projectName} from ${spec}`,
+      });
+      return result;
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Template creation failed: ${String(error)}`,
+      });
+      throw error;
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
+  }
+
+  async loadTemplateThumbnail(
+    spec: string,
+    location: PackageLocation,
+  ): Promise<TemplateThumbnail | null> {
+    try {
+      return await this.gateway.readTemplateThumbnail(spec, location, this.packageDirectories);
+    } catch {
+      return null;
+    }
+  }
+
   clearPackageError() {
     if (this.state.packageError) this.update({ packageError: "" });
+  }
+
+  async choosePackageDirectory(location: PackageLocation) {
+    try {
+      const path = await this.gateway.choosePackageDirectory(location);
+      if (path) await this.applyPackageDirectory(location, path);
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Could not choose package directory: ${String(error)}`,
+      });
+    }
+  }
+
+  async resetPackageDirectory(location: PackageLocation) {
+    await this.applyPackageDirectory(location, null);
+  }
+
+  private async applyPackageDirectory(location: PackageLocation, path: string | null) {
+    if (this.state.packageMutationPending) return;
+    const directories: PackageDirectories = {
+      cachePath: location === "cache" ? path : this.state.packageCachePath,
+      dataPath: location === "data" ? path : this.state.packageDataPath,
+    };
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      const packageCatalog = await this.gateway.listPackages(directories);
+      this.update({
+        packageCatalog,
+        packagesLoaded: true,
+        packageCachePath: directories.cachePath,
+        packageDataPath: directories.dataPath,
+        statusText: `${location === "cache" ? "Downloaded" : "Local"} package directory updated`,
+      });
+      this.scheduleSessionSave();
+      if (this.activeTab) await this.compileActive();
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Package directory update failed: ${String(error)}`,
+      });
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
   }
 
   setSidebarView(sidebarView: SidebarView) {
@@ -697,6 +864,8 @@ export class WorkspaceController {
         activeTabPath: this.state.activePath || null,
         latinFont: this.state.latinFont || null,
         cjkFont: this.state.cjkFont || null,
+        packageCachePath: this.state.packageCachePath,
+        packageDataPath: this.state.packageDataPath,
       });
     }, 500);
   }

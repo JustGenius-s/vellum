@@ -7,6 +7,7 @@ use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook, FontInfo};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
+use typst_kit::datetime::Time;
 use walkdir::WalkDir;
 
 use crate::packages;
@@ -259,10 +260,19 @@ pub struct TypstWorld {
     source: Source,
     vault_path: String,
     main_vpath: VirtualPath,
+    package_cache_path: Option<String>,
+    package_data_path: Option<String>,
+    time: Time,
 }
 
 impl TypstWorld {
-    pub fn new(source: String, vault_path: String, main_file: String) -> Self {
+    pub fn new(
+        source: String,
+        vault_path: String,
+        main_file: String,
+        package_cache_path: Option<String>,
+        package_data_path: Option<String>,
+    ) -> Self {
         let library = Library::default();
         let book = FONT_LIBRARY.book.clone();
         let relative = main_file
@@ -280,6 +290,9 @@ impl TypstWorld {
             source: Source::new(main, source),
             vault_path,
             main_vpath,
+            package_cache_path,
+            package_data_path,
+            time: Time::system(),
         }
     }
 
@@ -340,7 +353,12 @@ impl World for TypstWorld {
                 }
             }
             VirtualRoot::Package(spec) => {
-                let bytes = packages::load_package_file(spec, id.vpath())?;
+                let bytes = packages::load_package_file(
+                    spec,
+                    id.vpath(),
+                    self.package_cache_path.as_deref(),
+                    self.package_data_path.as_deref(),
+                )?;
                 std::str::from_utf8(bytes.as_slice())
                     .map_err(|_| typst::diag::FileError::InvalidUtf8)?
                     .to_owned()
@@ -357,7 +375,12 @@ impl World for TypstWorld {
                     .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
                 Ok(Bytes::new(bytes))
             }
-            VirtualRoot::Package(spec) => packages::load_package_file(spec, id.vpath()),
+            VirtualRoot::Package(spec) => packages::load_package_file(
+                spec,
+                id.vpath(),
+                self.package_cache_path.as_deref(),
+                self.package_data_path.as_deref(),
+            ),
         }
     }
 
@@ -365,7 +388,7 @@ impl World for TypstWorld {
         FONT_LIBRARY.slots.get(index).and_then(FontSlot::get)
     }
 
-    fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
-        None
+    fn today(&self, offset: Option<Duration>) -> Option<Datetime> {
+        self.time.today(offset)
     }
 }

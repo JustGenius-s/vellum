@@ -47,6 +47,17 @@ export interface FontCatalog {
 
 export type PackageLocation = "cache" | "data";
 
+export interface PackageDirectories {
+  cachePath: string | null;
+  dataPath: string | null;
+}
+
+export interface TemplateMetadata {
+  path: string;
+  entrypoint: string;
+  thumbnail: string | null;
+}
+
 export interface PackageEntry {
   spec: string;
   namespace: string;
@@ -57,6 +68,8 @@ export interface PackageEntry {
   sizeBytes: number;
   modifiedAtMs: number | null;
   removable: boolean;
+  description: string | null;
+  template: TemplateMetadata | null;
 }
 
 export interface PackageCatalog {
@@ -64,8 +77,33 @@ export interface PackageCatalog {
   cachePath: string | null;
   dataPath: string | null;
   cacheSizeBytes: number;
+  dataSizeBytes: number;
   cacheCount: number;
   dataCount: number;
+  templateCount: number;
+}
+
+export interface TemplateProjectPlan {
+  destination: string;
+  entrypoint: string;
+  destinationExists: boolean;
+  destinationFileCount: number;
+  templateFileCount: number;
+  filesToCreate: number;
+  conflicts: string[];
+  requiresMerge: boolean;
+}
+
+export interface TemplateProjectResult {
+  destination: string;
+  entrypoint: string;
+  createdFiles: number;
+  skippedFiles: number;
+}
+
+export interface TemplateThumbnail {
+  mediaType: string;
+  bytes: number[];
 }
 
 export interface SavedSession {
@@ -74,6 +112,8 @@ export interface SavedSession {
   activeTabPath: string | null;
   latinFont: string | null;
   cjkFont: string | null;
+  packageCachePath: string | null;
+  packageDataPath: string | null;
 }
 
 export interface OutlineHeading {

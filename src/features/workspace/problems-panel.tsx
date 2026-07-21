@@ -1,6 +1,7 @@
 import {
   CaretRightIcon,
   CheckCircleIcon,
+  CopyIcon,
   WarningIcon,
   XCircleIcon,
   XIcon,
@@ -9,8 +10,15 @@ import {
 import { useWorkspace } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { CompileDiagnostic } from "@/domain/workspace";
+import { formatDiagnosticForClipboard } from "@/features/workspace/diagnostic-copy";
 
 interface DiagnosticGroup {
   key: string;
@@ -121,36 +129,52 @@ export function ProblemsPanel() {
                 <CollapsibleContent>
                   {group.diagnostics.map((diagnostic, index) => {
                     const isError = diagnostic.severity === "error";
+                    const key = `${diagnostic.line}:${diagnostic.column}:${diagnostic.message}:${index}`;
 
                     return (
-                      <Button
-                        key={`${diagnostic.line}:${diagnostic.column}:${diagnostic.message}:${index}`}
-                        type="button"
-                        variant="ghost"
-                        className="grid h-auto min-h-10 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-2 rounded-none py-1.5 pr-3 pl-8 text-left whitespace-normal"
-                        onClick={() => void controller.openDiagnostic(diagnostic)}
-                      >
-                        {isError ? (
-                          <XCircleIcon className="mt-0.5 size-4 text-destructive" />
-                        ) : (
-                          <WarningIcon className="mt-0.5 size-4 text-muted-foreground" />
-                        )}
-                        <span className="min-w-0">
-                          <span className="block text-sm leading-5 text-foreground">
-                            {diagnostic.message}
-                          </span>
-                          {diagnostic.hints.length ? (
-                            <span className="block text-xs leading-4 text-muted-foreground">
-                              {diagnostic.hints.join(" · ")}
+                      <ContextMenu key={key}>
+                        <ContextMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="grid h-auto min-h-10 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-2 rounded-none py-1.5 pr-3 pl-8 text-left whitespace-normal"
+                            onClick={() => void controller.openDiagnostic(diagnostic)}
+                          >
+                            {isError ? (
+                              <XCircleIcon className="mt-0.5 size-4 text-destructive" />
+                            ) : (
+                              <WarningIcon className="mt-0.5 size-4 text-muted-foreground" />
+                            )}
+                            <span className="min-w-0">
+                              <span className="block text-sm leading-5 text-foreground">
+                                {diagnostic.message}
+                              </span>
+                              {diagnostic.hints.length ? (
+                                <span className="block text-xs leading-4 text-muted-foreground">
+                                  {diagnostic.hints.join(" · ")}
+                                </span>
+                              ) : null}
                             </span>
-                          ) : null}
-                        </span>
-                        {diagnostic.line ? (
-                          <span className="pt-0.5 font-mono text-xs leading-4 text-muted-foreground">
-                            {diagnostic.line}:{diagnostic.column ?? 1}
-                          </span>
-                        ) : null}
-                      </Button>
+                            {diagnostic.line ? (
+                              <span className="pt-0.5 font-mono text-xs leading-4 text-muted-foreground">
+                                {diagnostic.line}:{diagnostic.column ?? 1}
+                              </span>
+                            ) : null}
+                          </Button>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="min-w-40">
+                          <ContextMenuItem
+                            onSelect={() =>
+                              void navigator.clipboard.writeText(
+                                formatDiagnosticForClipboard(diagnostic),
+                              )
+                            }
+                          >
+                            <CopyIcon />
+                            Copy {isError ? "error" : "warning"}
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );
                   })}
                 </CollapsibleContent>
