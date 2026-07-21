@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fileName, flattenFiles } from "@/domain/workspace";
+import { fileName, fileStem, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
 import { ProblemsPanel } from "@/features/workspace/problems-panel";
@@ -78,7 +78,7 @@ function WorkspaceTopbar() {
       </div>
 
       <span className="min-w-0 flex-1 truncate px-1 text-sm font-medium min-[1180px]:hidden">
-        {active?.name.replace(/\.typ$/i, "") ?? "Workspace"}
+        {active ? fileStem(active.name) : "Workspace"}
         {active?.dirty ? " *" : ""}
       </span>
 
@@ -155,7 +155,7 @@ function DocumentTabs() {
               onClick={() => controller.switchTab(tab.path)}
             >
               <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{tab.name.replace(/\.typ$/i, "")}</span>
+              <span className="truncate">{fileStem(tab.name)}</span>
               {tab.dirty ? <span className="text-muted-foreground">*</span> : null}
             </button>
             <button
@@ -191,8 +191,8 @@ function EmptyWorkspace() {
         </h1>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
           {state.vaultPath
-            ? "Your Typst files remain local and portable. Open one to edit source and preview the compiled page side by side."
-            : "Open a folder to create a workspace around plain Typst files, native compilation, and fast keyboard commands."}
+            ? "Your Typst and Markdown files remain local and portable. Open one to edit source and preview the typeset page side by side."
+            : "Open a folder to create a workspace around plain Typst and Markdown files, native compilation, and fast keyboard commands."}
         </p>
         {!state.vaultPath ? (
           <Button className="mt-6" size="lg" onClick={() => void controller.openVault()}>
@@ -207,9 +207,7 @@ function EmptyWorkspace() {
 function EditorPane() {
   const { controller, state } = useWorkspace();
   const active = controller.activeTab;
-  const fileNames = flattenFiles(state.tree).map((file) =>
-    fileName(file.path).replace(/\.typ$/i, ""),
-  );
+  const fileNames = flattenFiles(state.tree).map((file) => fileName(file.path));
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-card" aria-label="Document editor">

@@ -144,7 +144,7 @@ function TreeRow({
               <span
                 className={`truncate ${isActive ? "font-medium text-sidebar-foreground" : "text-sidebar-foreground/76"}`}
               >
-                {node.name.replace(/\.typ$/i, "")}
+                {fileStem(node.name)}
               </span>
             </button>
           </div>
@@ -212,7 +212,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
       <EmptySidebar
         icon={FolderOpenIcon}
         title="No vault open"
-        description="Choose a folder of Typst documents. Vellum never moves it into a proprietary database."
+        description="Choose a folder of Typst and Markdown documents. Vellum never moves it into a proprietary database."
         action={
           <Button size="sm" onClick={() => void controller.openVault()}>
             <FolderOpenIcon data-icon="inline-start" /> Open vault
@@ -230,7 +230,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
             <EmptySidebar
               icon={FilePlusIcon}
               title="The vault is empty"
-              description="Create the first Typst document and start with a durable local file."
+              description="Create the first Typst or Markdown document and start with a durable local file."
               action={
                 <Button
                   size="sm"
@@ -489,7 +489,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
             <DialogDescription>
               {state?.kind === "folder"
                 ? "Folders organize the local vault without changing file formats."
-                : "Documents are stored as plain .typ files."}
+                : "Documents are stored as plain .typ or .md files."}
             </DialogDescription>
           </DialogHeader>
           <label className="grid gap-2 text-xs font-medium">

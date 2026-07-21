@@ -86,7 +86,8 @@ export function PreviewPane() {
             <FileTextIcon className="mb-4 size-6 text-muted-foreground" weight="duotone" />
             <h2 className="text-base font-semibold tracking-[-0.015em]">Nothing to preview yet</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Open a Typst document from the sidebar. Compilation begins automatically as you write.
+              Open a Typst or Markdown document from the sidebar. Compilation begins automatically
+              as you write.
             </p>
           </div>
         )}

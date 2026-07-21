@@ -43,6 +43,14 @@ Compile early so structure and typography evolve together.
 
 The useful boundary is not notes versus documents. It is temporary text versus maintained knowledge.
 `,
+  [`${ROOT}/draft.md`]: `# Mixed document
+
+Markdown is edited as its own file, then typeset through the same paged preview.
+
+## Referenced Typst content
+
+![[method.typ]]
+`,
 };
 
 function escapeXml(value: string) {
@@ -72,16 +80,21 @@ function renderDemoSvg(source: string) {
   let y = 104;
   const content = rows
     .map((row) => {
-      const isHeading = row.startsWith("=");
+      const typstHeading = /^(=+)\s+/.exec(row);
+      const markdownHeading = /^(#{1,6})\s+/.exec(row);
+      const headingLevel = typstHeading?.[1].length ?? markdownHeading?.[1].length ?? 0;
+      const isHeading = headingLevel > 0;
       const text = escapeXml(
         row
-          .replace(/^=+\s*/, "")
+          .replace(/^(?:=+|#{1,6})\s*/, "")
+          .replace(/\*\*(.+?)\*\*/g, "$1")
+          .replace(/`(.+?)`/g, "$1")
           .replace(
             /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g,
             (_match, target: string, label: string | undefined) => label ?? target,
           ),
       );
-      const size = isHeading ? (row.startsWith("==") ? 23 : 34) : 15;
+      const size = isHeading ? (headingLevel > 1 ? 23 : 34) : 15;
       const weight = isHeading ? 650 : 420;
       const fill = isHeading ? "#1f2822" : "#3f4942";
       const current = y;
@@ -91,6 +104,20 @@ function renderDemoSvg(source: string) {
     .join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 794 1123" role="img" aria-label="Compiled Typst preview"><rect width="794" height="1123" fill="#fbfaf5"/><text x="88" y="62" font-family="ui-monospace, monospace" font-size="10" letter-spacing="2" fill="#79827a">VELLUM / DEMO COMPILE</text>${content}<text x="397" y="1062" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" fill="#9aa199">1</text></svg>`;
+}
+
+function expandDemoMarkdown(source: string, mainFile: string, files: Map<string, string>) {
+  const parent = mainFile.slice(0, mainFile.lastIndexOf("/"));
+  return source
+    .split("\n")
+    .map((line) => {
+      const match = /^\s*!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]\s*$/.exec(line);
+      if (!match) return line;
+      const target = /\.[^/]+$/.test(match[1]) ? match[1] : `${match[1]}.typ`;
+      const path = target.startsWith("/") ? target : `${parent}/${target}`;
+      return files.get(path) ?? `Missing reference: ${target}`;
+    })
+    .join("\n");
 }
 
 export class DemoWorkspaceGateway implements WorkspaceGateway {
@@ -123,7 +150,12 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
   async createEntry(path: string, _vaultPath: string, isDir: boolean) {
     if (isDir) return;
     if (this.files.has(path)) throw new Error("An entry with that name already exists");
-    this.files.set(path, "= Untitled\n\nStart writing here.\n");
+    this.files.set(
+      path,
+      path.toLowerCase().endsWith(".md")
+        ? "# Untitled\n\nStart writing here.\n"
+        : "= Untitled\n\nStart writing here.\n",
+    );
   }
 
   async renameEntry(oldPath: string, newPath: string) {
@@ -171,8 +203,9 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
           path
             .split("/")
             .pop()
-            ?.replace(/\.typ$/, "") ?? path;
-        links[match[1]] = [...(links[match[1]] ?? []), source];
+            ?.replace(/\.(?:typ|md)$/, "") ?? path;
+        const target = match[1].split("/").pop()?.replace(/\.(?:typ|md)$/, "") ?? match[1];
+        links[target] = [...(links[target] ?? []), source];
       }
     });
     return { links };
@@ -192,7 +225,10 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
           },
         ]
       : [];
-    return { pages: diagnostics.length ? null : [renderDemoSvg(request.source)], diagnostics };
+    const source = request.mainFile.toLowerCase().endsWith(".md")
+      ? expandDemoMarkdown(request.source, request.mainFile, this.files)
+      : request.source;
+    return { pages: diagnostics.length ? null : [renderDemoSvg(source)], diagnostics };
   }
 
   async exportPdf() {

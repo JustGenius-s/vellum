@@ -4,7 +4,7 @@ import { defaultKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter, setDiagnostics, type Diagnostic as EditorDiagnostic } from "@codemirror/lint";
 import { search, searchKeymap } from "@codemirror/search";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
   highlightActiveLine,
@@ -14,7 +14,8 @@ import {
 } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 
-import type { CompileDiagnostic } from "@/domain/workspace";
+import { documentFormat, type CompileDiagnostic } from "@/domain/workspace";
+import { markdownLanguage } from "@/features/editor/markdown-language";
 import { typstLanguage } from "@/features/editor/typst-language";
 
 interface EditorSession {
@@ -174,6 +175,7 @@ export function TypstEditor({
   const initialValueRef = useRef(value);
   const applyingRef = useRef(false);
   const sessionsRef = useRef(new Map<string, EditorSession>());
+  const languageRef = useRef(new Compartment());
 
   onChangeRef.current = onChange;
   fileNamesRef.current = fileNames;
@@ -200,7 +202,9 @@ export function TypstEditor({
           highlightActiveLine(),
           highlightActiveLineGutter(),
           EditorView.lineWrapping,
-          typstLanguage,
+          languageRef.current.of(
+            documentFormat(activePath) === "markdown" ? markdownLanguage : typstLanguage,
+          ),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           search(),
           lintGutter(),
@@ -250,6 +254,11 @@ export function TypstEditor({
         applyingRef.current = false;
         view.scrollDOM.scrollTo(0, 0);
       }
+      view.dispatch({
+        effects: languageRef.current.reconfigure(
+          documentFormat(activePath) === "markdown" ? markdownLanguage : typstLanguage,
+        ),
+      });
       pathRef.current = activePath;
     } else if (view.state.doc.toString() !== value) {
       applyingRef.current = true;
@@ -276,5 +285,11 @@ export function TypstEditor({
     onRevealComplete();
   }, [onRevealComplete, revealLine]);
 
-  return <div ref={hostRef} className="h-full min-h-0 overflow-hidden" aria-label="Typst editor" />;
+  return (
+    <div
+      ref={hostRef}
+      className="h-full min-h-0 overflow-hidden"
+      aria-label={documentFormat(activePath) === "markdown" ? "Markdown editor" : "Typst editor"}
+    />
+  );
 }

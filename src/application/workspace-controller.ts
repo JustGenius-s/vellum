@@ -383,7 +383,9 @@ export class WorkspaceController {
   }
 
   async createEntry(parent: string, name: string, isDir: boolean) {
-    const safeName = isDir || name.toLowerCase().endsWith(".typ") ? name : `${name}.typ`;
+    const lowerName = name.toLowerCase();
+    const safeName =
+      isDir || lowerName.endsWith(".typ") || lowerName.endsWith(".md") ? name : `${name}.typ`;
     const path = joinPath(parent || this.state.vaultPath, safeName);
     try {
       await this.gateway.createEntry(path, this.state.vaultPath, isDir);
@@ -397,8 +399,8 @@ export class WorkspaceController {
   }
 
   async renameEntry(path: string, name: string) {
-    const suffix =
-      path.toLowerCase().endsWith(".typ") && !name.toLowerCase().endsWith(".typ") ? ".typ" : "";
+    const pathMatch = /\.(typ|md)$/i.exec(path);
+    const suffix = pathMatch && !/\.(?:typ|md)$/i.test(name) ? `.${pathMatch[1]}` : "";
     const nextPath = joinPath(parentPath(path), `${name}${suffix}`);
     try {
       await this.gateway.renameEntry(path, nextPath, this.state.vaultPath);

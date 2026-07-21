@@ -14,7 +14,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { flattenFiles } from "@/domain/workspace";
+import { fileStem, flattenFiles } from "@/domain/workspace";
 
 const groupOrder: CommandGroup[] = ["Navigate", "Document", "View", "Workspace", "Developer"];
 
@@ -65,7 +65,7 @@ export function CommandPalette() {
       onOpenChange={setPaletteOpen}
       title={paletteMode === "files" ? "Quick open" : "Command palette"}
       description={
-        paletteMode === "files" ? "Search local Typst files" : "Search available commands"
+        paletteMode === "files" ? "Search local documents" : "Search available commands"
       }
       className="sm:max-w-[40rem]"
     >
@@ -86,7 +86,7 @@ export function CommandPalette() {
                   value={`file ${file.name} ${file.path}`}
                   onSelect={() => openFile(file.path)}
                 >
-                  <span className="truncate">{file.name.replace(/\.typ$/i, "")}</span>
+                  <span className="truncate">{fileStem(file.name)}</span>
                 </CommandItem>
               ))}
             </CommandGroupView>

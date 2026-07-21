@@ -31,6 +31,16 @@ pub struct BacklinkIndex {
     links: HashMap<String, Vec<String>>,
 }
 
+fn is_supported_document(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some("typ" | "md")
+    )
+}
+
 fn build_tree(path: &Path) -> Vec<TreeNode> {
     let Ok(entries) = std::fs::read_dir(path) else {
         return Vec::new();
@@ -44,7 +54,7 @@ fn build_tree(path: &Path) -> Vec<TreeNode> {
         }
         let entry_path = entry.path();
         let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-        if !is_dir && entry_path.extension().and_then(|value| value.to_str()) != Some("typ") {
+        if !is_dir && !is_supported_document(&entry_path) {
             continue;
         }
         nodes.push(TreeNode {
@@ -134,7 +144,7 @@ fn search_vault_sync(vault_path: &str, query: &str) -> Result<Vec<SearchMatch>, 
     }) {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|value| value.to_str()) != Some("typ") {
+        if !path.is_file() || !is_supported_document(path) {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -180,8 +190,8 @@ pub fn create_file(path: String, vault_path: String, is_dir: bool) -> Result<(),
     if is_dir {
         std::fs::create_dir(&resolved).map_err(|error| error.to_string())
     } else {
-        if resolved.extension().and_then(|value| value.to_str()) != Some("typ") {
-            return Err("Only .typ files are supported".into());
+        if !is_supported_document(&resolved) {
+            return Err("Only .typ and .md files are supported".into());
         }
         std::fs::OpenOptions::new()
             .write(true)
@@ -242,7 +252,7 @@ pub fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
     }) {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|value| value.to_str()) != Some("typ") {
+        if !path.is_file() || !is_supported_document(path) {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -251,8 +261,9 @@ pub fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
         let source = file_stem(path);
         for captures in WIKILINK_RE.captures_iter(&content) {
             if let Some(target) = captures.get(1) {
+                let target = file_stem(Path::new(target.as_str()));
                 links
-                    .entry(target.as_str().to_string())
+                    .entry(target)
                     .or_default()
                     .push(source.clone());
             }
@@ -302,6 +313,16 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].line, 2);
         assert_eq!(matches[0].column, 1);
+
+        std::fs::write(vault.join("draft.md"), "# Draft\nMarkdown stays local.\n")
+            .expect("write markdown note");
+        let markdown_matches = search_vault_sync(
+            vault.to_string_lossy().as_ref(),
+            "markdown",
+        )
+        .expect("markdown search succeeds");
+        assert_eq!(markdown_matches.len(), 1);
+        assert_eq!(markdown_matches[0].line, 2);
         std::fs::remove_dir_all(root).expect("remove fixture");
     }
 }

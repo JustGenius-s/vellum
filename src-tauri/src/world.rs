@@ -1,8 +1,37 @@
+use regex::Regex;
+use std::path::Path;
+use std::sync::LazyLock;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
+
+static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("valid wikilink regex")
+});
+
+fn expand_wikilinks(source: &str) -> String {
+    WIKILINK_RE
+        .replace_all(source, |captures: &regex::Captures| {
+            let target = captures.get(1).map(|value| value.as_str()).unwrap_or("");
+            let label = captures
+                .get(2)
+                .map(|value| value.as_str())
+                .unwrap_or(target);
+            let target = if Path::new(target).extension().is_some() {
+                target.to_string()
+            } else {
+                format!("{target}.typ")
+            };
+            format!(
+                "#link(\"{}\")[{}]",
+                target.replace('\\', "\\\\").replace('"', "\\\""),
+                label.replace('\\', "\\\\").replace('"', "\\\"")
+            )
+        })
+        .into_owned()
+}
 
 pub struct TypstWorld {
     library: LazyHash<Library>,
@@ -80,6 +109,15 @@ impl World for TypstWorld {
         let path = self.resolve_to_disk(id)?;
         let content = std::fs::read_to_string(&path)
             .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
+        let content = if path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("typ"))
+        {
+            expand_wikilinks(&content)
+        } else {
+            content
+        };
         Ok(Source::new(id, content))
     }
 

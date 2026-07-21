@@ -53,12 +53,18 @@ export interface OutlineHeading {
   from: number;
 }
 
+export type DocumentFormat = "typst" | "markdown";
+
 export function fileName(path: string) {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
 export function fileStem(path: string) {
-  return fileName(path).replace(/\.typ$/i, "");
+  return fileName(path).replace(/\.(?:typ|md)$/i, "");
+}
+
+export function documentFormat(path: string): DocumentFormat {
+  return path.toLowerCase().endsWith(".md") ? "markdown" : "typst";
 }
 
 export function relativePath(path: string, vaultPath: string) {
@@ -74,7 +80,7 @@ export function parseOutline(source: string): OutlineHeading[] {
   let offset = 0;
 
   source.split("\n").forEach((line, index) => {
-    const match = /^(=+)\s+(.+?)\s*$/.exec(line);
+    const match = /^(=+)\s+(.+?)\s*$/.exec(line) ?? /^(#{1,6})\s+(.+?)\s*$/.exec(line);
     if (match && match[1].length <= 6) {
       const title = match[2]
         .replace(/<[^>]*>\s*$/, "")
