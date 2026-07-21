@@ -13,6 +13,7 @@ import {
   LinkSimpleIcon,
   ListBulletsIcon,
   MagnifyingGlassIcon,
+  PackageIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
 
@@ -67,6 +68,7 @@ const sidebarViews: Array<{
   { id: "files", label: "Files", icon: FolderOpenIcon },
   { id: "search", label: "Search", icon: MagnifyingGlassIcon },
   { id: "outline", label: "Structure", icon: ListBulletsIcon },
+  { id: "packages", label: "Packages", icon: PackageIcon },
 ];
 
 const settingsView = { id: "settings", label: "Settings", icon: GearSixIcon } as const;
@@ -619,7 +621,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
 
 export function AppSidebar() {
   const { controller, state } = useWorkspace();
-  const { state: sidebarState, setOpen, isMobile } = useSidebar();
+  const { state: sidebarState, setOpen, setOpenMobile, isMobile } = useSidebar();
   const [dialog, setDialog] = useState<EntryDialogState>(null);
   const vaultName = useMemo(
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
@@ -631,6 +633,13 @@ export function AppSidebar() {
       : sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
+    if (view === "packages") {
+      if (state.sidebarView !== view) controller.setSidebarView(view);
+      if (isMobile) setOpenMobile(false);
+      else setOpen(false);
+      return;
+    }
+
     if (!isMobile && state.sidebarView === view) {
       setOpen(sidebarState === "collapsed");
       return;
@@ -638,7 +647,9 @@ export function AppSidebar() {
 
     controller.setSidebarView(view);
 
-    if (!isMobile) {
+    if (isMobile) {
+      setOpenMobile(false);
+    } else {
       setOpen(true);
     }
   }
@@ -708,35 +719,37 @@ export function AppSidebar() {
             </Tooltip>
           </nav>
 
-          <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
-            <header className="flex h-12 shrink-0 items-center px-3">
-              <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
-                {state.sidebarView === "files" ? vaultName : activeView.label}
-              </h2>
-              {state.sidebarView === "files" && state.vaultPath ? (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
-                  aria-label="Create document"
-                >
-                  <PlusIcon />
-                </Button>
-              ) : null}
-            </header>
+          {state.sidebarView !== "packages" ? (
+            <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
+              <header className="flex h-12 shrink-0 items-center px-3">
+                <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
+                  {state.sidebarView === "files" ? vaultName : activeView.label}
+                </h2>
+                {state.sidebarView === "files" && state.vaultPath ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
+                    aria-label="Create document"
+                  >
+                    <PlusIcon />
+                  </Button>
+                ) : null}
+              </header>
 
-            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-              {state.sidebarView === "files" ? (
-                <FilesPanel onDialog={setDialog} />
-              ) : state.sidebarView === "search" ? (
-                <SearchPanel />
-              ) : state.sidebarView === "outline" ? (
-                <OutlinePanel />
-              ) : (
-                <SettingsPanel />
-              )}
+              <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+                {state.sidebarView === "files" ? (
+                  <FilesPanel onDialog={setDialog} />
+                ) : state.sidebarView === "search" ? (
+                  <SearchPanel />
+                ) : state.sidebarView === "outline" ? (
+                  <OutlinePanel />
+                ) : (
+                  <SettingsPanel />
+                )}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </Sidebar>
 

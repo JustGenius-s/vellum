@@ -2,6 +2,7 @@ import type {
   BacklinkIndex,
   CompileSvgResult,
   FontCatalog,
+  PackageCatalog,
   RuntimeMode,
   SavedSession,
   SearchMatch,
@@ -28,6 +29,10 @@ export interface WorkspaceGateway {
   search(vaultPath: string, query: string): Promise<SearchMatch[]>;
   indexBacklinks(vaultPath: string): Promise<BacklinkIndex>;
   listFontFamilies(): Promise<FontCatalog>;
+  listPackages(): Promise<PackageCatalog>;
+  installPackage(spec: string): Promise<PackageCatalog>;
+  removePackage(spec: string): Promise<PackageCatalog>;
+  clearPackageCache(): Promise<PackageCatalog>;
   compileSvg(request: CompileRequest): Promise<CompileSvgResult>;
   exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
   loadSession(): Promise<SavedSession>;

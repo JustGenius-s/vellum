@@ -7,6 +7,7 @@ import type {
   BacklinkIndex,
   CompileSvgResult,
   FontCatalog,
+  PackageCatalog,
   SavedSession,
   SearchMatch,
   TreeNode,
@@ -71,6 +72,22 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
 
   listFontFamilies() {
     return invoke<FontCatalog>("list_font_families");
+  }
+
+  listPackages() {
+    return invoke<PackageCatalog>("list_packages");
+  }
+
+  installPackage(spec: string) {
+    return invoke<PackageCatalog>("install_package", { spec });
+  }
+
+  removePackage(spec: string) {
+    return invoke<PackageCatalog>("remove_package", { spec });
+  }
+
+  clearPackageCache() {
+    return invoke<PackageCatalog>("clear_package_cache");
   }
 
   compileSvg(request: CompileRequest) {

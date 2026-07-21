@@ -1,4 +1,5 @@
 mod compiler;
+mod packages;
 mod session;
 mod workspace;
 mod world;
@@ -12,6 +13,10 @@ pub fn run() {
             compiler::compile_typst_pdf,
             compiler::compile_typst_svg,
             world::list_font_families,
+            packages::list_packages,
+            packages::install_package,
+            packages::remove_package,
+            packages::clear_package_cache,
             workspace::list_vault_tree,
             workspace::search_vault,
             workspace::read_file,

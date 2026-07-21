@@ -6,7 +6,7 @@ authors = ["Vellum contributors"]
 license = "MIT"
 repository = ""
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.92"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,6 +27,7 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
 typst = "0.15"
 typst-assets = { version = "0.15", features = ["fonts"] }
+typst-kit = { version = "0.15.0", features = ["system-packages", "system-downloader"] }
 typst-layout = "0.15"
 typst-pdf = "0.15"
 typst-svg = "0.15"

@@ -10,12 +10,13 @@ import {
   type DocumentTab,
   type FontCatalog,
   type OutlineHeading,
+  type PackageCatalog,
   type RuntimeMode,
   type SearchMatch,
   type TreeNode,
 } from "@/domain/workspace";
 
-export type SidebarView = "files" | "search" | "outline" | "settings";
+export type SidebarView = "files" | "search" | "outline" | "packages" | "settings";
 export type CompactSurface = "editor" | "preview";
 export type CompilePhase = "idle" | "queued" | "compiling" | "ready" | "failed";
 export type WorkspacePhase = "booting" | "ready" | "error";
@@ -42,6 +43,11 @@ export interface WorkspaceState {
   latinFont: string;
   cjkFont: string;
   fontsPending: boolean;
+  packageCatalog: PackageCatalog;
+  packagesLoaded: boolean;
+  packagesPending: boolean;
+  packageMutationPending: boolean;
+  packageError: string;
   revealLine: number | null;
   revision: number;
 }
@@ -68,6 +74,18 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   latinFont: "",
   cjkFont: "",
   fontsPending: true,
+  packageCatalog: {
+    packages: [],
+    cachePath: null,
+    dataPath: null,
+    cacheSizeBytes: 0,
+    cacheCount: 0,
+    dataCount: 0,
+  },
+  packagesLoaded: false,
+  packagesPending: false,
+  packageMutationPending: false,
+  packageError: "",
   revealLine: null,
   revision: 0,
 });
@@ -558,8 +576,90 @@ export class WorkspaceController {
     if (this.state.revealLine != null) this.update({ revealLine: null });
   }
 
+  async refreshPackages() {
+    if (this.state.packagesPending) return;
+    this.update({ packagesPending: true, packageError: "" });
+    try {
+      const packageCatalog = await this.gateway.listPackages();
+      this.update({
+        packageCatalog,
+        packagesLoaded: true,
+        packagesPending: false,
+        statusText: `${packageCatalog.packages.length} Typst packages available locally`,
+      });
+    } catch (error) {
+      this.update({
+        packagesPending: false,
+        packageError: String(error),
+        statusText: `Package refresh failed: ${String(error)}`,
+      });
+    }
+  }
+
+  async installPackage(spec: string) {
+    if (this.state.packageMutationPending) return;
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      const packageCatalog = await this.gateway.installPackage(spec);
+      this.update({
+        packageCatalog,
+        packagesLoaded: true,
+        statusText: `Installed ${spec.trim()}`,
+      });
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Package install failed: ${String(error)}`,
+      });
+      throw error;
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
+  }
+
+  async removePackage(spec: string) {
+    if (this.state.packageMutationPending) return;
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      const packageCatalog = await this.gateway.removePackage(spec);
+      this.update({ packageCatalog, statusText: `Removed ${spec}` });
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Package removal failed: ${String(error)}`,
+      });
+      throw error;
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
+  }
+
+  async clearPackageCache() {
+    if (this.state.packageMutationPending) return;
+    this.update({ packageMutationPending: true, packageError: "" });
+    try {
+      const packageCatalog = await this.gateway.clearPackageCache();
+      this.update({ packageCatalog, statusText: "Typst package cache cleared" });
+    } catch (error) {
+      this.update({
+        packageError: String(error),
+        statusText: `Package cache clear failed: ${String(error)}`,
+      });
+      throw error;
+    } finally {
+      this.update({ packageMutationPending: false });
+    }
+  }
+
+  clearPackageError() {
+    if (this.state.packageError) this.update({ packageError: "" });
+  }
+
   setSidebarView(sidebarView: SidebarView) {
+    const shouldLoadPackages =
+      sidebarView === "packages" && !this.state.packagesLoaded && !this.state.packagesPending;
     this.update({ sidebarView });
+    if (shouldLoadPackages) void this.refreshPackages();
   }
 
   setCompactSurface(compactSurface: CompactSurface) {

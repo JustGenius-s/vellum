@@ -9,6 +9,8 @@ use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 use walkdir::WalkDir;
 
+use crate::packages;
+
 static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("valid wikilink regex")
 });
@@ -281,7 +283,10 @@ impl TypstWorld {
         }
     }
 
-    fn resolve_to_disk(&self, id: FileId) -> Result<std::path::PathBuf, typst::diag::FileError> {
+    fn resolve_project_to_disk(
+        &self,
+        id: FileId,
+    ) -> Result<std::path::PathBuf, typst::diag::FileError> {
         let relative = if id == self.main {
             std::path::Path::new(self.main_vpath.get_without_slash())
         } else {
@@ -318,26 +323,42 @@ impl World for TypstWorld {
         if id == self.main {
             return Ok(self.source.clone());
         }
-        let path = self.resolve_to_disk(id)?;
-        let content = std::fs::read_to_string(&path)
-            .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
-        let content = if path
-            .extension()
-            .and_then(|value| value.to_str())
-            .is_some_and(|value| value.eq_ignore_ascii_case("typ"))
-        {
-            expand_wikilinks(&content)
-        } else {
-            content
+
+        let content = match id.root() {
+            VirtualRoot::Project => {
+                let path = self.resolve_project_to_disk(id)?;
+                let content = std::fs::read_to_string(&path)
+                    .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
+                if path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value.eq_ignore_ascii_case("typ"))
+                {
+                    expand_wikilinks(&content)
+                } else {
+                    content
+                }
+            }
+            VirtualRoot::Package(spec) => {
+                let bytes = packages::load_package_file(spec, id.vpath())?;
+                std::str::from_utf8(bytes.as_slice())
+                    .map_err(|_| typst::diag::FileError::InvalidUtf8)?
+                    .to_owned()
+            }
         };
         Ok(Source::new(id, content))
     }
 
     fn file(&self, id: FileId) -> Result<Bytes, typst::diag::FileError> {
-        let path = self.resolve_to_disk(id)?;
-        let bytes =
-            std::fs::read(&path).map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
-        Ok(Bytes::new(bytes))
+        match id.root() {
+            VirtualRoot::Project => {
+                let path = self.resolve_project_to_disk(id)?;
+                let bytes = std::fs::read(&path)
+                    .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
+                Ok(Bytes::new(bytes))
+            }
+            VirtualRoot::Package(spec) => packages::load_package_file(spec, id.vpath()),
+        }
     }
 
     fn font(&self, index: usize) -> Option<Font> {

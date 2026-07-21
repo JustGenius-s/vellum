@@ -45,6 +45,29 @@ export interface FontCatalog {
   cjk: string[];
 }
 
+export type PackageLocation = "cache" | "data";
+
+export interface PackageEntry {
+  spec: string;
+  namespace: string;
+  name: string;
+  version: string;
+  location: PackageLocation;
+  path: string;
+  sizeBytes: number;
+  modifiedAtMs: number | null;
+  removable: boolean;
+}
+
+export interface PackageCatalog {
+  packages: PackageEntry[];
+  cachePath: string | null;
+  dataPath: string | null;
+  cacheSizeBytes: number;
+  cacheCount: number;
+  dataCount: number;
+}
+
 export interface SavedSession {
   vaultPath: string | null;
   openTabs: string[];

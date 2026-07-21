@@ -1,7 +1,16 @@
 import type { CompileRequest, WorkspaceGateway } from "@/application/ports/workspace-gateway";
-import type { CompileSvgResult, SavedSession, SearchMatch, TreeNode } from "@/domain/workspace";
+import type {
+  CompileSvgResult,
+  PackageCatalog,
+  PackageEntry,
+  SavedSession,
+  SearchMatch,
+  TreeNode,
+} from "@/domain/workspace";
 
 const ROOT = "/Vellum Demo";
+const DEMO_CACHE_PATH = `${ROOT}/Library/Caches/typst/packages`;
+const DEMO_DATA_PATH = `${ROOT}/Library/Application Support/typst/packages`;
 
 const initialFiles: Record<string, string> = {
   [`${ROOT}/atlas.typ`]: `#set page(paper: "a4", margin: 28mm)
@@ -124,6 +133,30 @@ function expandDemoMarkdown(source: string, mainFile: string, files: Map<string,
 export class DemoWorkspaceGateway implements WorkspaceGateway {
   readonly mode = "demo" as const;
   private readonly files = new Map(Object.entries(initialFiles));
+  private packageEntries: PackageEntry[] = [
+    {
+      spec: "@preview/tiaoma:0.3.0",
+      namespace: "preview",
+      name: "tiaoma",
+      version: "0.3.0",
+      location: "cache",
+      path: `${DEMO_CACHE_PATH}/preview/tiaoma/0.3.0`,
+      sizeBytes: 184_672,
+      modifiedAtMs: Date.UTC(2026, 6, 18, 9, 42),
+      removable: true,
+    },
+    {
+      spec: "@local/house-style:0.2.4",
+      namespace: "local",
+      name: "house-style",
+      version: "0.2.4",
+      location: "data",
+      path: `${DEMO_DATA_PATH}/local/house-style/0.2.4`,
+      sizeBytes: 63_918,
+      modifiedAtMs: Date.UTC(2026, 5, 27, 14, 16),
+      removable: false,
+    },
+  ];
   private session: SavedSession = {
     vaultPath: ROOT,
     openTabs: [`${ROOT}/atlas.typ`, `${ROOT}/method.typ`],
@@ -223,6 +256,51 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     };
   }
 
+  async listPackages() {
+    return this.packageCatalog();
+  }
+
+  async installPackage(input: string) {
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    const match = /^@([a-z0-9_-]+)\/([a-z0-9_-]+)(?::(\d+\.\d+\.\d+))?$/i.exec(
+      input.trim(),
+    );
+    if (!match) throw new Error("Use @namespace/name or @namespace/name:version");
+
+    const [, namespace, name, requestedVersion] = match;
+    const version = requestedVersion ?? (name.toLowerCase() === "tiaoma" ? "0.3.0" : "1.0.0");
+    const spec = `@${namespace}/${name}:${version}`;
+    if (!this.packageEntries.some((entry) => entry.spec === spec)) {
+      this.packageEntries = [
+        ...this.packageEntries,
+        {
+          spec,
+          namespace,
+          name,
+          version,
+          location: "cache",
+          path: `${DEMO_CACHE_PATH}/${namespace}/${name}/${version}`,
+          sizeBytes: 91_000 + name.length * 1_337,
+          modifiedAtMs: Date.now(),
+          removable: true,
+        },
+      ];
+    }
+    return this.packageCatalog();
+  }
+
+  async removePackage(spec: string) {
+    this.packageEntries = this.packageEntries.filter(
+      (entry) => entry.spec !== spec || entry.location !== "cache",
+    );
+    return this.packageCatalog();
+  }
+
+  async clearPackageCache() {
+    this.packageEntries = this.packageEntries.filter((entry) => entry.location !== "cache");
+    return this.packageCatalog();
+  }
+
   async compileSvg(request: CompileRequest): Promise<CompileSvgResult> {
     await new Promise((resolve) => setTimeout(resolve, 220));
     const diagnostics = request.source.includes("#error")
@@ -258,5 +336,20 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
 
   async saveSession(session: SavedSession) {
     this.session = structuredClone(session);
+  }
+
+  private packageCatalog(): PackageCatalog {
+    const packages = structuredClone(this.packageEntries).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    const cached = packages.filter((entry) => entry.location === "cache");
+    return {
+      packages,
+      cachePath: DEMO_CACHE_PATH,
+      dataPath: DEMO_DATA_PATH,
+      cacheSizeBytes: cached.reduce((total, entry) => total + entry.sizeBytes, 0),
+      cacheCount: cached.length,
+      dataCount: packages.length - cached.length,
+    };
   }
 }

@@ -20,6 +20,7 @@ import { SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { documentFormat, fileName, fileStem, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
+import { PackageManagerPage } from "@/features/packages/package-manager-page";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
 import { ProblemsPanel } from "@/features/workspace/problems-panel";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -293,6 +294,14 @@ function WorkspaceSurfaces() {
 
 function WorkspaceMain() {
   const { state } = useWorkspace();
+
+  if (state.sidebarView === "packages") {
+    return (
+      <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
+        <PackageManagerPage />
+      </SidebarInset>
+    );
+  }
 
   return (
     <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
