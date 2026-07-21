@@ -1,6 +1,7 @@
 import type {
   BacklinkIndex,
   CompileSvgResult,
+  FontCatalog,
   RuntimeMode,
   SavedSession,
   SearchMatch,
@@ -11,6 +12,8 @@ export interface CompileRequest {
   source: string;
   vaultPath: string;
   mainFile: string;
+  latinFont: string;
+  cjkFont: string;
 }
 
 export interface WorkspaceGateway {
@@ -24,6 +27,7 @@ export interface WorkspaceGateway {
   deleteEntry(path: string, vaultPath: string): Promise<void>;
   search(vaultPath: string, query: string): Promise<SearchMatch[]>;
   indexBacklinks(vaultPath: string): Promise<BacklinkIndex>;
+  listFontFamilies(): Promise<FontCatalog>;
   compileSvg(request: CompileRequest): Promise<CompileSvgResult>;
   exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
   loadSession(): Promise<SavedSession>;

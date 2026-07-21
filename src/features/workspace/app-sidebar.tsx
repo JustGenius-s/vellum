@@ -32,6 +32,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Sidebar,
@@ -420,6 +427,24 @@ function SettingsPanel() {
 
   return (
     <div className="space-y-4 px-1 pb-6 group-data-[collapsible=icon]:hidden">
+      <section className="space-y-2 px-2">
+        <p className="text-xs font-medium text-sidebar-foreground/60">Typography</p>
+        <FontPicker
+          label="English font"
+          value={state.latinFont}
+          options={state.fontCatalog.latin}
+          pending={state.fontsPending}
+          onValueChange={(family) => controller.setFontPreference("latin", family)}
+        />
+        <FontPicker
+          label="Chinese font"
+          value={state.cjkFont}
+          options={state.fontCatalog.cjk}
+          pending={state.fontsPending}
+          onValueChange={(family) => controller.setFontPreference("cjk", family)}
+        />
+      </section>
+
       <section>
         <div className="px-2 pb-2">
           <p className="text-xs font-medium text-sidebar-foreground/60">Workspace</p>
@@ -441,6 +466,57 @@ function SettingsPanel() {
           Refresh workspace
         </Button>
       </section>
+    </div>
+  );
+}
+
+function FontPicker({
+  label,
+  value,
+  options,
+  pending,
+  onValueChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  pending: boolean;
+  onValueChange(value: string): void;
+}) {
+  const placeholder = pending ? "Loading fonts" : "No fonts found";
+
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-[11px] text-sidebar-foreground/48">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 w-full min-w-0 justify-between border-sidebar-border bg-background px-2 text-xs font-normal shadow-none"
+            disabled={pending || options.length === 0}
+          >
+            <span className="truncate" style={value ? { fontFamily: value } : undefined}>
+              {value || placeholder}
+            </span>
+            <CaretDownIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72">
+          <DropdownMenuRadioGroup value={value} onValueChange={onValueChange}>
+            {options.map((family) => (
+              <DropdownMenuRadioItem
+                key={family}
+                value={family}
+                className="min-h-8 text-xs"
+                style={{ fontFamily: family }}
+              >
+                <span className="truncate">{family}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

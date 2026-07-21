@@ -7,6 +7,7 @@ import {
   type BacklinkIndex,
   type CompileDiagnostic,
   type DocumentTab,
+  type FontCatalog,
   type OutlineHeading,
   type RuntimeMode,
   type SearchMatch,
@@ -36,6 +37,10 @@ export interface WorkspaceState {
   searchQuery: string;
   searchResults: SearchMatch[];
   searchPending: boolean;
+  fontCatalog: FontCatalog;
+  latinFont: string;
+  cjkFont: string;
+  fontsPending: boolean;
   revealLine: number | null;
   revision: number;
 }
@@ -58,6 +63,10 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   searchQuery: "",
   searchResults: [],
   searchPending: false,
+  fontCatalog: { latin: [], cjk: [] },
+  latinFont: "",
+  cjkFont: "",
+  fontsPending: true,
   revealLine: null,
   revision: 0,
 });
@@ -82,6 +91,11 @@ function joinPath(parent: string, name: string) {
 function parentPath(path: string) {
   const normalized = path.replaceAll("\\", "/");
   return normalized.slice(0, normalized.lastIndexOf("/")) || normalized;
+}
+
+function preferredFont(saved: string | null | undefined, available: string[], defaults: string[]) {
+  if (saved && (available.length === 0 || available.includes(saved))) return saved;
+  return defaults.find((family) => available.includes(family)) ?? available[0] ?? saved ?? "";
 }
 
 export class WorkspaceController {
@@ -135,7 +149,23 @@ export class WorkspaceController {
     this.initialized = true;
 
     try {
-      const session = await this.gateway.loadSession();
+      const [session, fontCatalog] = await Promise.all([
+        this.gateway.loadSession(),
+        this.gateway.listFontFamilies().catch(() => ({ latin: [], cjk: [] })),
+      ]);
+      const latinFont = preferredFont(session.latinFont, fontCatalog.latin, [
+        "Libertinus Serif",
+        "New Computer Modern",
+        "Georgia",
+      ]);
+      const cjkFont = preferredFont(session.cjkFont, fontCatalog.cjk, [
+        "Songti SC",
+        "Hiragino Sans GB",
+        "STHeiti",
+        "PingFang SC",
+        "Noto Sans CJK SC",
+      ]);
+      this.update({ fontCatalog, latinFont, cjkFont, fontsPending: false });
       if (!session.vaultPath) {
         this.update({ phase: "ready", statusText: "Open a vault to begin" });
         return;
@@ -327,6 +357,8 @@ export class WorkspaceController {
         source: tab.content,
         vaultPath: this.state.vaultPath,
         mainFile: tab.path,
+        latinFont: this.state.latinFont,
+        cjkFont: this.state.cjkFont,
       });
       if (token !== this.compileToken) return;
 
@@ -373,6 +405,8 @@ export class WorkspaceController {
           source: tab.content,
           vaultPath: this.state.vaultPath,
           mainFile: tab.path,
+          latinFont: this.state.latinFont,
+          cjkFont: this.state.cjkFont,
         },
         `${fileStem(tab.name)}.pdf`,
       );
@@ -508,6 +542,14 @@ export class WorkspaceController {
     this.update({ problemsOpen });
   }
 
+  setFontPreference(kind: "latin" | "cjk", family: string) {
+    const key = kind === "latin" ? "latinFont" : "cjkFont";
+    if (this.state[key] === family) return;
+    this.update({ [key]: family });
+    this.scheduleSessionSave();
+    void this.compileActive();
+  }
+
   private async refreshBacklinks() {
     if (!this.state.vaultPath) return;
     try {
@@ -525,6 +567,8 @@ export class WorkspaceController {
         vaultPath: this.state.vaultPath || null,
         openTabs: this.state.tabs.map((tab) => tab.path),
         activeTabPath: this.state.activePath || null,
+        latinFont: this.state.latinFont || null,
+        cjkFont: this.state.cjkFont || null,
       });
     }, 500);
   }

@@ -70,7 +70,7 @@ function asTree(files: Map<string, string>): TreeNode[] {
   ];
 }
 
-function renderDemoSvg(source: string) {
+function renderDemoSvg(source: string, latinFont: string, cjkFont: string) {
   const rows = source
     .split("\n")
     .map((line) => line.trim())
@@ -99,7 +99,8 @@ function renderDemoSvg(source: string) {
       const fill = isHeading ? "#1f2822" : "#3f4942";
       const current = y;
       y += isHeading ? 48 : 28;
-      return `<text x="88" y="${current}" font-family="Georgia, serif" font-size="${size}" font-weight="${weight}" fill="${fill}">${text}</text>`;
+      const fontFamily = escapeXml(`"${latinFont}", "${cjkFont}", serif`);
+      return `<text x="88" y="${current}" font-family="${fontFamily}" font-size="${size}" font-weight="${weight}" fill="${fill}">${text}</text>`;
     })
     .join("");
 
@@ -127,6 +128,8 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     vaultPath: ROOT,
     openTabs: [`${ROOT}/atlas.typ`, `${ROOT}/method.typ`],
     activeTabPath: `${ROOT}/atlas.typ`,
+    latinFont: "Georgia",
+    cjkFont: "Songti SC",
   };
 
   async chooseVault() {
@@ -211,6 +214,13 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     return { links };
   }
 
+  async listFontFamilies() {
+    return {
+      latin: ["Libertinus Serif", "New Computer Modern", "Georgia"],
+      cjk: ["Songti SC", "Hiragino Sans GB", "STHeiti", "PingFang SC"],
+    };
+  }
+
   async compileSvg(request: CompileRequest): Promise<CompileSvgResult> {
     await new Promise((resolve) => setTimeout(resolve, 220));
     const diagnostics = request.source.includes("#error")
@@ -228,7 +238,12 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     const source = request.mainFile.toLowerCase().endsWith(".md")
       ? expandDemoMarkdown(request.source, request.mainFile, this.files)
       : request.source;
-    return { pages: diagnostics.length ? null : [renderDemoSvg(source)], diagnostics };
+    return {
+      pages: diagnostics.length
+        ? null
+        : [renderDemoSvg(source, request.latinFont, request.cjkFont)],
+      diagnostics,
+    };
   }
 
   async exportPdf() {

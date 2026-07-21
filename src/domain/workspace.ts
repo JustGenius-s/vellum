@@ -40,10 +40,17 @@ export interface BacklinkIndex {
   links: Record<string, string[]>;
 }
 
+export interface FontCatalog {
+  latin: string[];
+  cjk: string[];
+}
+
 export interface SavedSession {
   vaultPath: string | null;
   openTabs: string[];
   activeTabPath: string | null;
+  latinFont: string | null;
+  cjkFont: string | null;
 }
 
 export interface OutlineHeading {

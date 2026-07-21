@@ -9,6 +9,10 @@ pub struct SavedState {
     open_tabs: Vec<String>,
     #[serde(alias = "active_tab_path")]
     active_tab_path: Option<String>,
+    #[serde(alias = "latin_font")]
+    latin_font: Option<String>,
+    #[serde(alias = "cjk_font")]
+    cjk_font: Option<String>,
 }
 
 fn state_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -44,9 +48,13 @@ mod tests {
             vault_path: Some("/notes".into()),
             open_tabs: vec!["/notes/main.typ".into()],
             active_tab_path: Some("/notes/main.typ".into()),
+            latin_font: Some("Libertinus Serif".into()),
+            cjk_font: Some("Songti SC".into()),
         })
         .expect("serialize session");
         assert_eq!(value["vaultPath"], "/notes");
         assert!(value.get("vault_path").is_none());
+        assert_eq!(value["latinFont"], "Libertinus Serif");
+        assert_eq!(value["cjkFont"], "Songti SC");
     }
 }

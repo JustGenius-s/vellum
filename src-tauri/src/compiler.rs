@@ -30,6 +30,23 @@ fn escape_typst_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn apply_font_preferences(source: String, latin_font: &str, cjk_font: &str) -> (String, u32) {
+    let families = [latin_font, cjk_font]
+        .into_iter()
+        .filter(|family| !family.is_empty())
+        .map(|family| format!("\"{}\"", escape_typst_string(family)))
+        .collect::<Vec<_>>();
+
+    match families.as_slice() {
+        [] => (source, 0),
+        [family] => (format!("#show: set text(font: {family})\n{source}"), 1),
+        _ => (
+            format!("#show: set text(font: ({}))\n{source}", families.join(", ")),
+            1,
+        ),
+    }
+}
+
 fn escape_typst_markup(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for character in value.chars() {
@@ -242,7 +259,11 @@ pub struct CompileSvgResult {
     diagnostics: Vec<CompileDiagnostic>,
 }
 
-fn format_diagnostic(world: &TypstWorld, diagnostic: &SourceDiagnostic) -> CompileDiagnostic {
+fn format_diagnostic(
+    world: &TypstWorld,
+    diagnostic: &SourceDiagnostic,
+    main_line_offset: u32,
+) -> CompileDiagnostic {
     let severity = match diagnostic.severity {
         Severity::Error => "error",
         Severity::Warning => "warning",
@@ -259,7 +280,12 @@ fn format_diagnostic(world: &TypstWorld, diagnostic: &SourceDiagnostic) -> Compi
                 if let Some((line_index, column_index)) =
                     source.lines().byte_to_line_column(range.start)
                 {
-                    line = Some((line_index + 1) as u32);
+                    let line_number = (line_index + 1) as u32;
+                    line = if id == world.main() {
+                        line_number.checked_sub(main_line_offset).filter(|line| *line > 0)
+                    } else {
+                        Some(line_number)
+                    };
                     column = Some((column_index + 1) as u32);
                 }
             }
@@ -285,6 +311,8 @@ pub async fn compile_typst_svg(
     source: String,
     vault_path: String,
     main_file: String,
+    latin_font: String,
+    cjk_font: String,
 ) -> Result<CompileSvgResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let prepared = if main_file.to_ascii_lowercase().ends_with(".md") {
@@ -292,12 +320,14 @@ pub async fn compile_typst_svg(
         } else {
             expand_wikilinks(&source)
         };
+        let (prepared, main_line_offset) =
+            apply_font_preferences(prepared, &latin_font, &cjk_font);
         let world = TypstWorld::new(prepared, vault_path, main_file);
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
         let mut diagnostics: Vec<CompileDiagnostic> = warned
             .warnings
             .iter()
-            .map(|item| format_diagnostic(&world, item))
+            .map(|item| format_diagnostic(&world, item, main_line_offset))
             .collect();
 
         match warned.output {
@@ -314,7 +344,11 @@ pub async fn compile_typst_svg(
                 })
             }
             Err(errors) => {
-                diagnostics.extend(errors.iter().map(|item| format_diagnostic(&world, item)));
+                diagnostics.extend(
+                    errors
+                        .iter()
+                        .map(|item| format_diagnostic(&world, item, main_line_offset)),
+                );
                 Ok(CompileSvgResult {
                     pages: None,
                     diagnostics,
@@ -331,6 +365,8 @@ pub async fn compile_typst_pdf(
     source: String,
     vault_path: String,
     main_file: String,
+    latin_font: String,
+    cjk_font: String,
 ) -> Result<Vec<u8>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let prepared = if main_file.to_ascii_lowercase().ends_with(".md") {
@@ -338,6 +374,7 @@ pub async fn compile_typst_pdf(
         } else {
             expand_wikilinks(&source)
         };
+        let (prepared, _) = apply_font_preferences(prepared, &latin_font, &cjk_font);
         let world = TypstWorld::new(prepared, vault_path, main_file);
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
         let document = warned.output.map_err(|errors| {
@@ -356,7 +393,7 @@ pub async fn compile_typst_pdf(
 
 #[cfg(test)]
 mod tests {
-    use super::{expand_wikilinks, markdown_to_typst};
+    use super::{apply_font_preferences, expand_wikilinks, markdown_to_typst};
 
     #[test]
     fn expands_wikilinks_with_optional_labels() {
@@ -374,5 +411,18 @@ mod tests {
         assert!(converted.contains("A *strong* idea"));
         assert!(converted.contains("#link(\"https://example.com\")[source]"));
         assert!(converted.contains("#include \"method.typ\""));
+    }
+
+    #[test]
+    fn applies_escaped_font_fallbacks() {
+        let (prepared, line_offset) = apply_font_preferences(
+            "Hello 中文".into(),
+            "Latin \"Display\"",
+            "CJK\\Family",
+        );
+        assert_eq!(line_offset, 1);
+        assert!(prepared.starts_with(
+            "#show: set text(font: (\"Latin \\\"Display\\\"\", \"CJK\\\\Family\"))\n"
+        ));
     }
 }

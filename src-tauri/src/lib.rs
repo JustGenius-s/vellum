@@ -11,6 +11,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             compiler::compile_typst_pdf,
             compiler::compile_typst_svg,
+            world::list_font_families,
             workspace::list_vault_tree,
             workspace::search_vault,
             workspace::read_file,

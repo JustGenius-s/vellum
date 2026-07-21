@@ -6,6 +6,7 @@ import type { CompileRequest, WorkspaceGateway } from "@/application/ports/works
 import type {
   BacklinkIndex,
   CompileSvgResult,
+  FontCatalog,
   SavedSession,
   SearchMatch,
   TreeNode,
@@ -68,11 +69,17 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
     return invoke<BacklinkIndex>("index_backlinks", { vaultPath });
   }
 
+  listFontFamilies() {
+    return invoke<FontCatalog>("list_font_families");
+  }
+
   compileSvg(request: CompileRequest) {
     return invoke<CompileSvgResult>("compile_typst_svg", {
       source: request.source,
       vaultPath: request.vaultPath,
       mainFile: request.mainFile,
+      latinFont: request.latinFont,
+      cjkFont: request.cjkFont,
     });
   }
 
@@ -81,6 +88,8 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
       source: request.source,
       vaultPath: request.vaultPath,
       mainFile: request.mainFile,
+      latinFont: request.latinFont,
+      cjkFont: request.cjkFont,
     });
     const target = await save({
       defaultPath: defaultName,

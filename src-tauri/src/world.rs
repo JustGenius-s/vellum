@@ -1,15 +1,232 @@
 use regex::Regex;
-use std::path::Path;
-use std::sync::LazyLock;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, OnceLock};
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
-use typst::text::{Font, FontBook};
+use typst::text::{Font, FontBook, FontInfo};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
+use walkdir::WalkDir;
 
 static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("valid wikilink regex")
 });
+
+static FONT_LIBRARY: LazyLock<FontLibrary> = LazyLock::new(FontLibrary::load);
+
+enum FontSource {
+    Embedded(Font),
+    System {
+        file: Arc<SystemFontFile>,
+        index: u32,
+        loaded: OnceLock<Option<Font>>,
+    },
+}
+
+struct SystemFontFile {
+    path: PathBuf,
+    data: OnceLock<Option<Bytes>>,
+}
+
+impl SystemFontFile {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            data: OnceLock::new(),
+        }
+    }
+
+    fn data(&self) -> Option<Bytes> {
+        self.data
+            .get_or_init(|| std::fs::read(&self.path).ok().map(Bytes::new))
+            .clone()
+    }
+}
+
+struct FontSlot {
+    info: FontInfo,
+    source: FontSource,
+}
+
+impl FontSlot {
+    fn embedded(font: Font) -> Self {
+        Self {
+            info: font.info().clone(),
+            source: FontSource::Embedded(font),
+        }
+    }
+
+    fn system(file: Arc<SystemFontFile>, index: u32, info: FontInfo) -> Self {
+        Self {
+            info,
+            source: FontSource::System {
+                file,
+                index,
+                loaded: OnceLock::new(),
+            },
+        }
+    }
+
+    fn get(&self) -> Option<Font> {
+        match &self.source {
+            FontSource::Embedded(font) => Some(font.clone()),
+            FontSource::System {
+                file,
+                index,
+                loaded,
+            } => loaded
+                .get_or_init(|| file.data().and_then(|data| Font::new(data, *index)))
+                .clone(),
+        }
+    }
+}
+
+struct FontLibrary {
+    book: FontBook,
+    slots: Vec<FontSlot>,
+}
+
+#[derive(serde::Serialize)]
+pub struct FontCatalog {
+    latin: Vec<String>,
+    cjk: Vec<String>,
+}
+
+impl FontLibrary {
+    fn load() -> Self {
+        let mut slots = load_system_fonts();
+        slots.extend(
+            typst_assets::fonts()
+                .flat_map(|data| Font::iter(Bytes::new(data)))
+                .map(FontSlot::embedded),
+        );
+        let book = FontBook::from_infos(slots.iter().map(|slot| slot.info.clone()));
+        Self { book, slots }
+    }
+}
+
+fn is_font_path(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some("ttf" | "otf" | "ttc" | "otc")
+    )
+}
+
+fn system_font_dirs() -> Vec<PathBuf> {
+    let mut dirs = std::env::var_os("TYPST_FONT_PATHS")
+        .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    #[cfg(target_os = "macos")]
+    {
+        dirs.extend([
+            PathBuf::from("/System/Library/Fonts"),
+            PathBuf::from("/Library/Fonts"),
+        ]);
+        if let Some(home) = std::env::var_os("HOME") {
+            dirs.push(PathBuf::from(home).join("Library/Fonts"));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(windir) = std::env::var_os("WINDIR") {
+            dirs.push(PathBuf::from(windir).join("Fonts"));
+        }
+        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+            dirs.push(PathBuf::from(local_app_data).join("Microsoft/Windows/Fonts"));
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        dirs.extend([
+            PathBuf::from("/usr/share/fonts"),
+            PathBuf::from("/usr/local/share/fonts"),
+        ]);
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = PathBuf::from(home);
+            dirs.push(home.join(".fonts"));
+            dirs.push(home.join(".local/share/fonts"));
+        }
+    }
+
+    let mut seen = HashSet::new();
+    dirs.into_iter()
+        .filter(|path| path.is_dir())
+        .filter(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())))
+        .collect()
+}
+
+fn load_system_fonts() -> Vec<FontSlot> {
+    let mut slots = Vec::new();
+    let mut seen_files = HashSet::new();
+
+    for directory in system_font_dirs() {
+        let mut paths = WalkDir::new(directory)
+            .into_iter()
+            .filter_map(Result::ok)
+            .map(|entry| entry.into_path())
+            .filter(|path| path.is_file() && is_font_path(path))
+            .collect::<Vec<_>>();
+        paths.sort();
+
+        for path in paths {
+            let canonical = path.canonicalize().unwrap_or(path);
+            if !seen_files.insert(canonical.clone()) {
+                continue;
+            }
+            let Ok(data) = std::fs::read(&canonical) else {
+                continue;
+            };
+            let file = Arc::new(SystemFontFile::new(canonical));
+            for font in Font::iter(Bytes::new(data)) {
+                slots.push(FontSlot::system(
+                    file.clone(),
+                    font.index(),
+                    font.info().clone(),
+                ));
+            }
+        }
+    }
+
+    slots
+}
+
+#[tauri::command]
+pub async fn list_font_families() -> Result<FontCatalog, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut latin = Vec::new();
+        let mut cjk = Vec::new();
+
+        for (family, indices) in FONT_LIBRARY.book.families() {
+            let infos = indices.filter_map(|index| FONT_LIBRARY.book.info(index));
+            let (has_latin, has_cjk) = infos.fold((false, false), |(latin, cjk), info| {
+                (
+                    latin || info.coverage.contains('A' as u32),
+                    cjk
+                        || info.coverage.contains('中' as u32)
+                        || info.coverage.contains('文' as u32),
+                )
+            });
+            if has_cjk {
+                cjk.push(family.to_string());
+            } else if has_latin {
+                latin.push(family.to_string());
+            }
+        }
+
+        latin.sort_by_key(|family| family.to_lowercase());
+        cjk.sort_by_key(|family| family.to_lowercase());
+        FontCatalog { latin, cjk }
+    })
+    .await
+    .map_err(|error| format!("Font discovery task failed: {error}"))
+}
 
 fn expand_wikilinks(source: &str) -> String {
     WIKILINK_RE
@@ -36,7 +253,6 @@ fn expand_wikilinks(source: &str) -> String {
 pub struct TypstWorld {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
-    fonts: Vec<Font>,
     main: FileId,
     source: Source,
     vault_path: String,
@@ -46,10 +262,7 @@ pub struct TypstWorld {
 impl TypstWorld {
     pub fn new(source: String, vault_path: String, main_file: String) -> Self {
         let library = Library::default();
-        let fonts: Vec<Font> = typst_assets::fonts()
-            .flat_map(|data| Font::new(Bytes::new(data), 0))
-            .collect();
-        let book = FontBook::from_fonts(&fonts);
+        let book = FONT_LIBRARY.book.clone();
         let relative = main_file
             .strip_prefix(&vault_path)
             .unwrap_or(&main_file)
@@ -61,7 +274,6 @@ impl TypstWorld {
         Self {
             library: LazyHash::new(library),
             book: LazyHash::new(book),
-            fonts,
             main,
             source: Source::new(main, source),
             vault_path,
@@ -129,7 +341,7 @@ impl World for TypstWorld {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.fonts.get(index).cloned()
+        FONT_LIBRARY.slots.get(index).and_then(FontSlot::get)
     }
 
     fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
