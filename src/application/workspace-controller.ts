@@ -1,5 +1,6 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
 import {
+  documentFormat,
   fileName,
   fileStem,
   parseOutline,
@@ -308,8 +309,13 @@ export class WorkspaceController {
     const tabs = this.state.tabs.map((tab) =>
       tab.path === active.path ? { ...tab, content, dirty: true } : tab,
     );
-    this.update({ tabs, compilePhase: "queued", statusText: "Draft changed" });
-    this.scheduleCompile();
+    const isBibliography = documentFormat(active.path) === "bibliography";
+    this.update({
+      tabs,
+      compilePhase: isBibliography ? "idle" : "queued",
+      statusText: isBibliography ? "Bibliography changed" : "Draft changed",
+    });
+    if (!isBibliography) this.scheduleCompile();
   }
 
   async saveActive() {
@@ -347,6 +353,18 @@ export class WorkspaceController {
     const tab = this.activeTab;
     if (!tab || !this.state.vaultPath) {
       this.update({ compilePhase: "idle", previewPages: [], diagnostics: [] });
+      return;
+    }
+
+    if (documentFormat(tab.path) === "bibliography") {
+      ++this.compileToken;
+      this.update({
+        compilePhase: "idle",
+        previewPages: [],
+        diagnostics: [],
+        problemsOpen: false,
+        statusText: "Bibliography ready",
+      });
       return;
     }
 
@@ -398,6 +416,10 @@ export class WorkspaceController {
   async exportPdf() {
     const tab = this.activeTab;
     if (!tab) return;
+    if (documentFormat(tab.path) === "bibliography") {
+      this.setStatus("Open a Typst or Markdown document to export PDF");
+      return;
+    }
     this.setStatus("Preparing PDF");
     try {
       await this.gateway.exportPdf(
@@ -419,7 +441,12 @@ export class WorkspaceController {
   async createEntry(parent: string, name: string, isDir: boolean) {
     const lowerName = name.toLowerCase();
     const safeName =
-      isDir || lowerName.endsWith(".typ") || lowerName.endsWith(".md") ? name : `${name}.typ`;
+      isDir ||
+      lowerName.endsWith(".typ") ||
+      lowerName.endsWith(".md") ||
+      lowerName.endsWith(".bib")
+        ? name
+        : `${name}.typ`;
     const path = joinPath(parent || this.state.vaultPath, safeName);
     try {
       await this.gateway.createEntry(path, this.state.vaultPath, isDir);
@@ -433,8 +460,8 @@ export class WorkspaceController {
   }
 
   async renameEntry(path: string, name: string) {
-    const pathMatch = /\.(typ|md)$/i.exec(path);
-    const suffix = pathMatch && !/\.(?:typ|md)$/i.test(name) ? `.${pathMatch[1]}` : "";
+    const pathMatch = /\.(typ|md|bib)$/i.exec(path);
+    const suffix = pathMatch && !/\.(?:typ|md|bib)$/i.test(name) ? `.${pathMatch[1]}` : "";
     const nextPath = joinPath(parentPath(path), `${name}${suffix}`);
     try {
       await this.gateway.renameEntry(path, nextPath, this.state.vaultPath);
@@ -451,6 +478,7 @@ export class WorkspaceController {
       });
       await this.refreshTree();
       this.scheduleSessionSave();
+      await this.compileActive();
     } catch (error) {
       this.setStatus(`Rename failed: ${String(error)}`);
       throw error;

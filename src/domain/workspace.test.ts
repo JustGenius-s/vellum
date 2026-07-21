@@ -3,11 +3,13 @@ import { describe, expect, it } from "vite-plus/test";
 import { documentFormat, fileStem, parseOutline } from "@/domain/workspace";
 
 describe("document formats", () => {
-  it("recognizes Typst and Markdown document names", () => {
+  it("recognizes supported document names", () => {
     expect(fileStem("notes/main.typ")).toBe("main");
     expect(fileStem("notes/draft.md")).toBe("draft");
+    expect(fileStem("notes/references.bib")).toBe("references");
     expect(documentFormat("notes/draft.md")).toBe("markdown");
     expect(documentFormat("notes/main.typ")).toBe("typst");
+    expect(documentFormat("notes/references.BIB")).toBe("bibliography");
   });
 
   it("parses headings from both syntaxes", () => {

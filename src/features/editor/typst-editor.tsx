@@ -4,7 +4,7 @@ import { defaultKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter, setDiagnostics, type Diagnostic as EditorDiagnostic } from "@codemirror/lint";
 import { search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
   highlightActiveLine,
@@ -22,6 +22,28 @@ interface EditorSession {
   state: EditorState;
   scrollTop: number;
   scrollLeft: number;
+}
+
+function languageForDocument(path: string): Extension {
+  switch (documentFormat(path)) {
+    case "markdown":
+      return markdownLanguage;
+    case "typst":
+      return typstLanguage;
+    case "bibliography":
+      return [];
+  }
+}
+
+function labelForDocument(path: string) {
+  switch (documentFormat(path)) {
+    case "markdown":
+      return "Markdown editor";
+    case "typst":
+      return "Typst editor";
+    case "bibliography":
+      return "BibTeX editor";
+  }
 }
 
 const editorTheme = EditorView.theme(
@@ -202,9 +224,7 @@ export function TypstEditor({
           highlightActiveLine(),
           highlightActiveLineGutter(),
           EditorView.lineWrapping,
-          languageRef.current.of(
-            documentFormat(activePath) === "markdown" ? markdownLanguage : typstLanguage,
-          ),
+          languageRef.current.of(languageForDocument(activePath)),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           search(),
           lintGutter(),
@@ -255,9 +275,7 @@ export function TypstEditor({
         view.scrollDOM.scrollTo(0, 0);
       }
       view.dispatch({
-        effects: languageRef.current.reconfigure(
-          documentFormat(activePath) === "markdown" ? markdownLanguage : typstLanguage,
-        ),
+        effects: languageRef.current.reconfigure(languageForDocument(activePath)),
       });
       pathRef.current = activePath;
     } else if (view.state.doc.toString() !== value) {
@@ -289,7 +307,7 @@ export function TypstEditor({
     <div
       ref={hostRef}
       className="h-full min-h-0 overflow-hidden"
-      aria-label={documentFormat(activePath) === "markdown" ? "Markdown editor" : "Typst editor"}
+      aria-label={labelForDocument(activePath)}
     />
   );
 }

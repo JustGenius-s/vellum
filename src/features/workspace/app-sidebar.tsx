@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   ArrowClockwiseIcon,
+  BookOpenTextIcon,
   BooksIcon,
   CaretDownIcon,
   CaretRightIcon,
@@ -39,6 +40,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import { Input } from "@/components/ui/input";
 import {
   Sidebar,
@@ -50,7 +52,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SidebarView } from "@/application/workspace-controller";
-import { fileName, fileStem, type TreeNode } from "@/domain/workspace";
+import { documentFormat, fileName, fileStem, type TreeNode } from "@/domain/workspace";
 
 type EntryDialogState =
   | { kind: "file" | "folder"; parent: string }
@@ -107,7 +109,7 @@ function TreeRow({
   const { setOpenMobile } = useSidebar();
   const [expanded, setExpanded] = useState(depth < 1);
   const isActive = state.activePath === node.path;
-  const Icon = node.isDir ? (expanded ? FolderOpenIcon : FolderIcon) : FileTextIcon;
+  const FolderEntryIcon = expanded ? FolderOpenIcon : FolderIcon;
 
   return (
     <div>
@@ -142,12 +144,22 @@ function TreeRow({
               ) : (
                 <span className="w-3 shrink-0" />
               )}
-              <Icon
-                className={`size-3.5 shrink-0 ${
-                  isActive ? "text-sidebar-primary" : "text-sidebar-foreground/48"
-                }`}
-                weight={isActive ? "duotone" : "regular"}
-              />
+              {node.isDir ? (
+                <FolderEntryIcon
+                  className={`size-3.5 shrink-0 ${
+                    isActive ? "text-sidebar-primary" : "text-sidebar-foreground/48"
+                  }`}
+                  weight={isActive ? "duotone" : "regular"}
+                />
+              ) : (
+                <FileTypeIcon
+                  name={node.name}
+                  className={`size-3.5 shrink-0 ${
+                    isActive ? "text-sidebar-primary" : "text-sidebar-foreground/48"
+                  }`}
+                  fallbackWeight={isActive ? "duotone" : "regular"}
+                />
+              )}
               <span
                 className={`truncate ${isActive ? "font-medium text-sidebar-foreground" : "text-sidebar-foreground/76"}`}
               >
@@ -219,7 +231,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
       <EmptySidebar
         icon={FolderOpenIcon}
         title="No vault open"
-        description="Choose a folder of Typst and Markdown documents. Vellum never moves it into a proprietary database."
+        description="Choose a folder of Typst, Markdown, and BibTeX files. Vellum never moves it into a proprietary database."
         action={
           <Button size="sm" onClick={() => void controller.openVault()}>
             <FolderOpenIcon data-icon="inline-start" /> Open vault
@@ -322,7 +334,10 @@ function SearchPanel() {
               }}
             >
               <span className="flex items-center gap-2 text-[11px] font-medium text-sidebar-foreground/78">
-                <FileTextIcon className="size-3 text-sidebar-primary" />
+                <FileTypeIcon
+                  name={result.relativePath}
+                  className="size-3 text-sidebar-primary"
+                />
                 <span className="truncate">{result.relativePath}</span>
               </span>
               <span className="mt-1 line-clamp-2 block text-[10px] leading-4 text-sidebar-foreground/48">
@@ -358,6 +373,16 @@ function OutlinePanel() {
         icon={ListBulletsIcon}
         title="No document selected"
         description="Open a Typst file to inspect its headings and linked mentions."
+      />
+    );
+  }
+
+  if (documentFormat(state.activePath) === "bibliography") {
+    return (
+      <EmptySidebar
+        icon={BookOpenTextIcon}
+        title="Bibliography file"
+        description="No document outline."
       />
     );
   }
@@ -565,7 +590,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
             <DialogDescription>
               {state?.kind === "folder"
                 ? "Folders organize the local vault without changing file formats."
-                : "Documents are stored as plain .typ or .md files."}
+                : "Documents are stored as plain .typ, .md, or .bib files."}
             </DialogDescription>
           </DialogHeader>
           <label className="grid gap-2 text-xs font-medium">

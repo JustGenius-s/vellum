@@ -155,7 +155,9 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     if (this.files.has(path)) throw new Error("An entry with that name already exists");
     this.files.set(
       path,
-      path.toLowerCase().endsWith(".md")
+      path.toLowerCase().endsWith(".bib")
+        ? ""
+        : path.toLowerCase().endsWith(".md")
         ? "# Untitled\n\nStart writing here.\n"
         : "= Untitled\n\nStart writing here.\n",
     );
@@ -206,8 +208,8 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
           path
             .split("/")
             .pop()
-            ?.replace(/\.(?:typ|md)$/, "") ?? path;
-        const target = match[1].split("/").pop()?.replace(/\.(?:typ|md)$/, "") ?? match[1];
+            ?.replace(/\.(?:typ|md|bib)$/, "") ?? path;
+        const target = match[1].split("/").pop()?.replace(/\.(?:typ|md|bib)$/, "") ?? match[1];
         links[target] = [...(links[target] ?? []), source];
       }
     });

@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo } from "react";
 import {
   CommandIcon,
   DownloadSimpleIcon,
-  FileTextIcon,
   FolderOpenIcon,
   XIcon,
 } from "@phosphor-icons/react";
@@ -10,6 +9,7 @@ import {
 import { useCommandRegistration, useCommands } from "@/app/command-context";
 import { useWorkspace } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
+import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fileName, fileStem, flattenFiles } from "@/domain/workspace";
+import { documentFormat, fileName, fileStem, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
 import { ProblemsPanel } from "@/features/workspace/problems-panel";
@@ -70,6 +70,7 @@ function WorkspaceTopbar() {
 
   const active = controller.activeTab;
   const compileFailed = state.compilePhase === "failed";
+  const canExport = Boolean(active && documentFormat(active.path) !== "bibliography");
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
@@ -112,7 +113,7 @@ function WorkspaceTopbar() {
         size="sm"
         className="h-8"
         onClick={() => void controller.exportPdf()}
-        disabled={!active}
+        disabled={!canExport}
         aria-label="Export PDF"
       >
         <DownloadSimpleIcon />
@@ -154,7 +155,11 @@ function DocumentTabs() {
               className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs active:translate-y-px"
               onClick={() => controller.switchTab(tab.path)}
             >
-              <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <FileTypeIcon
+                name={tab.name}
+                className="size-3.5 shrink-0 text-muted-foreground"
+                fallbackWeight={active ? "duotone" : "regular"}
+              />
               <span className="truncate">{fileStem(tab.name)}</span>
               {tab.dirty ? <span className="text-muted-foreground">*</span> : null}
             </button>
@@ -191,8 +196,8 @@ function EmptyWorkspace() {
         </h1>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
           {state.vaultPath
-            ? "Your Typst and Markdown files remain local and portable. Open one to edit source and preview the typeset page side by side."
-            : "Open a folder to create a workspace around plain Typst and Markdown files, native compilation, and fast keyboard commands."}
+            ? "Your Typst, Markdown, and BibTeX files remain local and portable. Open one to edit its source."
+            : "Open a folder to create a workspace around plain Typst, Markdown, and BibTeX files."}
         </p>
         {!state.vaultPath ? (
           <Button className="mt-6" size="lg" onClick={() => void controller.openVault()}>

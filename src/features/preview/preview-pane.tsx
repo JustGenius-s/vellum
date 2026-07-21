@@ -1,9 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
-import { FileTextIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { BookOpenTextIcon, FileTextIcon, WarningCircleIcon } from "@phosphor-icons/react";
 
 import { useWorkspace } from "@/app/workspace-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { documentFormat } from "@/domain/workspace";
 
 const pageStyles = `
   :host {
@@ -45,6 +46,8 @@ function InlineSvgPage({ svg, index, count }: { svg: string; index: number; coun
 export function PreviewPane() {
   const { state } = useWorkspace();
   const hasPages = state.previewPages.length > 0;
+  const isBibliography =
+    Boolean(state.activePath) && documentFormat(state.activePath) === "bibliography";
 
   return (
     <section
@@ -52,7 +55,13 @@ export function PreviewPane() {
       aria-label="Compiled preview"
     >
       <ScrollArea className="min-h-0 flex-1">
-        {hasPages ? (
+        {isBibliography ? (
+          <div className="mx-auto flex min-h-full max-w-sm flex-col items-start justify-center px-6 py-16">
+            <BookOpenTextIcon className="mb-4 size-6 text-muted-foreground" weight="duotone" />
+            <h2 className="text-base font-semibold tracking-[-0.015em]">Bibliography source</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">No standalone preview.</p>
+          </div>
+        ) : hasPages ? (
           <div className="flex min-h-full flex-col items-center gap-2 p-2">
             {state.previewPages.map((svg, index) => (
               <InlineSvgPage

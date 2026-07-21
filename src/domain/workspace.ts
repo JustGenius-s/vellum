@@ -60,18 +60,21 @@ export interface OutlineHeading {
   from: number;
 }
 
-export type DocumentFormat = "typst" | "markdown";
+export type DocumentFormat = "typst" | "markdown" | "bibliography";
 
 export function fileName(path: string) {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
 export function fileStem(path: string) {
-  return fileName(path).replace(/\.(?:typ|md)$/i, "");
+  return fileName(path).replace(/\.(?:typ|md|bib)$/i, "");
 }
 
 export function documentFormat(path: string): DocumentFormat {
-  return path.toLowerCase().endsWith(".md") ? "markdown" : "typst";
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.endsWith(".md")) return "markdown";
+  if (lowerPath.endsWith(".bib")) return "bibliography";
+  return "typst";
 }
 
 export function relativePath(path: string, vaultPath: string) {

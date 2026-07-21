@@ -37,7 +37,7 @@ fn is_supported_document(path: &Path) -> bool {
             .and_then(|value| value.to_str())
             .map(|value| value.to_ascii_lowercase())
             .as_deref(),
-        Some("typ" | "md")
+        Some("typ" | "md" | "bib")
     )
 }
 
@@ -191,7 +191,7 @@ pub fn create_file(path: String, vault_path: String, is_dir: bool) -> Result<(),
         std::fs::create_dir(&resolved).map_err(|error| error.to_string())
     } else {
         if !is_supported_document(&resolved) {
-            return Err("Only .typ and .md files are supported".into());
+            return Err("Only .typ, .md, and .bib files are supported".into());
         }
         std::fs::OpenOptions::new()
             .write(true)
@@ -274,7 +274,7 @@ pub fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_new_path, search_vault_sync};
+    use super::{is_supported_document, resolve_new_path, search_vault_sync};
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -302,6 +302,12 @@ mod tests {
     }
 
     #[test]
+    fn bibliography_files_are_supported_documents() {
+        assert!(is_supported_document(PathBuf::from("references.bib").as_path()));
+        assert!(is_supported_document(PathBuf::from("REFERENCES.BIB").as_path()));
+    }
+
+    #[test]
     fn search_returns_source_locations() {
         let root = fixture_root();
         let vault = root.join("vault");
@@ -323,6 +329,19 @@ mod tests {
         .expect("markdown search succeeds");
         assert_eq!(markdown_matches.len(), 1);
         assert_eq!(markdown_matches[0].line, 2);
+
+        std::fs::write(
+            vault.join("references.bib"),
+            "@article{knuth1984,\n  title = {Literate Programming}\n}\n",
+        )
+        .expect("write bibliography");
+        let bibliography_matches = search_vault_sync(
+            vault.to_string_lossy().as_ref(),
+            "literate programming",
+        )
+        .expect("bibliography search succeeds");
+        assert_eq!(bibliography_matches.len(), 1);
+        assert_eq!(bibliography_matches[0].line, 2);
         std::fs::remove_dir_all(root).expect("remove fixture");
     }
 }
