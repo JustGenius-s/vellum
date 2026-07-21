@@ -53,7 +53,7 @@ function CompactSurfaceSwitch() {
 }
 
 function WorkspaceTopbar() {
-  const { controller, state } = useWorkspace();
+  const { controller } = useWorkspace();
   const { openPalette } = useCommands();
   const { toggleSidebar } = useSidebar();
   const toggleSidebarCommand = useMemo(
@@ -70,7 +70,6 @@ function WorkspaceTopbar() {
   useCommandRegistration(toggleSidebarCommand);
 
   const active = controller.activeTab;
-  const compileFailed = state.compilePhase === "failed";
   const canExport = Boolean(active && documentFormat(active.path) !== "bibliography");
 
   return (
@@ -100,15 +99,6 @@ function WorkspaceTopbar() {
         </TooltipTrigger>
         <TooltipContent>Open command palette</TooltipContent>
       </Tooltip>
-
-      <div
-        className={`hidden px-2 text-xs capitalize sm:block ${
-          compileFailed ? "text-destructive" : "text-muted-foreground"
-        }`}
-        aria-label={`Compile status: ${state.compilePhase}`}
-      >
-        {state.compilePhase}
-      </div>
 
       <Button
         size="sm"

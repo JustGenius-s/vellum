@@ -1,7 +1,8 @@
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use tauri::ipc::Channel;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook, FontInfo};
@@ -17,6 +18,72 @@ static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static FONT_LIBRARY: LazyLock<FontLibrary> = LazyLock::new(FontLibrary::load);
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileProgress {
+    stage: String,
+    value: u8,
+    label: String,
+    detail: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct CompileProgressReporter {
+    channel: Channel<CompileProgress>,
+    seen_files: Arc<Mutex<HashSet<String>>>,
+}
+
+impl CompileProgressReporter {
+    pub fn new(channel: Channel<CompileProgress>) -> Self {
+        Self {
+            channel,
+            seen_files: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    pub fn emit(&self, stage: &str, value: u8, label: &str, detail: Option<String>) {
+        let _ = self.channel.send(CompileProgress {
+            stage: stage.to_string(),
+            value,
+            label: label.to_string(),
+            detail,
+        });
+    }
+
+    fn report_file(&self, id: FileId, source: bool) {
+        let (key, label, detail) = match id.root() {
+            VirtualRoot::Project => {
+                let path = id.vpath().get_without_slash().to_string();
+                (
+                    format!("project:{path}"),
+                    if source { "Compiling file" } else { "Loading asset" },
+                    path,
+                )
+            }
+            VirtualRoot::Package(spec) => {
+                let path = id.vpath().get_without_slash();
+                (
+                    format!("package:{spec}:{path}"),
+                    "Loading package",
+                    format!("{spec} /{path}"),
+                )
+            }
+        };
+
+        let count = {
+            let Ok(mut seen_files) = self.seen_files.lock() else {
+                return;
+            };
+            if !seen_files.insert(key) {
+                return;
+            }
+            seen_files.len()
+        };
+        let value = (24usize + count.saturating_mul(4)).min(68) as u8;
+        self.emit("compiling", value, label, Some(detail));
+    }
+}
 
 enum FontSource {
     Embedded(Font),
@@ -262,6 +329,7 @@ pub struct TypstWorld {
     main_vpath: VirtualPath,
     package_cache_path: Option<String>,
     package_data_path: Option<String>,
+    progress: Option<CompileProgressReporter>,
     time: Time,
 }
 
@@ -272,6 +340,7 @@ impl TypstWorld {
         main_file: String,
         package_cache_path: Option<String>,
         package_data_path: Option<String>,
+        progress: Option<CompileProgressReporter>,
     ) -> Self {
         let library = Library::default();
         let book = FONT_LIBRARY.book.clone();
@@ -292,6 +361,7 @@ impl TypstWorld {
             main_vpath,
             package_cache_path,
             package_data_path,
+            progress,
             time: Time::system(),
         }
     }
@@ -336,6 +406,9 @@ impl World for TypstWorld {
         if id == self.main {
             return Ok(self.source.clone());
         }
+        if let Some(progress) = &self.progress {
+            progress.report_file(id, true);
+        }
 
         let content = match id.root() {
             VirtualRoot::Project => {
@@ -368,6 +441,9 @@ impl World for TypstWorld {
     }
 
     fn file(&self, id: FileId) -> Result<Bytes, typst::diag::FileError> {
+        if let Some(progress) = &self.progress {
+            progress.report_file(id, false);
+        }
         match id.root() {
             VirtualRoot::Project => {
                 let path = self.resolve_project_to_disk(id)?;

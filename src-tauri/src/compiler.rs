@@ -1,10 +1,11 @@
 use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
+use tauri::ipc::Channel;
 use typst::diag::{Severity, SourceDiagnostic};
 use typst::{World, WorldExt};
 
-use crate::world::TypstWorld;
+use crate::world::{CompileProgress, CompileProgressReporter, TypstWorld};
 
 static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("valid wikilink regex")
@@ -315,8 +316,16 @@ pub async fn compile_typst_svg(
     cjk_font: String,
     package_cache_path: Option<String>,
     package_data_path: Option<String>,
+    progress: Channel<CompileProgress>,
 ) -> Result<CompileSvgResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let reporter = CompileProgressReporter::new(progress);
+        let main_name = Path::new(&main_file)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or(&main_file)
+            .to_string();
+        reporter.emit("preparing", 10, "Preparing source", Some(main_name.clone()));
         let prepared = if main_file.to_ascii_lowercase().ends_with(".md") {
             markdown_to_typst(&source)
         } else {
@@ -324,14 +333,22 @@ pub async fn compile_typst_svg(
         };
         let (prepared, main_line_offset) =
             apply_font_preferences(prepared, &latin_font, &cjk_font);
+        reporter.emit(
+            "compiling",
+            22,
+            "Compiling document",
+            Some(main_name),
+        );
         let world = TypstWorld::new(
             prepared,
             vault_path,
             main_file,
             package_cache_path,
             package_data_path,
+            Some(reporter.clone()),
         );
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
+        reporter.emit("rendering", 76, "Laying out pages", None);
         let mut diagnostics: Vec<CompileDiagnostic> = warned
             .warnings
             .iter()
@@ -341,11 +358,24 @@ pub async fn compile_typst_svg(
         match warned.output {
             Ok(document) => {
                 let options = typst_svg::SvgOptions::default();
+                let page_count = document.pages().len();
                 let pages = document
                     .pages()
                     .iter()
-                    .map(|page| typst_svg::svg(page, &options))
+                    .enumerate()
+                    .map(|(index, page)| {
+                        let completed = index + 1;
+                        let value = 76 + ((completed * 22) / page_count.max(1)) as u8;
+                        reporter.emit(
+                            "rendering",
+                            value,
+                            "Rendering preview",
+                            Some(format!("Page {completed} of {page_count}")),
+                        );
+                        typst_svg::svg(page, &options)
+                    })
                     .collect();
+                reporter.emit("complete", 100, "Preview updated", None);
                 Ok(CompileSvgResult {
                     pages: Some(pages),
                     diagnostics,
@@ -356,6 +386,12 @@ pub async fn compile_typst_svg(
                     errors
                         .iter()
                         .map(|item| format_diagnostic(&world, item, main_line_offset)),
+                );
+                reporter.emit(
+                    "complete",
+                    100,
+                    "Compile finished",
+                    Some(format!("{} errors", errors.len())),
                 );
                 Ok(CompileSvgResult {
                     pages: None,
@@ -391,6 +427,7 @@ pub async fn compile_typst_pdf(
             main_file,
             package_cache_path,
             package_data_path,
+            None,
         );
         let warned = typst::compile::<typst_layout::PagedDocument>(&world);
         let document = warned.output.map_err(|errors| {

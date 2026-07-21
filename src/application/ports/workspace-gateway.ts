@@ -1,5 +1,6 @@
 import type {
   BacklinkIndex,
+  CompileProgress,
   CompileSvgResult,
   FontCatalog,
   PackageCatalog,
@@ -63,7 +64,10 @@ export interface WorkspaceGateway {
     location: PackageLocation,
     directories: PackageDirectories,
   ): Promise<TemplateThumbnail | null>;
-  compileSvg(request: CompileRequest): Promise<CompileSvgResult>;
+  compileSvg(
+    request: CompileRequest,
+    onProgress: (progress: CompileProgress) => void,
+  ): Promise<CompileSvgResult>;
   exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
   loadSession(): Promise<SavedSession>;
   saveSession(session: SavedSession): Promise<void>;

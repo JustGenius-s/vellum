@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
@@ -9,6 +9,7 @@ import type {
 } from "@/application/ports/workspace-gateway";
 import type {
   BacklinkIndex,
+  CompileProgress,
   CompileSvgResult,
   FontCatalog,
   PackageCatalog,
@@ -144,7 +145,8 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
     });
   }
 
-  compileSvg(request: CompileRequest) {
+  compileSvg(request: CompileRequest, onProgress: (progress: CompileProgress) => void) {
+    const progress = new Channel<CompileProgress>(onProgress);
     return invoke<CompileSvgResult>("compile_typst_svg", {
       source: request.source,
       vaultPath: request.vaultPath,
@@ -153,6 +155,7 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
       cjkFont: request.cjkFont,
       packageCachePath: request.packageCachePath,
       packageDataPath: request.packageDataPath,
+      progress,
     });
   }
 

@@ -1,10 +1,16 @@
 import { useLayoutEffect, useRef } from "react";
-import { BookOpenTextIcon, FileTextIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import {
+  BookOpenTextIcon,
+  FileTextIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 
 import { useWorkspace } from "@/app/workspace-context";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { documentFormat } from "@/domain/workspace";
+import { cn } from "@/lib/utils";
 
 const pageStyles = `
   :host {
@@ -43,6 +49,52 @@ function InlineSvgPage({ svg, index, count }: { svg: string; index: number; coun
   );
 }
 
+function CompileStatus() {
+  const { state } = useWorkspace();
+  const progress = state.compileProgress;
+
+  if (
+    !state.activePath ||
+    documentFormat(state.activePath) === "bibliography" ||
+    state.compilePhase === "ready"
+  ) {
+    return null;
+  }
+
+  const failed = state.compilePhase === "failed";
+  const value = progress?.value ?? (failed ? 100 : 0);
+  const label = progress?.label ?? (failed ? "Compile failed" : "Waiting to compile");
+  const detail = progress?.detail;
+
+  return (
+    <div
+      className="shrink-0 border-b bg-background px-3 py-2"
+      role="status"
+      aria-live="polite"
+      aria-label={`Compile status: ${label}${detail ? `, ${detail}` : ""}`}
+    >
+      <div className="mb-1.5 flex min-w-0 items-center gap-2 text-xs">
+        {failed ? (
+          <WarningCircleIcon className="size-3.5 shrink-0 text-destructive" weight="fill" />
+        ) : (
+          <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-foreground" />
+        )}
+        <span className={cn("shrink-0 font-medium", failed && "text-destructive")}>{label}</span>
+        {detail ? <span className="min-w-0 truncate text-muted-foreground">{detail}</span> : null}
+        <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+          {Math.round(value)}%
+        </span>
+      </div>
+      <Progress
+        value={value}
+        aria-label="Compile progress"
+        aria-valuetext={`${label}${detail ? `: ${detail}` : ""}`}
+        className={cn("h-1", failed && "[&_[data-slot=progress-indicator]]:bg-destructive")}
+      />
+    </div>
+  );
+}
+
 export function PreviewPane() {
   const { state } = useWorkspace();
   const hasPages = state.previewPages.length > 0;
@@ -54,6 +106,7 @@ export function PreviewPane() {
       className="flex h-full min-h-0 w-full flex-col bg-muted/40"
       aria-label="Compiled preview"
     >
+      <CompileStatus />
       <ScrollArea className="min-h-0 flex-1">
         {isBibliography ? (
           <div className="mx-auto flex min-h-full max-w-sm flex-col items-start justify-center px-6 py-16">
@@ -72,7 +125,7 @@ export function PreviewPane() {
               />
             ))}
           </div>
-        ) : state.compilePhase === "compiling" ? (
+        ) : state.compilePhase === "compiling" || state.compilePhase === "queued" ? (
           <div className="p-2">
             <div className="aspect-[794/1123] w-full space-y-6 bg-background p-[11%] shadow-sm ring-1 ring-foreground/10">
               <Skeleton className="h-8 w-2/3" />

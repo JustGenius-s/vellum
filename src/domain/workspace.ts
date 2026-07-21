@@ -28,6 +28,20 @@ export interface CompileSvgResult {
   diagnostics: CompileDiagnostic[];
 }
 
+export type CompileProgressStage =
+  | "queued"
+  | "preparing"
+  | "compiling"
+  | "rendering"
+  | "complete";
+
+export interface CompileProgress {
+  stage: CompileProgressStage;
+  value: number;
+  label: string;
+  detail: string | null;
+}
+
 export interface SearchMatch {
   path: string;
   relativePath: string;

@@ -4,6 +4,7 @@ import type {
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
 import type {
+  CompileProgress,
   CompileSvgResult,
   PackageCatalog,
   PackageDirectories,
@@ -393,8 +394,17 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     return null;
   }
 
-  async compileSvg(request: CompileRequest): Promise<CompileSvgResult> {
-    await new Promise((resolve) => setTimeout(resolve, 220));
+  async compileSvg(
+    request: CompileRequest,
+    onProgress: (progress: CompileProgress) => void,
+  ): Promise<CompileSvgResult> {
+    const name = request.mainFile.split(/[\\/]/).pop() ?? request.mainFile;
+    onProgress({ stage: "preparing", value: 10, label: "Preparing source", detail: name });
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    onProgress({ stage: "compiling", value: 38, label: "Compiling document", detail: name });
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    onProgress({ stage: "rendering", value: 78, label: "Laying out pages", detail: null });
+    await new Promise((resolve) => setTimeout(resolve, 60));
     const diagnostics = request.source.includes("#error")
       ? [
           {
@@ -410,6 +420,7 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     const source = request.mainFile.toLowerCase().endsWith(".md")
       ? expandDemoMarkdown(request.source, request.mainFile, this.files)
       : request.source;
+    onProgress({ stage: "rendering", value: 94, label: "Rendering preview", detail: "Page 1 of 1" });
     return {
       pages: diagnostics.length
         ? null

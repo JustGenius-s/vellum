@@ -7,6 +7,7 @@ import {
   relativePath,
   type BacklinkIndex,
   type CompileDiagnostic,
+  type CompileProgress,
   type DocumentTab,
   type FontCatalog,
   type OutlineHeading,
@@ -37,6 +38,7 @@ export interface WorkspaceState {
   diagnostics: CompileDiagnostic[];
   backlinks: BacklinkIndex["links"];
   compilePhase: CompilePhase;
+  compileProgress: CompileProgress | null;
   statusText: string;
   sidebarView: SidebarView;
   compactSurface: CompactSurface;
@@ -70,6 +72,7 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   diagnostics: [],
   backlinks: {},
   compilePhase: "idle",
+  compileProgress: null,
   statusText: "Starting workspace",
   sidebarView: "files",
   compactSurface: "editor",
@@ -356,6 +359,14 @@ export class WorkspaceController {
     this.update({
       tabs,
       compilePhase: isBibliography ? "idle" : "queued",
+      compileProgress: isBibliography
+        ? null
+        : {
+            stage: "queued",
+            value: 4,
+            label: "Waiting to compile",
+            detail: fileName(active.path),
+          },
       statusText: isBibliography ? "Bibliography changed" : "Draft changed",
     });
     if (!isBibliography) this.scheduleCompile();
@@ -395,7 +406,12 @@ export class WorkspaceController {
     }
     const tab = this.activeTab;
     if (!tab || !this.state.vaultPath) {
-      this.update({ compilePhase: "idle", previewPages: [], diagnostics: [] });
+      this.update({
+        compilePhase: "idle",
+        compileProgress: null,
+        previewPages: [],
+        diagnostics: [],
+      });
       return;
     }
 
@@ -403,6 +419,7 @@ export class WorkspaceController {
       ++this.compileToken;
       this.update({
         compilePhase: "idle",
+        compileProgress: null,
         previewPages: [],
         diagnostics: [],
         problemsOpen: false,
@@ -412,25 +429,54 @@ export class WorkspaceController {
     }
 
     const token = ++this.compileToken;
-    this.update({ compilePhase: "compiling", statusText: "Compiling Typst" });
+    this.update({
+      compilePhase: "compiling",
+      compileProgress: {
+        stage: "preparing",
+        value: 8,
+        label: "Preparing source",
+        detail: fileName(tab.path),
+      },
+      statusText: "Compiling Typst",
+    });
     try {
-      const result = await this.gateway.compileSvg({
-        source: tab.content,
-        vaultPath: this.state.vaultPath,
-        mainFile: tab.path,
-        latinFont: this.state.latinFont,
-        cjkFont: this.state.cjkFont,
-        packageCachePath: this.state.packageCachePath,
-        packageDataPath: this.state.packageDataPath,
-      });
+      const result = await this.gateway.compileSvg(
+        {
+          source: tab.content,
+          vaultPath: this.state.vaultPath,
+          mainFile: tab.path,
+          latinFont: this.state.latinFont,
+          cjkFont: this.state.cjkFont,
+          packageCachePath: this.state.packageCachePath,
+          packageDataPath: this.state.packageDataPath,
+        },
+        (compileProgress) => {
+          if (token === this.compileToken) this.update({ compileProgress });
+        },
+      );
       if (token !== this.compileToken) return;
 
       const errorCount = result.diagnostics.filter((item) => item.severity === "error").length;
       const warningCount = result.diagnostics.length - errorCount;
+      const pageCount = result.pages?.length ?? 0;
       this.update({
         previewPages: result.pages ?? this.state.previewPages,
         diagnostics: result.diagnostics,
         compilePhase: errorCount ? "failed" : "ready",
+        compileProgress: {
+          stage: "complete",
+          value: 100,
+          label: errorCount
+            ? "Compile failed"
+            : warningCount
+              ? "Preview updated with warnings"
+              : "Preview updated",
+          detail: errorCount
+            ? `${errorCount} error${errorCount === 1 ? "" : "s"}`
+            : warningCount
+              ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
+              : `${pageCount} page${pageCount === 1 ? "" : "s"}`,
+        },
         problemsOpen: errorCount > 0 ? true : this.state.problemsOpen,
         statusText: errorCount
           ? `${errorCount} compile error${errorCount === 1 ? "" : "s"}`
@@ -442,6 +488,12 @@ export class WorkspaceController {
       if (token !== this.compileToken) return;
       this.update({
         compilePhase: "failed",
+        compileProgress: {
+          stage: "complete",
+          value: 100,
+          label: "Compile failed",
+          detail: String(error),
+        },
         problemsOpen: true,
         diagnostics: [
           {

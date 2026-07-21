@@ -190,6 +190,11 @@ function TreeRow({
           >
             Delete
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => void controller.openVault()}>
+            <FolderOpenIcon />
+            Open another vault
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
@@ -285,6 +290,11 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => void controller.refreshTree()}>Refresh</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => void controller.openVault()}>
+          <FolderOpenIcon />
+          Open another vault
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -725,16 +735,6 @@ export function AppSidebar() {
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
                   {state.sidebarView === "files" ? vaultName : activeView.label}
                 </h2>
-                {state.sidebarView === "files" && state.vaultPath ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
-                    aria-label="Create document"
-                  >
-                    <PlusIcon />
-                  </Button>
-                ) : null}
               </header>
 
               <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
