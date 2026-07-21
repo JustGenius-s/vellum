@@ -70,7 +70,12 @@ Markdown is edited as its own file, then typeset through the same paged preview.
 };
 
 function escapeXml(value: string) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function asTree(files: Map<string, string>): TreeNode[] {
@@ -96,6 +101,13 @@ function renderDemoSvg(source: string, latinFont: string, cjkFont: string) {
   let y = 104;
   const content = rows
     .map((row) => {
+      const wikilink = /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/.exec(row);
+      const markdownLink = /\[([^\]]+)\]\(([^)]+)\)/.exec(row);
+      const linkTarget = wikilink
+        ? /\.[^/]+$/.test(wikilink[1])
+          ? wikilink[1]
+          : `${wikilink[1]}.typ`
+        : markdownLink?.[2];
       const typstHeading = /^(=+)\s+/.exec(row);
       const markdownHeading = /^(#{1,6})\s+/.exec(row);
       const headingLevel = typstHeading?.[1].length ?? markdownHeading?.[1].length ?? 0;
@@ -105,6 +117,7 @@ function renderDemoSvg(source: string, latinFont: string, cjkFont: string) {
           .replace(/^(?:=+|#{1,6})\s*/, "")
           .replace(/\*\*(.+?)\*\*/g, "$1")
           .replace(/`(.+?)`/g, "$1")
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
           .replace(
             /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g,
             (_match, target: string, label: string | undefined) => label ?? target,
@@ -116,7 +129,8 @@ function renderDemoSvg(source: string, latinFont: string, cjkFont: string) {
       const current = y;
       y += isHeading ? 48 : 28;
       const fontFamily = escapeXml(`"${latinFont}", "${cjkFont}", serif`);
-      return `<text x="88" y="${current}" font-family="${fontFamily}" font-size="${size}" font-weight="${weight}" fill="${fill}">${text}</text>`;
+      const rendered = `<text x="88" y="${current}" font-family="${fontFamily}" font-size="${size}" font-weight="${weight}" fill="${fill}">${text}</text>`;
+      return linkTarget ? `<a href="${escapeXml(linkTarget)}">${rendered}</a>` : rendered;
     })
     .join("");
 
@@ -431,6 +445,10 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
 
   async exportPdf() {
     throw new Error("PDF export is available in the Tauri desktop runtime.");
+  }
+
+  async openExternalUrl(url: string) {
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async loadSession() {

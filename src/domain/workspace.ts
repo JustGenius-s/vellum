@@ -192,3 +192,71 @@ export function parseOutline(source: string): OutlineHeading[] {
 export function flattenFiles(nodes: TreeNode[]): TreeNode[] {
   return nodes.flatMap((node) => (node.isDir ? flattenFiles(node.children) : [node]));
 }
+
+function normalizeRelativeDocumentPath(path: string) {
+  const segments: string[] = [];
+  for (const segment of path.replaceAll("\\", "/").split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join("/");
+}
+
+function decodeDocumentTarget(target: string) {
+  const path = target.split(/[?#]/, 1)[0].trim();
+  if (!path || path.includes("\0")) return "";
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+export function resolveDocumentTarget(
+  nodes: TreeNode[],
+  target: string,
+  activePath: string,
+  vaultPath: string,
+) {
+  const decodedTarget = decodeDocumentTarget(target);
+  if (!decodedTarget) return null;
+
+  const unrootedTarget = decodedTarget.replace(/^[/\\]+/, "");
+  const targetPath = normalizeRelativeDocumentPath(unrootedTarget);
+  if (!targetPath) return null;
+
+  const activeRelative = normalizeRelativeDocumentPath(relativePath(activePath, vaultPath));
+  const activeDirectory = activeRelative.includes("/")
+    ? activeRelative.slice(0, activeRelative.lastIndexOf("/"))
+    : "";
+  const candidates = /^[/\\]/.test(decodedTarget)
+    ? [targetPath]
+    : [normalizeRelativeDocumentPath(`${activeDirectory}/${unrootedTarget}`), targetPath];
+  const hasKnownExtension = /\.(?:typ|md|bib)$/i.test(targetPath);
+  const candidatePaths = new Set(
+    candidates.flatMap((candidate) =>
+      hasKnownExtension
+        ? [candidate]
+        : [candidate, `${candidate}.typ`, `${candidate}.md`, `${candidate}.bib`],
+    ),
+  );
+  const files = flattenFiles(nodes);
+  const caseInsensitive = vaultPath.includes("\\");
+  const comparable = (value: string) => (caseInsensitive ? value.toLowerCase() : value);
+  const indexedFiles = files.map((node) => ({
+    node,
+    relative: comparable(normalizeRelativeDocumentPath(relativePath(node.path, vaultPath))),
+  }));
+  for (const candidate of candidatePaths) {
+    const exact = indexedFiles.find((file) => file.relative === comparable(candidate));
+    if (exact) return exact.node.path;
+  }
+
+  const targetStem = fileStem(targetPath);
+  const stemMatches = files.filter((node) => comparable(fileStem(node.path)) === comparable(targetStem));
+  return stemMatches.length === 1 ? stemMatches[0].path : null;
+}

@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   CompileRequest,
@@ -157,6 +158,10 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
       packageDataPath: request.packageDataPath,
       progress,
     });
+  }
+
+  openExternalUrl(url: string) {
+    return openUrl(url);
   }
 
   async exportPdf(request: CompileRequest, defaultName: string) {

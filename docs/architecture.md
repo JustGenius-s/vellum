@@ -29,3 +29,18 @@ src-tauri/src/
 3. React 只订阅控制器快照，业务异步和防抖不散落在 UI 组件。
 4. Rust 文件路径在 canonicalize 后必须仍位于 Vault 内。
 5. 浏览器演示和桌面运行共用同一套 UI 与 application 层。
+
+## 预览交互
+
+预览仍是只读的编译产物，不承担 WYSIWYG 编辑。`preview-interactions.ts` 在每个 SVG 的
+Shadow Root 内统一识别交互，并把动作交回 `WorkspaceController`：
+
+- 相对链接只会解析到当前 Vault 文件树中的文档；同名目标有歧义时不猜测。
+- `http`、`https`、`mailto` 与 `tel` 链接通过 `WorkspaceGateway` 交给系统打开。
+- Typst 内嵌图片可在应用 Dialog 中放大，不修改文档状态。
+- 自定义 Typst 元素可使用 `vellum:open:` label 声明文档跳转，例如
+  `#box[Open method] <vellum:open:method>`；包含路径时可使用
+  `#label("vellum:open:reading/systems.typ")`。
+
+预览文档不能通过 label 执行任意应用命令。新增动作必须在交互联合类型、控制器方法与测试中
+显式注册。

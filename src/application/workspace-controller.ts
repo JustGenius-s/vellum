@@ -5,6 +5,7 @@ import {
   fileStem,
   parseOutline,
   relativePath,
+  resolveDocumentTarget,
   type BacklinkIndex,
   type CompileDiagnostic,
   type CompileProgress,
@@ -636,6 +637,39 @@ export class WorkspaceController {
     };
     const path = find(this.state.tree);
     if (path) await this.openFile(path);
+  }
+
+  async openPreviewDocument(target: string) {
+    const path = resolveDocumentTarget(
+      this.state.tree,
+      target,
+      this.state.activePath,
+      this.state.vaultPath,
+    );
+    if (!path) {
+      this.setStatus(`Preview link target not found: ${target}`);
+      return;
+    }
+    await this.openFile(path);
+  }
+
+  async openExternalLink(url: string) {
+    const protocol = /^([a-z][a-z\d+.-]*):/i.exec(url.trim())?.[1]?.toLowerCase();
+    if (!protocol || !["http", "https", "mailto", "tel"].includes(protocol)) {
+      this.rejectPreviewLink(url);
+      return;
+    }
+
+    try {
+      await this.gateway.openExternalUrl(url);
+      this.setStatus("Opened external link");
+    } catch (error) {
+      this.setStatus(`Could not open external link: ${String(error)}`);
+    }
+  }
+
+  rejectPreviewLink(url: string) {
+    this.setStatus(`Unsupported preview link: ${url}`);
   }
 
   async openDiagnostic(diagnostic: CompileDiagnostic) {
