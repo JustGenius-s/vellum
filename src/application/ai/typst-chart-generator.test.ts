@@ -4,6 +4,7 @@ import {
   applyAiMessageContentUpdate,
   extractTypstSource,
   validateTypstChartSource,
+  workspaceAgentInstructions,
   type AiMessageContentPart,
   type AiToolActivity,
 } from "./typst-chart-generator";
@@ -64,5 +65,11 @@ describe("Typst chart generation helpers", () => {
       type: "tool",
       activity: { id: "read-1", state: "output-available" },
     });
+  });
+
+  it("uses a general editing workflow for workspace tasks", () => {
+    expect(workspaceAgentInstructions("workspace")).toContain("workspace editing agent");
+    expect(workspaceAgentInstructions("workspace")).toContain("It is valid to make no changes");
+    expect(workspaceAgentInstructions("data-figure")).toContain("workspace figure agent");
   });
 });

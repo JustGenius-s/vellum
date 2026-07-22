@@ -1,4 +1,5 @@
 import type { DataQuery, PreparedDataFigure } from "@/domain/data";
+import type { CompileDiagnostic } from "@/domain/workspace";
 
 export type AiTaskStatus =
   | "draft"
@@ -79,12 +80,19 @@ export interface AiTaskFileChange {
   createdAt: number;
 }
 
-export interface AiTaskSource {
-  kind: "data-figure";
-  vaultPath: string;
-  path: string;
-  query: DataQuery;
-}
+export type AiTaskSource =
+  | {
+      kind: "data-figure";
+      vaultPath: string;
+      path: string;
+      query: DataQuery;
+    }
+  | {
+      kind: "workspace";
+      vaultPath: string;
+      path: string;
+      diagnostics: CompileDiagnostic[];
+    };
 
 export interface AiTask {
   id: string;

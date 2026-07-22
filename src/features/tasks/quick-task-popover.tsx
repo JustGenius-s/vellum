@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { ArrowsOutSimpleIcon, ChartLineIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowsOutSimpleIcon, ChartLineIcon, RobotIcon, XIcon } from "@phosphor-icons/react";
 
 import { useWorkspace } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,11 @@ export function QuickTaskPopover({
       >
         <PopoverHeader className="relative flex-row items-center gap-2 border-b px-3 py-2.5">
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/30 text-muted-foreground">
-            <ChartLineIcon className="size-3.5" />
+            {task?.source.kind === "workspace" ? (
+              <RobotIcon className="size-3.5" />
+            ) : (
+              <ChartLineIcon className="size-3.5" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <PopoverTitle className="sr-only">AI task</PopoverTitle>

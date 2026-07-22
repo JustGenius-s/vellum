@@ -133,4 +133,24 @@ describe("AiTaskManager", () => {
     expect(restoredTask?.activeInput).toBeNull();
     expect(restoredTask?.pendingInputs[0]?.text).toBe("Continue");
   });
+
+  it("supports persistent workspace editing tasks without figure state", async () => {
+    const manager = new AiTaskManager(new MemoryTaskRepository(), async () => {});
+    await manager.initialize();
+    const task = manager.create({
+      kind: "workspace",
+      vaultPath: "/vault",
+      path: "/vault/main.typ",
+      diagnostics: [],
+    });
+
+    manager.submit(task.id, "Repair the document", []);
+    await until(() => manager.getTask(task.id)?.status === "completed");
+
+    expect(manager.getTask(task.id)).toMatchObject({
+      title: "Repair the document",
+      result: null,
+      source: { kind: "workspace", path: "/vault/main.typ" },
+    });
+  });
 });

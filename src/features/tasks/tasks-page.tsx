@@ -8,9 +8,11 @@ import {
   ClockIcon,
   DatabaseIcon,
   DotsThreeIcon,
+  FileTextIcon,
   FolderOpenIcon,
   ListChecksIcon,
   MagnifyingGlassIcon,
+  RobotIcon,
   SidebarSimpleIcon,
   WarningCircleIcon,
   XCircleIcon,
@@ -92,7 +94,11 @@ function TaskInspector({ task }: { task: AiTask }) {
           className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted disabled:opacity-50"
           onClick={() => void controller.openFile(task.source.path)}
         >
-          <DatabaseIcon className="size-4 shrink-0 text-muted-foreground" />
+          {task.source.kind === "data-figure" ? (
+            <DatabaseIcon className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
           <span className="min-w-0 flex-1 truncate font-mono">{relativePath(task.source.path, task.source.vaultPath)}</span>
         </button>
       </section>
@@ -134,13 +140,19 @@ function TaskInspector({ task }: { task: AiTask }) {
         {task.fileChanges.length ? (
           <div className="space-y-2 px-2">
             {task.fileChanges.map((change) => (
-              <div key={change.id} className="flex items-start gap-2 text-xs">
+              <button
+                key={change.id}
+                type="button"
+                disabled={!sameVault}
+                className="flex w-full items-start gap-2 rounded-md py-1 text-left text-xs hover:bg-muted disabled:opacity-50"
+                onClick={() => void controller.openFile(change.path)}
+              >
                 <span className="mt-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/45" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-mono text-[10px]">{relativePath(change.path, task.source.vaultPath)}</span>
                   <span className="text-[10px] text-muted-foreground">{change.operation} · {change.saved ? "saved" : "editor buffer"}</span>
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -233,7 +245,11 @@ export function TasksPage() {
               <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => setMobileDetail(false)} aria-label="Back to task list">
                 <ArrowLeftIcon />
               </Button>
-              <ChartLineIcon className="size-4 shrink-0 text-muted-foreground" />
+              {selected.source.kind === "data-figure" ? (
+                <ChartLineIcon className="size-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <RobotIcon className="size-4 shrink-0 text-muted-foreground" />
+              )}
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-sm font-medium">{selected.title}</h2>
                 <TaskStatus task={selected} />
@@ -277,7 +293,7 @@ export function TasksPage() {
             <div className="max-w-sm text-center">
               <ListChecksIcon className="mx-auto size-9 text-muted-foreground/45" />
               <h2 className="mt-4 text-sm font-medium">Select a task</h2>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Create a figure task from a data file, then return here to continue the conversation.</p>
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Start an AI task from an open document or data file, then return here to continue the conversation.</p>
             </div>
           </div>
         )}

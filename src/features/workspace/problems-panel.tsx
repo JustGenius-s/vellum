@@ -2,6 +2,7 @@ import {
   CaretRightIcon,
   CheckCircleIcon,
   CopyIcon,
+  RobotIcon,
   WarningIcon,
   XCircleIcon,
   XIcon,
@@ -77,6 +78,9 @@ export function ProblemsPanel() {
 
   const groups = groupDiagnostics(state.diagnostics);
   const fileCount = groups.filter((group) => group.key !== "__compiler__").length;
+  const canFixWithAi = Boolean(
+    state.diagnostics.length && controller.activeTab && !controller.activeIsData,
+  );
 
   return (
     <section
@@ -91,10 +95,25 @@ export function ProblemsPanel() {
             {fileCount ? ` in ${fileCount} ${fileCount === 1 ? "file" : "files"}` : ""}
           </span>
         ) : null}
+        {canFixWithAi ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7 text-xs"
+            onClick={() =>
+              controller.openWorkspaceAiTask(
+                state.activePath,
+                "Fix the current compiler errors with the smallest safe change, then compile again to verify the result.",
+              )
+            }
+          >
+            <RobotIcon /> Fix with AI
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon-xs"
-          className="ml-auto"
+          className={canFixWithAi ? "" : "ml-auto"}
           onClick={() => controller.setProblemsOpen(false)}
           aria-label="Close problems"
         >

@@ -103,7 +103,7 @@ export class AiTaskManager {
     const now = Date.now();
     const task: AiTask = {
       id: id("task"),
-      title: "New figure task",
+      title: source.kind === "workspace" ? "New workspace task" : "New figure task",
       status: "draft",
       stage: "idle",
       progress: 0,

@@ -217,7 +217,9 @@ export function TaskConversation({ task, compact = false }: { task: AiTask; comp
               <div className="space-y-1.5">
                 <h3 className="text-sm font-medium">Ask for the result you need</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  The agent can inspect attached project files, analyze the active dataset, write and compile Typst, then insert the figure into a document.
+                  {task.source.kind === "data-figure"
+                    ? "The agent can inspect attached files, analyze the active dataset, write and compile Typst, then insert the figure into a document."
+                    : "The agent can inspect attached files, edit the active document, and compile it to diagnose and repair errors."}
                 </p>
               </div>
             </ConversationEmptyState>
@@ -293,7 +295,9 @@ export function TaskConversation({ task, compact = false }: { task: AiTask; comp
               <Attachment data={attachment(task.source.path, task.source.vaultPath)} className="max-w-52 bg-muted/35 text-[10px] font-normal">
                 <AttachmentPreview fallbackIcon={<FileTypeIcon name={task.source.path} className="size-3" />} />
                 <AttachmentInfo />
-                <span className="text-[9px] text-muted-foreground">data</span>
+                <span className="text-[9px] text-muted-foreground">
+                  {task.source.kind === "data-figure" ? "data" : "active"}
+                </span>
               </Attachment>
               {contextPaths.map((path) => (
                 <Attachment key={path} data={attachment(path, task.source.vaultPath)} onRemove={() => toggleContext(path)} className="max-w-52 text-[10px] font-normal">
@@ -308,7 +312,13 @@ export function TaskConversation({ task, compact = false }: { task: AiTask; comp
             <PromptInputTextarea
               value={request}
               onChange={(event) => setRequest(event.currentTarget.value)}
-              placeholder={running ? "Add another message to this task's queue..." : "Ask the agent to create, revise, compile, or insert a figure..."}
+              placeholder={
+                running
+                  ? "Add another message to this task's queue..."
+                  : task.source.kind === "data-figure"
+                    ? "Ask the agent to create, revise, compile, or insert a figure..."
+                    : "Ask the agent to edit, explain, or repair this file..."
+              }
               className="max-h-36 min-h-20 px-3 pt-2 text-sm"
               disabled={!configured}
             />
