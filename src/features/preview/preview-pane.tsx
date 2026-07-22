@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
+  ArrowsOutSimpleIcon,
   BookOpenTextIcon,
+  CopyIcon,
+  DownloadSimpleIcon,
   FileTextIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
@@ -13,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -79,6 +89,16 @@ const pageStyles = `
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
+
+  [data-vellum-image-context] {
+    cursor: context-menu;
+    outline: none;
+  }
+
+  [data-vellum-image-context]:focus-visible {
+    outline: 1.5px solid currentColor;
+    outline-offset: 2px;
+  }
 `;
 
 function InlineSvgPage({
@@ -86,13 +106,25 @@ function InlineSvgPage({
   index,
   count,
   onInteraction,
+  onCopyImage,
+  onDownloadImage,
+  onPreviewImage,
 }: {
   svg: string;
   index: number;
   count: number;
   onInteraction: (interaction: PreviewInteraction) => void;
+  onCopyImage: (source: string) => void;
+  onDownloadImage: (source: string) => void;
+  onPreviewImage: (source: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const imageSourceRef = useRef<string | null>(null);
+  const [contextImage, setContextImage] = useState<string | null>(null);
+  const handleImageTargetChange = useCallback((source: string | null) => {
+    imageSourceRef.current = source;
+    setContextImage(source);
+  }, []);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -100,21 +132,66 @@ function InlineSvgPage({
 
     const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${pageStyles}</style>${svg}`;
-    const releaseInteractions = bindPreviewInteractions(root, onInteraction);
+    const releaseInteractions = bindPreviewInteractions(
+      root,
+      onInteraction,
+      handleImageTargetChange,
+    );
 
     return () => {
       releaseInteractions();
       root.replaceChildren();
     };
-  }, [onInteraction, svg]);
+  }, [handleImageTargetChange, onInteraction, svg]);
 
   return (
-    <div
-      ref={hostRef}
-      role="document"
-      aria-label={`Typst page ${index + 1} of ${count}`}
-      className="w-full shrink-0 overflow-hidden bg-background shadow-sm ring-1 ring-foreground/10"
-    />
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (!open) handleImageTargetChange(null);
+      }}
+    >
+      <ContextMenuTrigger asChild>
+        <div
+          ref={hostRef}
+          role="document"
+          aria-label={`Typst page ${index + 1} of ${count}`}
+          className="w-full shrink-0 overflow-hidden bg-background shadow-sm ring-1 ring-foreground/10"
+          onContextMenu={(event) => {
+            if (!imageSourceRef.current) event.preventDefault();
+          }}
+        />
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-44">
+        <ContextMenuItem
+          disabled={!contextImage}
+          onSelect={() => {
+            if (contextImage) onCopyImage(contextImage);
+          }}
+        >
+          <CopyIcon />
+          Copy image
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={!contextImage}
+          onSelect={() => {
+            if (contextImage) onDownloadImage(contextImage);
+          }}
+        >
+          <DownloadSimpleIcon />
+          Download image
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          disabled={!contextImage}
+          onSelect={() => {
+            if (contextImage) onPreviewImage(contextImage);
+          }}
+        >
+          <ArrowsOutSimpleIcon />
+          Preview image
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -179,14 +256,19 @@ export function PreviewPane() {
         case "external-link":
           void controller.openExternalLink(interaction.href);
           break;
-        case "image":
-          setPreviewImage(interaction.source);
-          break;
         case "blocked-link":
           controller.rejectPreviewLink(interaction.href);
           break;
       }
     },
+    [controller],
+  );
+  const handleCopyImage = useCallback(
+    (source: string) => void controller.copyPreviewImage(source),
+    [controller],
+  );
+  const handleDownloadImage = useCallback(
+    (source: string) => void controller.downloadPreviewImage(source),
     [controller],
   );
 
@@ -213,6 +295,9 @@ export function PreviewPane() {
                   index={index}
                   count={state.previewPages.length}
                   onInteraction={handleInteraction}
+                  onCopyImage={handleCopyImage}
+                  onDownloadImage={handleDownloadImage}
+                  onPreviewImage={setPreviewImage}
                 />
               ))}
             </div>

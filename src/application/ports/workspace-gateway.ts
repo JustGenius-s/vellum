@@ -69,6 +69,8 @@ export interface WorkspaceGateway {
     onProgress: (progress: CompileProgress) => void,
   ): Promise<CompileSvgResult>;
   openExternalUrl(url: string): Promise<void>;
+  copyPreviewImage(source: string): Promise<void>;
+  downloadPreviewImage(source: string, defaultStem: string): Promise<boolean>;
   exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
   loadSession(): Promise<SavedSession>;
   saveSession(session: SavedSession): Promise<void>;

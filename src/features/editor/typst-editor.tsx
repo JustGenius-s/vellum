@@ -15,6 +15,7 @@ import {
 import { basicSetup } from "codemirror";
 
 import { documentFormat, type CompileDiagnostic } from "@/domain/workspace";
+import { createEditorSearchPanel } from "@/features/editor/editor-search-panel";
 import { markdownLanguage } from "@/features/editor/markdown-language";
 import { typstLanguage } from "@/features/editor/typst-language";
 
@@ -102,18 +103,13 @@ const editorTheme = EditorView.theme(
       borderColor: "var(--border)",
     },
     ".cm-panel.cm-search": {
-      display: "flex",
-      alignItems: "center",
-      gap: "0.5rem",
-      padding: "0.55rem 0.75rem",
+      padding: "0",
+      backgroundColor: "var(--popover)",
+      borderBottom: "1px solid var(--border)",
+      boxShadow: "0 10px 24px color-mix(in oklch, var(--foreground) 5%, transparent)",
     },
-    ".cm-textfield, .cm-button": {
-      background: "var(--input)",
-      border: "1px solid var(--border)",
-      borderRadius: "0.45rem",
-      color: "var(--foreground)",
-      fontFamily: "var(--font-sans)",
-      minHeight: "1.9rem",
+    ".cm-panel.cm-search input, .cm-panel.cm-search button, .cm-panel.cm-search label": {
+      margin: "0",
     },
     ".cm-tooltip": {
       backgroundColor: "var(--popover)",
@@ -133,8 +129,14 @@ const editorTheme = EditorView.theme(
       color: "var(--accent-foreground)",
     },
     ".cm-searchMatch": {
-      backgroundColor: "var(--accent)",
-      outline: "1px solid var(--ring)",
+      backgroundColor: "color-mix(in oklch, var(--ring) 22%, transparent)",
+      borderBottom: "1px solid var(--ring)",
+      borderRadius: "2px",
+    },
+    ".cm-searchMatch-selected": {
+      backgroundColor: "color-mix(in oklch, var(--ring) 38%, transparent)",
+      borderBottomColor: "transparent",
+      outline: "1px solid var(--foreground)",
     },
   },
   { dark: false },
@@ -226,7 +228,7 @@ export function TypstEditor({
           EditorView.lineWrapping,
           languageRef.current.of(languageForDocument(activePath)),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          search(),
+          search({ top: true, createPanel: createEditorSearchPanel }),
           lintGutter(),
           autocompletion({ override: [wikilinkCompletions] }),
           keymap.of([...defaultKeymap, ...searchKeymap]),

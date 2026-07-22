@@ -23,6 +23,7 @@ import type {
   TemplateThumbnail,
   TreeNode,
 } from "@/domain/workspace";
+import { copyImageDataUrl, decodeImageDataUrl } from "@/infrastructure/image-data";
 
 interface TauriTreeNode {
   name: string;
@@ -162,6 +163,21 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
 
   openExternalUrl(url: string) {
     return openUrl(url);
+  }
+
+  copyPreviewImage(source: string) {
+    return copyImageDataUrl(source);
+  }
+
+  async downloadPreviewImage(source: string, defaultStem: string) {
+    const image = decodeImageDataUrl(source);
+    const target = await save({
+      defaultPath: `${defaultStem}.${image.extension}`,
+      filters: [{ name: "Image", extensions: [image.extension] }],
+    });
+    if (!target) return false;
+    await writeFile(target, image.bytes);
+    return true;
   }
 
   async exportPdf(request: CompileRequest, defaultName: string) {

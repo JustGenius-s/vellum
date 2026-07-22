@@ -37,7 +37,7 @@ Shadow Root 内统一识别交互，并把动作交回 `WorkspaceController`：
 
 - 相对链接只会解析到当前 Vault 文件树中的文档；同名目标有歧义时不猜测。
 - `http`、`https`、`mailto` 与 `tel` 链接通过 `WorkspaceGateway` 交给系统打开。
-- Typst 内嵌图片可在应用 Dialog 中放大，不修改文档状态。
+- Typst 内嵌图片通过右键菜单提供复制、保留原格式下载和 Dialog 预览，不修改文档状态。
 - 自定义 Typst 元素可使用 `vellum:open:` label 声明文档跳转，例如
   `#box[Open method] <vellum:open:method>`；包含路径时可使用
   `#label("vellum:open:reading/systems.typ")`。

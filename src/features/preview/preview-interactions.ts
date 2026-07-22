@@ -5,7 +5,6 @@ const XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
 export type PreviewInteraction =
   | { kind: "workspace-link"; target: string }
   | { kind: "external-link"; href: string }
-  | { kind: "image"; source: string }
   | { kind: "blocked-link"; href: string };
 
 interface ResolvedInteraction {
@@ -38,8 +37,6 @@ function hrefAttribute(element: Element) {
 }
 
 function findInteraction(origin: Element, root: ShadowRoot): ResolvedInteraction | null {
-  let image: ResolvedInteraction | null = null;
-
   for (let element: Element | null = origin; element && element !== root.host; element = element.parentElement) {
     if (element.localName === "a") {
       const href = hrefAttribute(element);
@@ -51,13 +48,37 @@ function findInteraction(origin: Element, root: ShadowRoot): ResolvedInteraction
     const action = label ? resolvePreviewLabel(label) : null;
     if (action) return { action, element };
 
-    if (!image && element.localName === "image") {
-      const source = hrefAttribute(element);
-      if (source) image = { action: { kind: "image", source }, element };
-    }
   }
 
-  return image;
+  return null;
+}
+
+function findImageSource(origin: Element, root: ShadowRoot) {
+  for (let element: Element | null = origin; element && element !== root.host; element = element.parentElement) {
+    if (element.localName !== "image") continue;
+    const source = hrefAttribute(element);
+    if (source?.startsWith("data:image/")) return source;
+  }
+  return null;
+}
+
+function imageSourceForEvent(event: Event, root: ShadowRoot) {
+  const origin = eventOrigin(event, root);
+  const direct = origin ? findImageSource(origin, root) : null;
+  if (direct || !(event instanceof MouseEvent)) return direct;
+
+  for (const element of root.querySelectorAll("image")) {
+    const bounds = element.getBoundingClientRect();
+    const containsPoint =
+      event.clientX >= bounds.left &&
+      event.clientX <= bounds.right &&
+      event.clientY >= bounds.top &&
+      event.clientY <= bounds.bottom;
+    if (!containsPoint) continue;
+    const source = hrefAttribute(element);
+    if (source?.startsWith("data:image/")) return source;
+  }
+  return null;
 }
 
 function eventOrigin(event: Event, root: ShadowRoot) {
@@ -72,15 +93,13 @@ function accessibleLabel(action: PreviewInteraction) {
       return `Open document: ${action.target}`;
     case "external-link":
       return `Open link: ${action.href}`;
-    case "image":
-      return "Open image preview";
     case "blocked-link":
       return `Unsupported link: ${action.href}`;
   }
 }
 
 function prepareInteractiveElements(root: ShadowRoot) {
-  root.querySelectorAll("a, [data-typst-label], image").forEach((element) => {
+  root.querySelectorAll("a, [data-typst-label]").forEach((element) => {
     const resolved = findInteraction(element, root);
     if (!resolved || resolved.element !== element) return;
 
@@ -89,16 +108,27 @@ function prepareInteractiveElements(root: ShadowRoot) {
     if (!element.hasAttribute("aria-label")) {
       element.setAttribute("aria-label", accessibleLabel(resolved.action));
     }
-    if (resolved.action.kind === "image") element.setAttribute("role", "button");
     if (element.localName !== "a" && resolved.action.kind === "workspace-link") {
       element.setAttribute("role", "link");
     }
+  });
+
+  root.querySelectorAll("image").forEach((element) => {
+    const source = hrefAttribute(element);
+    if (!source?.startsWith("data:image/")) return;
+    element.setAttribute("data-vellum-image-context", "");
+    if (!element.hasAttribute("tabindex")) element.setAttribute("tabindex", "0");
+    if (!element.hasAttribute("aria-label")) {
+      element.setAttribute("aria-label", "Document image. Open the context menu for actions.");
+    }
+    element.setAttribute("role", "img");
   });
 }
 
 export function bindPreviewInteractions(
   root: ShadowRoot,
   onInteraction: (interaction: PreviewInteraction) => void,
+  onImageTargetChange: (source: string | null) => void,
 ) {
   prepareInteractiveElements(root);
 
@@ -114,6 +144,18 @@ export function bindPreviewInteractions(
   };
 
   const handleClick = (event: Event) => activate(event);
+  const handlePointerDown = (event: Event) => {
+    if (!(event instanceof PointerEvent)) return;
+    if (event.pointerType === "mouse" && event.button !== 2) return;
+    const source = imageSourceForEvent(event, root);
+    onImageTargetChange(source);
+    if (!source && event.pointerType !== "mouse") event.stopPropagation();
+  };
+  const handleContextMenu = (event: Event) => {
+    const source = imageSourceForEvent(event, root);
+    onImageTargetChange(source);
+    if (!source) event.stopPropagation();
+  };
   const handleKeyDown = (event: Event) => {
     if (!(event instanceof KeyboardEvent)) return;
     const origin = eventOrigin(event, root);
@@ -121,14 +163,17 @@ export function bindPreviewInteractions(
     const resolved = findInteraction(origin, root);
     if (!resolved) return;
 
-    const activates = event.key === "Enter" || (event.key === " " && resolved.action.kind === "image");
-    if (activates) activate(event);
+    if (event.key === "Enter") activate(event);
   };
 
   root.addEventListener("click", handleClick);
+  root.addEventListener("pointerdown", handlePointerDown);
+  root.addEventListener("contextmenu", handleContextMenu);
   root.addEventListener("keydown", handleKeyDown);
   return () => {
     root.removeEventListener("click", handleClick);
+    root.removeEventListener("pointerdown", handlePointerDown);
+    root.removeEventListener("contextmenu", handleContextMenu);
     root.removeEventListener("keydown", handleKeyDown);
   };
 }

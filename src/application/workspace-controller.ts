@@ -668,6 +668,25 @@ export class WorkspaceController {
     }
   }
 
+  async copyPreviewImage(source: string) {
+    try {
+      await this.gateway.copyPreviewImage(source);
+      this.setStatus("Image copied");
+    } catch (error) {
+      this.setStatus(`Could not copy image: ${String(error)}`);
+    }
+  }
+
+  async downloadPreviewImage(source: string) {
+    try {
+      const defaultStem = `${this.activeStem || "vellum"}-image`;
+      const saved = await this.gateway.downloadPreviewImage(source, defaultStem);
+      if (saved) this.setStatus("Image downloaded");
+    } catch (error) {
+      this.setStatus(`Could not download image: ${String(error)}`);
+    }
+  }
+
   rejectPreviewLink(url: string) {
     this.setStatus(`Unsupported preview link: ${url}`);
   }

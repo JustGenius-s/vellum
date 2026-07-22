@@ -14,6 +14,7 @@ import type {
   SearchMatch,
   TreeNode,
 } from "@/domain/workspace";
+import { copyImageDataUrl, decodeImageDataUrl } from "@/infrastructure/image-data";
 
 const ROOT = "/Vellum Demo";
 const DEMO_CACHE_PATH = `${ROOT}/Library/Caches/typst/packages`;
@@ -449,6 +450,21 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
 
   async openExternalUrl(url: string) {
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  copyPreviewImage(source: string) {
+    return copyImageDataUrl(source);
+  }
+
+  async downloadPreviewImage(source: string, defaultStem: string) {
+    const image = decodeImageDataUrl(source);
+    const anchor = document.createElement("a");
+    anchor.href = source;
+    anchor.download = `${defaultStem}.${image.extension}`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    return true;
   }
 
   async loadSession() {
