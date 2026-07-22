@@ -7,6 +7,11 @@ describe("file type icons", () => {
     expect(resolveFileTypeIconKind("paper.typ")).toBe("typst");
     expect(resolveFileTypeIconKind("README.MD")).toBe("markdown");
     expect(resolveFileTypeIconKind("references.bib")).toBe("bibliography");
+    expect(resolveFileTypeIconKind("results.csv")).toBe("delimited");
+    expect(resolveFileTypeIconKind("events.jsonl")).toBe("json");
+    expect(resolveFileTypeIconKind("measurements.xlsx")).toBe("spreadsheet");
+    expect(resolveFileTypeIconKind("dataset.parquet")).toBe("columnar");
+    expect(resolveFileTypeIconKind("simulation.h5")).toBe("tensor");
   });
 
   it("leaves unknown files to the fallback icon", () => {

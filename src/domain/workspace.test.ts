@@ -13,6 +13,7 @@ describe("document formats", () => {
     expect(fileStem("notes/main.typ")).toBe("main");
     expect(fileStem("notes/draft.md")).toBe("draft");
     expect(fileStem("notes/references.bib")).toBe("references");
+    expect(fileStem("data/results.parquet")).toBe("results");
     expect(documentFormat("notes/draft.md")).toBe("markdown");
     expect(documentFormat("notes/main.typ")).toBe("typst");
     expect(documentFormat("notes/references.BIB")).toBe("bibliography");

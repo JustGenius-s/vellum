@@ -1,8 +1,12 @@
 import type {
   CompileRequest,
+  DataFileRequest,
+  DataPreviewRequest,
+  GenerateDataChartRequest,
   TemplateProjectRequest,
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
+import { dataFormat, type DataColumn, type DataPreview } from "@/domain/data";
 import type {
   CompileProgress,
   CompileSvgResult,
@@ -68,7 +72,31 @@ Markdown is edited as its own file, then typeset through the same paged preview.
 
 ![[method.typ]]
 `,
+  [`${ROOT}/observations.csv`]: `sample,temperature,response
+A,18.4,0.31
+B,21.7,0.46
+C,24.1,0.62
+D,27.8,0.81
+E,30.3,0.93
+`,
 };
+
+function demoDataRows(content: string) {
+  const lines = content.trim().split("\n");
+  const headers = lines.shift()?.split(",") ?? [];
+  const rows = lines.map((line) =>
+    line.split(",").map((value) => {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : value;
+    }),
+  );
+  const columns: DataColumn[] = headers.map((name, index) => ({
+    name,
+    dataType: rows.every((row) => typeof row[index] === "number") ? "number" : "string",
+    numeric: rows.every((row) => typeof row[index] === "number"),
+  }));
+  return { headers, columns, rows };
+}
 
 function escapeXml(value: string) {
   return value
@@ -292,6 +320,90 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
       }
     });
     return { links };
+  }
+
+  async inspectData(request: DataFileRequest) {
+    const content = this.files.get(request.path);
+    if (content == null) throw new Error("Data file not found");
+    const format = dataFormat(request.path);
+    if (!format) throw new Error("Unsupported demo data format");
+    const { columns, rows } = demoDataRows(content);
+    return {
+      format,
+      adapter: "Demo delimited text",
+      sourcePath: request.path,
+      sizeBytes: content.length,
+      datasets: [
+        {
+          id: "$",
+          name: "Data",
+          kind: "table" as const,
+          dataType: "records",
+          shape: [rows.length, columns.length],
+          dimensions: [],
+          columns,
+          rowCount: rows.length,
+          description: "Demo research observations",
+        },
+      ],
+      warnings: [],
+    };
+  }
+
+  async previewData(request: DataPreviewRequest): Promise<DataPreview> {
+    const content = this.files.get(request.path);
+    if (content == null) throw new Error("Data file not found");
+    const { columns, rows } = demoDataRows(content);
+    const statistics = columns.flatMap((column, index) => {
+      if (!column.numeric) return [];
+      const values = rows.map((row) => Number(row[index])).sort((left, right) => left - right);
+      const mean = values.reduce((total, value) => total + value, 0) / values.length;
+      return [
+        {
+          name: column.name,
+          count: values.length,
+          validCount: values.length,
+          missingCount: 0,
+          min: values[0] ?? null,
+          max: values.at(-1) ?? null,
+          mean,
+          median: values[Math.floor(values.length / 2)] ?? null,
+          standardDeviation: Math.sqrt(
+            values.reduce((total, value) => total + (value - mean) ** 2, 0) / values.length,
+          ),
+          q1: values[Math.floor((values.length - 1) * 0.25)] ?? null,
+          q3: values[Math.floor((values.length - 1) * 0.75)] ?? null,
+          sampled: false,
+        },
+      ];
+    });
+    return {
+      datasetId: "$",
+      kind: "table",
+      columns,
+      rows: rows.slice(request.query.offset, request.query.offset + request.query.limit),
+      rowOffset: request.query.offset,
+      totalRows: rows.length,
+      statistics,
+      tensor: null,
+      sampled: false,
+    };
+  }
+
+  async generateDataChart(request: GenerateDataChartRequest) {
+    const preview = await this.previewData(request);
+    const numeric = preview.columns.filter((column) => column.numeric);
+    const xName = request.xColumn ?? numeric[0]?.name;
+    const yName = request.yColumn ?? numeric[1]?.name;
+    if (!xName || !yName) throw new Error("Choose two numeric columns");
+    const base = request.path.replace(/\.[^.]+$/, "-chart");
+    const typstPath = `${base}.typ`;
+    const dataPath = `${base}.json`;
+    const recipePath = `${base}.toml`;
+    this.files.set(dataPath, JSON.stringify(preview.rows, null, 2));
+    this.files.set(recipePath, `dataset = "$"\nx = "${xName}"\ny = "${yName}"\n`);
+    this.files.set(typstPath, `= ${request.title ?? "Data chart"}\n\nGenerated from ${request.path}.\n`);
+    return { typstPath, dataPath, recipePath };
   }
 
   async listFontFamilies() {

@@ -1,4 +1,5 @@
 mod compiler;
+mod data;
 mod packages;
 mod session;
 mod workspace;
@@ -13,6 +14,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             compiler::compile_typst_pdf,
             compiler::compile_typst_svg,
+            data::inspect_data_file,
+            data::preview_data_file,
+            data::generate_data_chart,
             world::list_font_families,
             packages::list_packages,
             packages::install_package,

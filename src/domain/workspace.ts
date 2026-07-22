@@ -144,7 +144,10 @@ export function fileName(path: string) {
 }
 
 export function fileStem(path: string) {
-  return fileName(path).replace(/\.(?:typ|md|bib)$/i, "");
+  return fileName(path).replace(
+    /\.(?:typ|md|bib|csv|tsv|json|jsonl|ndjson|xlsx|xls|xlsb|ods|parquet|h5|hdf5|mat|nc|cdf|netcdf)$/i,
+    "",
+  );
 }
 
 export function documentFormat(path: string): DocumentFormat {

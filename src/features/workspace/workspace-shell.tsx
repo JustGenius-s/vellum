@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { isDataFile } from "@/domain/data";
 import { documentFormat, fileName, fileStem, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { PackageManagerPage } from "@/features/packages/package-manager-page";
@@ -29,8 +30,13 @@ const TypstEditor = lazy(() =>
   import("@/features/editor/typst-editor").then((module) => ({ default: module.TypstEditor })),
 );
 
+const DataInspector = lazy(() =>
+  import("@/features/data/data-inspector").then((module) => ({ default: module.DataInspector })),
+);
+
 function CompactSurfaceSwitch() {
   const { controller, state } = useWorkspace();
+  if (controller.activeIsData) return null;
 
   return (
     <div className="flex h-8 items-center rounded-lg bg-muted p-0.5 min-[1180px]:hidden">
@@ -70,7 +76,9 @@ function WorkspaceTopbar() {
   useCommandRegistration(toggleSidebarCommand);
 
   const active = controller.activeTab;
-  const canExport = Boolean(active && documentFormat(active.path) !== "bibliography");
+  const canExport = Boolean(
+    active && !isDataFile(active.path) && documentFormat(active.path) !== "bibliography",
+  );
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
@@ -187,8 +195,8 @@ function EmptyWorkspace() {
         </h1>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
           {state.vaultPath
-            ? "Your Typst, Markdown, and BibTeX files remain local and portable. Open one to edit its source."
-            : "Open a folder to create a workspace around plain Typst, Markdown, and BibTeX files."}
+            ? "Your documents and research data remain local and portable. Open one to edit or inspect it."
+            : "Open a folder to create a workspace around plain documents and research data files."}
         </p>
         {!state.vaultPath ? (
           <Button className="mt-6" size="lg" onClick={() => void controller.openVault()}>
@@ -203,7 +211,9 @@ function EmptyWorkspace() {
 function EditorPane() {
   const { controller, state } = useWorkspace();
   const active = controller.activeTab;
-  const fileNames = flattenFiles(state.tree).map((file) => fileName(file.path));
+  const fileNames = flattenFiles(state.tree)
+    .filter((file) => !isDataFile(file.path))
+    .map((file) => fileName(file.path));
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-card" aria-label="Document editor">
@@ -274,12 +284,34 @@ function WideWorkspaceSurfaces() {
 }
 
 function WorkspaceSurfaces() {
-  const { state } = useWorkspace();
+  const { controller, state } = useWorkspace();
   const isWide = useMediaQuery("(min-width: 1180px)");
+
+  if (controller.activeIsData) {
+    return (
+      <Suspense fallback={<DataLoadingSurface />}>
+        <DataInspector />
+      </Suspense>
+    );
+  }
 
   if (isWide) return <WideWorkspaceSurfaces />;
 
   return state.compactSurface === "editor" ? <EditorPane /> : <PreviewPane />;
+}
+
+function DataLoadingSurface() {
+  return (
+    <div className="grid h-full grid-cols-1 md:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="border-b p-4 md:border-r md:border-b-0">
+        <div className="h-8 animate-pulse rounded bg-muted" />
+      </div>
+      <div className="space-y-4 p-6">
+        <div className="h-6 w-48 animate-pulse rounded bg-muted" />
+        <div className="h-52 animate-pulse rounded-lg bg-muted" />
+      </div>
+    </div>
+  );
 }
 
 function WorkspaceMain() {

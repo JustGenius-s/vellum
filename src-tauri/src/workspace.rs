@@ -41,6 +41,48 @@ fn is_supported_document(path: &Path) -> bool {
     )
 }
 
+fn is_supported_data(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some(
+            "csv"
+                | "tsv"
+                | "json"
+                | "jsonl"
+                | "ndjson"
+                | "xlsx"
+                | "xls"
+                | "xlsb"
+                | "ods"
+                | "parquet"
+                | "h5"
+                | "hdf5"
+                | "mat"
+                | "nc"
+                | "cdf"
+                | "netcdf"
+        )
+    )
+}
+
+fn is_workspace_file(path: &Path) -> bool {
+    is_supported_document(path) || is_supported_data(path)
+}
+
+fn is_text_workspace_file(path: &Path) -> bool {
+    is_supported_document(path)
+        || matches!(
+            path.extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_ascii_lowercase())
+                .as_deref(),
+            Some("csv" | "tsv" | "json" | "jsonl" | "ndjson")
+        )
+}
+
 fn build_tree(path: &Path) -> Vec<TreeNode> {
     let Ok(entries) = std::fs::read_dir(path) else {
         return Vec::new();
@@ -54,7 +96,7 @@ fn build_tree(path: &Path) -> Vec<TreeNode> {
         }
         let entry_path = entry.path();
         let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-        if !is_dir && !is_supported_document(&entry_path) {
+        if !is_dir && !is_workspace_file(&entry_path) {
             continue;
         }
         nodes.push(TreeNode {
@@ -190,8 +232,8 @@ pub fn create_file(path: String, vault_path: String, is_dir: bool) -> Result<(),
     if is_dir {
         std::fs::create_dir(&resolved).map_err(|error| error.to_string())
     } else {
-        if !is_supported_document(&resolved) {
-            return Err("Only .typ, .md, and .bib files are supported".into());
+        if !is_text_workspace_file(&resolved) {
+            return Err("Only document and text data files can be created".into());
         }
         std::fs::OpenOptions::new()
             .write(true)
@@ -228,12 +270,20 @@ pub fn delete_path(path: String, vault_path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn read_file(path: String, vault_path: String) -> Result<String, String> {
-    std::fs::read_to_string(existing_path(&path, &vault_path)?).map_err(|error| error.to_string())
+    let resolved = existing_path(&path, &vault_path)?;
+    if !is_text_workspace_file(&resolved) {
+        return Err("Binary data files are inspected through the data adapter".into());
+    }
+    std::fs::read_to_string(resolved).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn write_file(path: String, content: String, vault_path: String) -> Result<(), String> {
-    std::fs::write(existing_path(&path, &vault_path)?, content).map_err(|error| error.to_string())
+    let resolved = existing_path(&path, &vault_path)?;
+    if !is_text_workspace_file(&resolved) {
+        return Err("Binary data files cannot be edited as text".into());
+    }
+    std::fs::write(resolved, content).map_err(|error| error.to_string())
 }
 
 fn file_stem(path: &Path) -> String {
@@ -274,7 +324,7 @@ pub fn index_backlinks(vault_path: String) -> Result<BacklinkIndex, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_supported_document, resolve_new_path, search_vault_sync};
+    use super::{is_supported_document, is_workspace_file, resolve_new_path, search_vault_sync};
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -305,6 +355,21 @@ mod tests {
     fn bibliography_files_are_supported_documents() {
         assert!(is_supported_document(PathBuf::from("references.bib").as_path()));
         assert!(is_supported_document(PathBuf::from("REFERENCES.BIB").as_path()));
+    }
+
+    #[test]
+    fn research_data_files_are_visible_in_the_workspace() {
+        for name in [
+            "results.csv",
+            "events.jsonl",
+            "observations.xlsx",
+            "records.parquet",
+            "simulation.hdf5",
+            "matrix.mat",
+            "field.nc",
+        ] {
+            assert!(is_workspace_file(PathBuf::from(name).as_path()), "{name}");
+        }
     }
 
     #[test]

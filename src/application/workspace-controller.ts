@@ -1,5 +1,15 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
 import {
+  emptyDataQuery,
+  isDataFile,
+  type DataCatalog,
+  type DataChartType,
+  type DataPreview,
+  type DataQuery,
+  type DatasetDescriptor,
+  type GeneratedDataChart,
+} from "@/domain/data";
+import {
   documentFormat,
   fileName,
   fileStem,
@@ -58,6 +68,12 @@ export interface WorkspaceState {
   packageError: string;
   packageCachePath: string | null;
   packageDataPath: string | null;
+  dataCatalog: DataCatalog | null;
+  dataPreview: DataPreview | null;
+  dataQuery: DataQuery;
+  dataPending: boolean;
+  dataChartPending: boolean;
+  dataError: string;
   revealLine: number | null;
   revision: number;
 }
@@ -101,6 +117,12 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   packageError: "",
   packageCachePath: null,
   packageDataPath: null,
+  dataCatalog: null,
+  dataPreview: null,
+  dataQuery: emptyDataQuery(),
+  dataPending: false,
+  dataChartPending: false,
+  dataError: "",
   revealLine: null,
   revision: 0,
 });
@@ -164,6 +186,20 @@ export class WorkspaceController {
 
   get activeTab() {
     return this.state.tabs.find((tab) => tab.path === this.state.activePath) ?? null;
+  }
+
+  get activeIsData() {
+    return Boolean(this.state.activePath && isDataFile(this.state.activePath));
+  }
+
+  get selectedDataset(): DatasetDescriptor | null {
+    return (
+      this.state.dataCatalog?.datasets.find(
+        (dataset) => dataset.id === this.state.dataQuery.datasetId,
+      ) ??
+      this.state.dataCatalog?.datasets[0] ??
+      null
+    );
   }
 
   get outline(): OutlineHeading[] {
@@ -242,6 +278,11 @@ export class WorkspaceController {
       activePath: "",
       previewPages: [],
       diagnostics: [],
+      dataCatalog: null,
+      dataPreview: null,
+      dataQuery: emptyDataQuery(),
+      dataPending: false,
+      dataError: "",
       statusText: "Indexing workspace",
     });
 
@@ -254,7 +295,7 @@ export class WorkspaceController {
         openTabs.map(async (path) => ({
           path,
           name: fileName(path),
-          content: await this.gateway.readFile(path, vaultPath),
+          content: isDataFile(path) ? "" : await this.gateway.readFile(path, vaultPath),
           dirty: false,
         })),
       );
@@ -304,7 +345,9 @@ export class WorkspaceController {
     }
 
     try {
-      const content = await this.gateway.readFile(path, this.state.vaultPath);
+      const content = isDataFile(path)
+        ? ""
+        : await this.gateway.readFile(path, this.state.vaultPath);
       const tab: DocumentTab = { path, name: fileName(path), content, dirty: false };
       this.update({
         tabs: [...this.state.tabs, tab],
@@ -352,7 +395,7 @@ export class WorkspaceController {
 
   updateSource(content: string) {
     const active = this.activeTab;
-    if (!active || active.content === content) return;
+    if (!active || isDataFile(active.path) || active.content === content) return;
     const tabs = this.state.tabs.map((tab) =>
       tab.path === active.path ? { ...tab, content, dirty: true } : tab,
     );
@@ -400,6 +443,186 @@ export class WorkspaceController {
     this.compileTimer = window.setTimeout(() => void this.compileActive(), 420);
   }
 
+  private queryForDataset(dataset: DatasetDescriptor): DataQuery {
+    const varyingDimensions =
+      dataset.kind === "tensor"
+        ? dataset.shape.length <= 2
+          ? dataset.shape.map((_, index) => index)
+          : [dataset.shape.length - 1]
+        : [];
+    return {
+      ...emptyDataQuery(),
+      datasetId: dataset.id,
+      varyingDimensions,
+      fixedDimensions:
+        dataset.kind === "tensor"
+          ? dataset.shape.flatMap((_, dimension) =>
+              varyingDimensions.includes(dimension) ? [] : [{ dimension, index: 0 }],
+            )
+          : [],
+    };
+  }
+
+  private async inspectActiveData() {
+    const tab = this.activeTab;
+    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath) return;
+    const token = ++this.compileToken;
+    this.update({
+      compilePhase: "idle",
+      compileProgress: null,
+      previewPages: [],
+      diagnostics: [],
+      problemsOpen: false,
+      dataPending: true,
+      dataError: "",
+      statusText: `Inspecting ${tab.name}`,
+    });
+    try {
+      const catalog = await this.gateway.inspectData({
+        path: tab.path,
+        vaultPath: this.state.vaultPath,
+      });
+      if (token !== this.compileToken) return;
+      const dataset = catalog.datasets[0];
+      if (!dataset) throw new Error("The data file contains no readable datasets");
+      const dataQuery = this.queryForDataset(dataset);
+      this.update({ dataCatalog: catalog, dataQuery });
+      const dataPreview = await this.gateway.previewData({
+        path: tab.path,
+        vaultPath: this.state.vaultPath,
+        query: dataQuery,
+      });
+      if (token !== this.compileToken) return;
+      this.update({
+        dataPreview,
+        dataPending: false,
+        dataError: "",
+        statusText: `${catalog.adapter} ready`,
+      });
+    } catch (error) {
+      if (token !== this.compileToken) return;
+      this.update({
+        dataCatalog: null,
+        dataPreview: null,
+        dataPending: false,
+        dataError: String(error),
+        statusText: `Data inspection failed: ${String(error)}`,
+      });
+    }
+  }
+
+  async selectDataset(datasetId: string) {
+    const dataset = this.state.dataCatalog?.datasets.find((item) => item.id === datasetId);
+    if (!dataset) return;
+    await this.loadDataPreview(this.queryForDataset(dataset));
+  }
+
+  async setDataVaryingDimension(dimension: number, varying: boolean) {
+    const dataset = this.selectedDataset;
+    if (!dataset || dataset.kind !== "tensor") return;
+    let varyingDimensions = this.state.dataQuery.varyingDimensions.filter(
+      (candidate) => candidate !== dimension,
+    );
+    if (varying) varyingDimensions = [...varyingDimensions, dimension].sort((a, b) => a - b).slice(-2);
+    if (varyingDimensions.length === 0) varyingDimensions = [dimension];
+    const fixedDimensions = dataset.shape.flatMap((size, candidate) =>
+      varyingDimensions.includes(candidate)
+        ? []
+        : [
+            {
+              dimension: candidate,
+              index: Math.min(
+                this.state.dataQuery.fixedDimensions.find(
+                  (item) => item.dimension === candidate,
+                )?.index ?? 0,
+                Math.max(0, size - 1),
+              ),
+            },
+          ],
+    );
+    await this.loadDataPreview({
+      ...this.state.dataQuery,
+      offset: 0,
+      varyingDimensions,
+      fixedDimensions,
+    });
+  }
+
+  async setDataFixedDimension(dimension: number, index: number) {
+    const dataset = this.selectedDataset;
+    if (!dataset || dataset.kind !== "tensor") return;
+    const size = dataset.shape[dimension] ?? 1;
+    const fixedDimensions = [
+      ...this.state.dataQuery.fixedDimensions.filter((item) => item.dimension !== dimension),
+      { dimension, index: Math.min(Math.max(0, index), Math.max(0, size - 1)) },
+    ].sort((left, right) => left.dimension - right.dimension);
+    await this.loadDataPreview({ ...this.state.dataQuery, fixedDimensions });
+  }
+
+  async setDataPage(offset: number) {
+    await this.loadDataPreview({ ...this.state.dataQuery, offset: Math.max(0, offset) });
+  }
+
+  async refreshDataPreview() {
+    await this.loadDataPreview(this.state.dataQuery);
+  }
+
+  private async loadDataPreview(query: DataQuery) {
+    const tab = this.activeTab;
+    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath) return;
+    const token = ++this.compileToken;
+    this.update({ dataQuery: query, dataPending: true, dataError: "", statusText: "Reading data" });
+    try {
+      const dataPreview = await this.gateway.previewData({
+        path: tab.path,
+        vaultPath: this.state.vaultPath,
+        query,
+      });
+      if (token !== this.compileToken) return;
+      this.update({ dataPreview, dataPending: false, statusText: "Data preview updated" });
+    } catch (error) {
+      if (token !== this.compileToken) return;
+      this.update({
+        dataPending: false,
+        dataError: String(error),
+        statusText: `Data preview failed: ${String(error)}`,
+      });
+    }
+  }
+
+  async generateDataChart(
+    chartType: DataChartType,
+    xColumn: string | null,
+    yColumn: string | null,
+    title: string | null,
+  ): Promise<GeneratedDataChart | null> {
+    const tab = this.activeTab;
+    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath) return null;
+    this.update({ dataChartPending: true, dataError: "", statusText: "Generating Typst chart" });
+    try {
+      const result = await this.gateway.generateDataChart({
+        path: tab.path,
+        vaultPath: this.state.vaultPath,
+        query: this.state.dataQuery,
+        chartType,
+        xColumn,
+        yColumn,
+        title,
+      });
+      this.update({ dataChartPending: false, statusText: "Typst chart generated" });
+      await this.refreshTree();
+      await this.openFile(result.typstPath);
+      return result;
+    } catch (error) {
+      this.update({
+        dataChartPending: false,
+        dataError: String(error),
+        statusText: `Chart generation failed: ${String(error)}`,
+      });
+      return null;
+    }
+  }
+
   async compileActive() {
     if (this.compileTimer) {
       window.clearTimeout(this.compileTimer);
@@ -414,6 +637,21 @@ export class WorkspaceController {
         diagnostics: [],
       });
       return;
+    }
+
+    if (isDataFile(tab.path)) {
+      await this.inspectActiveData();
+      return;
+    }
+
+    if (this.state.dataCatalog || this.state.dataPreview || this.state.dataError) {
+      this.update({
+        dataCatalog: null,
+        dataPreview: null,
+        dataQuery: emptyDataQuery(),
+        dataPending: false,
+        dataError: "",
+      });
     }
 
     if (documentFormat(tab.path) === "bibliography") {
@@ -514,6 +752,10 @@ export class WorkspaceController {
   async exportPdf() {
     const tab = this.activeTab;
     if (!tab) return;
+    if (isDataFile(tab.path)) {
+      this.setStatus("Generate or open a Typst chart before exporting PDF");
+      return;
+    }
     if (documentFormat(tab.path) === "bibliography") {
       this.setStatus("Open a Typst or Markdown document to export PDF");
       return;
@@ -542,9 +784,7 @@ export class WorkspaceController {
     const lowerName = name.toLowerCase();
     const safeName =
       isDir ||
-      lowerName.endsWith(".typ") ||
-      lowerName.endsWith(".md") ||
-      lowerName.endsWith(".bib")
+      /\.(?:typ|md|bib|csv|tsv|json|jsonl|ndjson)$/i.test(lowerName)
         ? name
         : `${name}.typ`;
     const path = joinPath(parent || this.state.vaultPath, safeName);
@@ -560,8 +800,8 @@ export class WorkspaceController {
   }
 
   async renameEntry(path: string, name: string) {
-    const pathMatch = /\.(typ|md|bib)$/i.exec(path);
-    const suffix = pathMatch && !/\.(?:typ|md|bib)$/i.test(name) ? `.${pathMatch[1]}` : "";
+    const pathMatch = /\.([^.]+)$/i.exec(path);
+    const suffix = pathMatch && !/\.[^.]+$/i.test(name) ? `.${pathMatch[1]}` : "";
     const nextPath = joinPath(parentPath(path), `${name}${suffix}`);
     try {
       await this.gateway.renameEntry(path, nextPath, this.state.vaultPath);

@@ -1,12 +1,27 @@
-import { BookOpenTextIcon, FileTextIcon } from "@phosphor-icons/react";
+import {
+  BookOpenTextIcon,
+  CubeIcon,
+  DatabaseIcon,
+  FileCodeIcon,
+  FileCsvIcon,
+  FileTextIcon,
+  FileXlsIcon,
+} from "@phosphor-icons/react";
 import { siMarkdown, siTypst, type SimpleIcon } from "simple-icons";
 import type { ComponentProps } from "react";
 
-type FileTypeIconKind = "bibliography" | "markdown" | "typst" | "generic";
+type FileTypeIconKind =
+  | "bibliography"
+  | "delimited"
+  | "json"
+  | "markdown"
+  | "spreadsheet"
+  | "columnar"
+  | "tensor"
+  | "typst"
+  | "generic";
 
-const simpleIcons: Readonly<
-  Record<Exclude<FileTypeIconKind, "bibliography" | "generic">, SimpleIcon>
-> = {
+const simpleIcons: Readonly<Record<Extract<FileTypeIconKind, "markdown" | "typst">, SimpleIcon>> = {
   markdown: siMarkdown,
   typst: siTypst,
 };
@@ -14,6 +29,13 @@ const simpleIcons: Readonly<
 function resolveFileTypeIconKind(name: string): FileTypeIconKind {
   const extension = /\.([^.]+)$/.exec(name)?.[1].toLowerCase();
   if (extension === "bib") return "bibliography";
+  if (extension === "csv" || extension === "tsv") return "delimited";
+  if (extension === "json" || extension === "jsonl" || extension === "ndjson") return "json";
+  if (["xlsx", "xls", "xlsb", "ods"].includes(extension ?? "")) return "spreadsheet";
+  if (extension === "parquet") return "columnar";
+  if (["h5", "hdf5", "mat", "nc", "cdf", "netcdf"].includes(extension ?? "")) {
+    return "tensor";
+  }
   if (extension === "md" || extension === "markdown") return "markdown";
   if (extension === "typ" || extension === "typst") return "typst";
   return "generic";
@@ -41,6 +63,31 @@ function FileTypeIcon({
     );
   }
 
+  const DataIcon =
+    kind === "delimited"
+      ? FileCsvIcon
+      : kind === "json"
+        ? FileCodeIcon
+        : kind === "spreadsheet"
+          ? FileXlsIcon
+          : kind === "columnar"
+            ? DatabaseIcon
+            : kind === "tensor"
+              ? CubeIcon
+              : null;
+
+  if (DataIcon) {
+    return (
+      <DataIcon
+        aria-hidden="true"
+        data-slot="file-type-icon"
+        focusable="false"
+        weight={fallbackWeight}
+        {...props}
+      />
+    );
+  }
+
   if (kind === "generic") {
     return (
       <FileTextIcon
@@ -53,7 +100,7 @@ function FileTypeIcon({
     );
   }
 
-  const icon = simpleIcons[kind];
+  const icon = kind === "markdown" ? simpleIcons.markdown : simpleIcons.typst;
 
   return (
     <svg

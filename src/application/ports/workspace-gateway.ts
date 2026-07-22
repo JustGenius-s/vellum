@@ -14,6 +14,13 @@ import type {
   TemplateThumbnail,
   TreeNode,
 } from "@/domain/workspace";
+import type {
+  DataCatalog,
+  DataChartType,
+  DataPreview,
+  DataQuery,
+  GeneratedDataChart,
+} from "@/domain/data";
 
 export interface CompileRequest {
   source: string;
@@ -32,6 +39,22 @@ export interface TemplateProjectRequest extends PackageDirectories {
   projectName: string;
 }
 
+export interface DataFileRequest {
+  path: string;
+  vaultPath: string;
+}
+
+export interface DataPreviewRequest extends DataFileRequest {
+  query: DataQuery;
+}
+
+export interface GenerateDataChartRequest extends DataPreviewRequest {
+  chartType: DataChartType;
+  xColumn: string | null;
+  yColumn: string | null;
+  title: string | null;
+}
+
 export interface WorkspaceGateway {
   readonly mode: RuntimeMode;
   chooseVault(): Promise<string | null>;
@@ -43,6 +66,9 @@ export interface WorkspaceGateway {
   deleteEntry(path: string, vaultPath: string): Promise<void>;
   search(vaultPath: string, query: string): Promise<SearchMatch[]>;
   indexBacklinks(vaultPath: string): Promise<BacklinkIndex>;
+  inspectData(request: DataFileRequest): Promise<DataCatalog>;
+  previewData(request: DataPreviewRequest): Promise<DataPreview>;
+  generateDataChart(request: GenerateDataChartRequest): Promise<GeneratedDataChart>;
   listFontFamilies(): Promise<FontCatalog>;
   choosePackageDirectory(location: PackageLocation): Promise<string | null>;
   listPackages(directories: PackageDirectories): Promise<PackageCatalog>;

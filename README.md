@@ -11,6 +11,13 @@
 - CodeMirror 6
 - Tauri 2 + Rust
 - Typst 0.15，输出 SVG 实时预览与 PDF
+- 统一数据适配器：CSV、TSV、JSON、JSONL、XLSX、Parquet、HDF5、MAT 与 NetCDF
+
+## 数据工作流
+
+数据文件保留在原始 Vault 中。表格型数据提供分页预览与列统计；HDF5、MAT、NetCDF
+通过变量目录、统计和一至二维切片检查。生成图表时，Vellum 会在源文件旁写入普通 JSON
+投影、TOML 配方和可编辑的 Typst 图表源文件，并使用 CeTZ/cetz-plot 渲染。
 
 ## 命令
 

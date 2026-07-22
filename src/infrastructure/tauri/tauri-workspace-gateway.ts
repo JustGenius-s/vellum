@@ -5,9 +5,13 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   CompileRequest,
+  DataFileRequest,
+  DataPreviewRequest,
+  GenerateDataChartRequest,
   TemplateProjectRequest,
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
+import type { DataCatalog, DataPreview, GeneratedDataChart } from "@/domain/data";
 import type {
   BacklinkIndex,
   CompileProgress,
@@ -80,6 +84,18 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
 
   indexBacklinks(vaultPath: string) {
     return invoke<BacklinkIndex>("index_backlinks", { vaultPath });
+  }
+
+  inspectData(request: DataFileRequest) {
+    return invoke<DataCatalog>("inspect_data_file", { request });
+  }
+
+  previewData(request: DataPreviewRequest) {
+    return invoke<DataPreview>("preview_data_file", { request });
+  }
+
+  generateDataChart(request: GenerateDataChartRequest) {
+    return invoke<GeneratedDataChart>("generate_data_chart", { request });
   }
 
   listFontFamilies() {

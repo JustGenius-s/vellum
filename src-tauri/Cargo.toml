@@ -18,7 +18,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+calamine = "0.36"
+csv = "1.4"
 ecow = "0.2"
+hdf5-reader = { version = "0.8", default-features = false, features = ["lz4"] }
+matfile = "0.5"
+netcdf-reader = { version = "0.8", default-features = false, features = ["netcdf4"] }
+parquet = { version = "59.1", default-features = false, features = ["brotli", "flate2-zlib-rs", "lz4", "snap", "zstd"] }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -30,6 +30,16 @@ src-tauri/src/
 4. Rust 文件路径在 canonicalize 后必须仍位于 Vault 内。
 5. 浏览器演示和桌面运行共用同一套 UI 与 application 层。
 
+## 数据适配器
+
+数据功能沿用应用端口边界：React 只通过 `WorkspaceGateway` 请求 catalog、preview 和 chart
+generation，Tauri 端由格式注册表分派解析器。表格格式统一输出列与分页记录；多维格式统一输出
+dataset、shape、dimension、统计与最多二维的切片投影。图表层只依赖投影和 `DataQuery`，不感知
+CSV、Parquet、HDF5 等源格式。
+
+转换产物使用 JSON、TOML 和 Typst，不依赖私有数据库。MAT v7.3 复用 HDF5 适配器；NetCDF-4
+与 HDF5 使用纯 Rust 解码器，避免桌面安装包依赖系统 HDF5/NetCDF 动态库。
+
 ## 预览交互
 
 预览仍是只读的编译产物，不承担 WYSIWYG 编辑。`preview-interactions.ts` 在每个 SVG 的

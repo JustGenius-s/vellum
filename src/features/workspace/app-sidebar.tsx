@@ -53,6 +53,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SidebarView } from "@/application/workspace-controller";
+import { isDataFile } from "@/domain/data";
 import { documentFormat, fileName, fileStem, type TreeNode } from "@/domain/workspace";
 
 type EntryDialogState =
@@ -175,7 +176,7 @@ function TreeRow({
           {node.isDir ? (
             <>
               <ContextMenuItem onSelect={() => onCreate(node.path, "file")}>
-                New document
+                New file
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => onCreate(node.path, "folder")}>
                 New folder
@@ -238,7 +239,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
       <EmptySidebar
         icon={FolderOpenIcon}
         title="No vault open"
-        description="Choose a folder of Typst, Markdown, and BibTeX files. Vellum never moves it into a proprietary database."
+        description="Choose a folder of documents and research data. Vellum keeps every source local and portable."
         action={
           <Button size="sm" onClick={() => void controller.openVault()}>
             <FolderOpenIcon data-icon="inline-start" /> Open vault
@@ -256,7 +257,7 @@ function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
             <EmptySidebar
               icon={FilePlusIcon}
               title="The vault is empty"
-              description="Create the first Typst or Markdown document and start with a durable local file."
+              description="Create the first document or text data file and keep the workspace in durable local formats."
               action={
                 <Button
                   size="sm"
@@ -385,6 +386,16 @@ function OutlinePanel() {
         icon={ListBulletsIcon}
         title="No document selected"
         description="Open a Typst file to inspect its headings and linked mentions."
+      />
+    );
+  }
+
+  if (isDataFile(state.activePath)) {
+    return (
+      <EmptySidebar
+        icon={ListBulletsIcon}
+        title="Data file"
+        description="Use the data inspector to browse datasets, statistics, and dimension slices."
       />
     );
   }
@@ -575,7 +586,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
       ? "Rename entry"
       : state?.kind === "folder"
         ? "New folder"
-        : "New document";
+        : "New file";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -602,7 +613,7 @@ function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): v
             <DialogDescription>
               {state?.kind === "folder"
                 ? "Folders organize the local vault without changing file formats."
-                : "Documents are stored as plain .typ, .md, or .bib files."}
+                : "Create .typ, .md, .bib, .csv, .tsv, .json, or .jsonl files. Binary datasets can be added through the filesystem."}
             </DialogDescription>
           </DialogHeader>
           <label className="grid gap-2 text-xs font-medium">
