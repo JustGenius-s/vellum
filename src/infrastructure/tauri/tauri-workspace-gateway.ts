@@ -13,6 +13,7 @@ import type {
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
 import type { DataCatalog, DataPreview, PreparedDataFigure } from "@/domain/data";
+import type { AiTaskStore } from "@/domain/ai-task";
 import type {
   BacklinkIndex,
   CompileProgress,
@@ -224,5 +225,13 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
 
   saveSession(session: SavedSession) {
     return invoke<void>("save_state", { state: session });
+  }
+
+  loadAiTasks() {
+    return invoke<AiTaskStore>("load_ai_tasks");
+  }
+
+  saveAiTasks(store: AiTaskStore) {
+    return invoke<void>("save_ai_tasks", { store });
   }
 }

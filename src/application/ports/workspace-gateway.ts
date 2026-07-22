@@ -20,6 +20,7 @@ import type {
   DataQuery,
   PreparedDataFigure,
 } from "@/domain/data";
+import type { AiTaskRepository } from "@/application/ports/ai-task-repository";
 
 export interface CompileRequest {
   source: string;
@@ -54,7 +55,7 @@ export interface PrepareDataFigureRequest extends DataPreviewRequest {
   typstSource: string;
 }
 
-export interface WorkspaceGateway {
+export interface WorkspaceGateway extends AiTaskRepository {
   readonly mode: RuntimeMode;
   aiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   chooseVault(): Promise<string | null>;

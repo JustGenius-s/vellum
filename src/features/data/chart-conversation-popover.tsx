@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactElement } from "react";
 import {
-  BrainIcon,
   ChartLineIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -11,6 +10,10 @@ import {
 import type { SourceDocumentUIPart } from "ai";
 
 import { useWorkspace } from "@/app/workspace-context";
+import type {
+  AiMessageContentPart,
+  AiToolActivity,
+} from "@/application/ai/typst-chart-generator";
 import {
   Attachment,
   AttachmentInfo,
@@ -83,7 +86,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import { fileName, flattenFiles, relativePath } from "@/domain/workspace";
 
 const stageLabel = {
@@ -116,6 +118,81 @@ function contextAttachment(path: string, vaultPath: string): AttachmentData {
   return { ...source, id: path };
 }
 
+function ToolActivityBlock({ activity }: { activity: AiToolActivity }) {
+  return (
+    <Tool
+      defaultOpen={activity.state === "output-error"}
+      className="mb-0 overflow-hidden rounded-lg border-border/80 bg-muted/10"
+    >
+      <ToolHeader
+        type="dynamic-tool"
+        toolName={activity.name}
+        state={activity.state}
+        title={activity.title}
+        className="min-h-10 px-3 py-2"
+      />
+      <ToolContent className="border-t px-3 py-3">
+        {activity.input !== undefined ? <ToolInput input={activity.input} /> : null}
+        <ToolOutput output={activity.output} errorText={activity.errorText} />
+      </ToolContent>
+    </Tool>
+  );
+}
+
+function ChartCodePreview({ code, repairs }: { code: string; repairs: number }) {
+  return (
+    <CodeBlock code={code} language="typst" className="rounded-lg border-border/80 shadow-none">
+      <CodeBlockHeader className="bg-muted/30">
+        <CodeBlockTitle>
+          <CodeIcon className="size-3.5" />
+          <CodeBlockFilename>
+            {repairs ? `chart.typ · ${repairs} edits` : "chart.typ"}
+          </CodeBlockFilename>
+        </CodeBlockTitle>
+        <CodeBlockActions>
+          <span className="text-[10px]">{code.length.toLocaleString()} chars</span>
+          <CodeBlockCopyButton size="icon-sm" />
+        </CodeBlockActions>
+      </CodeBlockHeader>
+    </CodeBlock>
+  );
+}
+
+function MessagePart({
+  part,
+  isStreaming,
+}: {
+  part: AiMessageContentPart;
+  isStreaming: boolean;
+}) {
+  if (part.type === "reasoning") {
+    return (
+      <Reasoning isStreaming={isStreaming} className="mb-0">
+        <ReasoningTrigger
+          className="text-xs"
+          getThinkingMessage={(streaming, duration) => (
+            <span>
+              {streaming
+                ? "Reasoning through the workspace…"
+                : duration == null
+                  ? "Model reasoning"
+                  : `Reasoned for ${duration} seconds`}
+            </span>
+          )}
+        />
+        <ReasoningContent className="mt-3 border-l-2 pl-3 text-xs leading-5">
+          {part.text}
+        </ReasoningContent>
+      </Reasoning>
+    );
+  }
+  if (part.type === "tool") {
+    return <ToolActivityBlock activity={part.activity} />;
+  }
+  if (part.type !== "text") return null;
+  return <MessageResponse className="text-sm leading-6">{part.text}</MessageResponse>;
+}
+
 export function ChartConversationPopover({
   open,
   onOpenChange,
@@ -144,17 +221,25 @@ export function ChartConversationPopover({
   );
   const configured = Boolean(state.aiBaseUrl.trim() && state.aiModel.trim());
   const chatStatus = state.dataChartPending
-    ? state.dataChartResponse || state.dataChartTools.length
+    ? state.dataChartContent.length
       ? "streaming"
       : "submitted"
     : state.dataChartStage === "failed"
       ? "error"
       : "ready";
-  const reasoningStreaming = state.dataChartPending;
   const figurePath = state.dataChartResult?.typstPath;
   const inserted = state.dataChartTools.some(
     (tool) => tool.name === "insert_figure" && tool.state === "output-available",
   );
+  const codeAnchorId = useMemo(() => {
+    if (!state.dataChartOutput) return null;
+    const preferredTool = state.dataChartRepairs ? "write_workspace_file" : "write_data_figure";
+    for (let index = state.dataChartContent.length - 1; index >= 0; index -= 1) {
+      const part = state.dataChartContent[index];
+      if (part?.type === "tool" && part.activity.name === preferredTool) return part.id;
+    }
+    return null;
+  }, [state.dataChartContent, state.dataChartOutput, state.dataChartRepairs]);
 
   useEffect(() => {
     setRequest("");
@@ -324,25 +409,7 @@ export function ChartConversationPopover({
 
                 <Message from="assistant" className="max-w-full">
                   <MessageContent className="w-full gap-5">
-                    {state.dataChartReasoning ? (
-                      <Reasoning isStreaming={reasoningStreaming} className="mb-0">
-                        <ReasoningTrigger
-                          className="text-xs"
-                          getThinkingMessage={(streaming, duration) => (
-                            <span>
-                              {streaming
-                                ? "Reasoning through the workspace…"
-                                : duration == null
-                                  ? "Model reasoning"
-                                  : `Reasoned for ${duration} seconds`}
-                            </span>
-                          )}
-                        />
-                        <ReasoningContent className="mt-3 border-l-2 pl-3 text-xs leading-5">
-                          {state.dataChartReasoning}
-                        </ReasoningContent>
-                      </Reasoning>
-                    ) : state.dataChartPending && state.dataChartTools.length === 0 ? (
+                    {state.dataChartPending && state.dataChartContent.length === 0 ? (
                       <Reasoning isStreaming className="mb-0">
                         <ReasoningTrigger
                           className="text-xs"
@@ -352,84 +419,32 @@ export function ChartConversationPopover({
                           Reasoning appears here when the selected model and provider stream it.
                         </ReasoningContent>
                       </Reasoning>
-                    ) : state.dataChartTools.length > 0 && !state.dataChartReasoning ? (
-                      <p className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
-                        <BrainIcon className="mt-0.5 size-3.5 shrink-0" />
-                        This model did not stream reasoning. Its file and compiler actions are shown below.
-                      </p>
                     ) : null}
 
-                    {state.dataChartTools.length ? (
-                      <div className="space-y-2">
-                        {state.dataChartTools.map((activity) => (
-                          <Tool
-                            key={activity.id}
-                            defaultOpen={activity.state === "output-error"}
-                            className="mb-0 overflow-hidden rounded-lg border-border/80 bg-muted/10"
-                          >
-                            <ToolHeader
-                              type="dynamic-tool"
-                              toolName={activity.name}
-                              state={activity.state}
-                              title={activity.title}
-                              className="min-h-10 px-3 py-2"
-                            />
-                            <ToolContent className="border-t px-3 py-3">
-                              {activity.input !== undefined ? (
-                                <ToolInput input={activity.input} />
-                              ) : null}
-                              <ToolOutput
-                                output={activity.output}
-                                errorText={activity.errorText}
-                              />
-                            </ToolContent>
-                          </Tool>
-                        ))}
-                      </div>
-                    ) : null}
+                    {state.dataChartContent.map((part, index) => (
+                      <Fragment key={part.id}>
+                        <MessagePart
+                          part={part}
+                          isStreaming={
+                            state.dataChartPending &&
+                            index === state.dataChartContent.length - 1 &&
+                            part.type === "reasoning"
+                          }
+                        />
+                        {part.id === codeAnchorId && state.dataChartOutput ? (
+                          <ChartCodePreview
+                            code={state.dataChartOutput}
+                            repairs={state.dataChartRepairs}
+                          />
+                        ) : null}
+                      </Fragment>
+                    ))}
 
-                    {state.dataChartOutput ? (
-                      <CodeBlock
+                    {state.dataChartOutput && !codeAnchorId ? (
+                      <ChartCodePreview
                         code={state.dataChartOutput}
-                        language="typst"
-                        className="rounded-lg border-border/80 shadow-none"
-                      >
-                        <CodeBlockHeader className="bg-muted/30">
-                          <CodeBlockTitle>
-                            <CodeIcon className="size-3.5" />
-                            <CodeBlockFilename>
-                              {state.dataChartRepairs
-                                ? `chart.typ · ${state.dataChartRepairs} edits`
-                                : "chart.typ"}
-                            </CodeBlockFilename>
-                          </CodeBlockTitle>
-                          <CodeBlockActions>
-                            <span className="text-[10px]">
-                              {state.dataChartOutput.length.toLocaleString()} chars
-                            </span>
-                            <CodeBlockCopyButton size="icon-sm" />
-                          </CodeBlockActions>
-                        </CodeBlockHeader>
-                      </CodeBlock>
-                    ) : state.dataChartPending && state.dataChartTools.length === 0 ? (
-                      <div
-                        className="space-y-3 rounded-lg border px-4 py-4"
-                        aria-label="Waiting for agent output"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="size-4 rounded-sm" />
-                          <Skeleton className="h-3 w-28" />
-                        </div>
-                        <Skeleton className="h-2.5 w-full" />
-                        <Skeleton className="h-2.5 w-4/5" />
-                        <Skeleton className="h-2.5 w-3/5" />
-                      </div>
-                    ) : null}
-
-                    {state.dataChartResponse ? (
-                      <MessageResponse className="text-sm leading-6">
-                        {state.dataChartResponse}
-                      </MessageResponse>
+                        repairs={state.dataChartRepairs}
+                      />
                     ) : null}
 
                     {state.dataChartStage === "complete" && figurePath ? (

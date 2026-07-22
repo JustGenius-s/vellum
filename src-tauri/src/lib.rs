@@ -1,3 +1,4 @@
+mod ai_task;
 mod compiler;
 mod data;
 mod packages;
@@ -36,6 +37,8 @@ pub fn run() {
             workspace::index_backlinks,
             session::load_state,
             session::save_state,
+            ai_task::load_ai_tasks,
+            ai_task::save_ai_tasks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Vellum");

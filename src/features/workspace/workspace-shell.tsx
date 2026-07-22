@@ -1,12 +1,10 @@
 import { lazy, Suspense, useMemo } from "react";
 import {
-  ChartLineIcon,
-  CheckCircleIcon,
   CircleNotchIcon,
   CommandIcon,
   DownloadSimpleIcon,
   FolderOpenIcon,
-  XCircleIcon,
+  ListChecksIcon,
   XIcon,
 } from "@phosphor-icons/react";
 
@@ -39,61 +37,54 @@ const DataInspector = lazy(() =>
   import("@/features/data/data-inspector").then((module) => ({ default: module.DataInspector })),
 );
 
-const ChartConversationPopover = lazy(() =>
-  import("@/features/data/chart-conversation-popover").then((module) => ({
-    default: module.ChartConversationPopover,
+const QuickTaskPopover = lazy(() =>
+  import("@/features/tasks/quick-task-popover").then((module) => ({
+    default: module.QuickTaskPopover,
   })),
+);
+
+const TasksPage = lazy(() =>
+  import("@/features/tasks/tasks-page").then((module) => ({ default: module.TasksPage })),
 );
 
 function WorkspaceAiTaskDock() {
   const { controller, state } = useWorkspace();
-  if (!state.dataChartTaskId || !state.dataChartSourcePath) return null;
-
-  const failed = state.dataChartStage === "failed";
-  const complete = state.dataChartStage === "complete";
-  const label = state.dataChartPending
-    ? "Generating figure"
-    : complete
-      ? "Figure ready"
-      : failed
-        ? "Figure needs attention"
-        : "Figure task";
-  const icon = state.dataChartPending ? (
+  const tasks = state.aiTasks.filter((task) => !task.archivedAt);
+  if (state.sidebarView === "tasks" || !tasks.length || !state.selectedAiTaskId) return null;
+  const activeCount = tasks.filter((task) => task.status === "running" || task.status === "queued").length;
+  const attentionCount = tasks.filter((task) => task.status === "failed" || task.status === "interrupted").length;
+  const label = activeCount
+    ? `${activeCount} active task${activeCount === 1 ? "" : "s"}`
+    : attentionCount
+      ? `${attentionCount} task${attentionCount === 1 ? "" : "s"} need attention`
+      : `${tasks.length} AI task${tasks.length === 1 ? "" : "s"}`;
+  const icon = activeCount ? (
     <CircleNotchIcon className="animate-spin" />
-  ) : complete ? (
-    <CheckCircleIcon weight="fill" />
-  ) : failed ? (
-    <XCircleIcon />
   ) : (
-    <ChartLineIcon />
+    <ListChecksIcon />
   );
   const trigger = (
     <Button
       type="button"
-      variant={failed ? "destructive" : "outline"}
+      variant="outline"
       size="sm"
       className="fixed right-3 bottom-3 z-40 h-9 max-w-[calc(100vw-1.5rem)] gap-2 rounded-full bg-background/95 px-3 shadow-md ring-1 ring-foreground/5 backdrop-blur-sm active:scale-[0.98] sm:right-4 sm:bottom-4"
       aria-label={`Open AI task: ${label}`}
     >
       {icon}
       <span className="truncate">{label}</span>
-      {state.dataChartPending ? (
-        <span className="font-mono text-[10px] text-muted-foreground">
-          {state.dataChartProgress}%
-        </span>
-      ) : null}
+      {activeCount ? <span className="font-mono text-[10px] text-muted-foreground">{activeCount}</span> : null}
     </Button>
   );
 
   return (
     <Suspense fallback={trigger}>
-      <ChartConversationPopover
-        key={state.dataChartTaskId}
+      <QuickTaskPopover
         open={state.dataChartOpen}
         onOpenChange={(open) => controller.setDataChartOpen(open)}
       >
         {trigger}
-      </ChartConversationPopover>
+      </QuickTaskPopover>
     </Suspense>
   );
 }
@@ -381,6 +372,16 @@ function DataLoadingSurface() {
 
 function WorkspaceMain() {
   const { state } = useWorkspace();
+
+  if (state.sidebarView === "tasks") {
+    return (
+      <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
+        <Suspense fallback={<div className="h-full animate-pulse bg-muted/20" />}>
+          <TasksPage />
+        </Suspense>
+      </SidebarInset>
+    );
+  }
 
   if (state.sidebarView === "packages") {
     return (

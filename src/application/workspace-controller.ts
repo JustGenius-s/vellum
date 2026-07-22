@@ -1,5 +1,11 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import {
+  AiTaskManager,
+  type AiTaskExecutionContext,
+} from "@/application/ai/ai-task-manager";
+import { WorkspaceMutationCoordinator } from "@/application/ai/workspace-mutation-coordinator";
 import type {
+  AiMessageContentPart,
   AiToolActivity,
   WorkspaceChartToolHandlers,
 } from "@/application/ai/typst-chart-generator";
@@ -12,6 +18,11 @@ import {
   type DatasetDescriptor,
   type PreparedDataFigure,
 } from "@/domain/data";
+import {
+  aiTaskText,
+  type AiTask,
+  type AiTaskStage,
+} from "@/domain/ai-task";
 import {
   figureReference,
   insertFigureReference,
@@ -43,7 +54,7 @@ import {
   type TreeNode,
 } from "@/domain/workspace";
 
-export type SidebarView = "files" | "search" | "outline" | "packages" | "settings";
+export type SidebarView = "files" | "search" | "outline" | "tasks" | "packages" | "settings";
 export type CompactSurface = "editor" | "preview";
 export type CompilePhase = "idle" | "queued" | "compiling" | "ready" | "failed";
 export type WorkspacePhase = "booting" | "ready" | "error";
@@ -108,9 +119,12 @@ export interface WorkspaceState {
   dataChartResponse: string;
   dataChartReasoning: string;
   dataChartTools: AiToolActivity[];
+  dataChartContent: AiMessageContentPart[];
   dataChartRepairs: number;
   dataChartResult: PreparedDataFigure | null;
   dataError: string;
+  aiTasks: AiTask[];
+  selectedAiTaskId: string | null;
   aiBaseUrl: string;
   aiModel: string;
   aiApiKey: string;
@@ -171,9 +185,12 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   dataChartResponse: "",
   dataChartReasoning: "",
   dataChartTools: [],
+  dataChartContent: [],
   dataChartRepairs: 0,
   dataChartResult: null,
   dataError: "",
+  aiTasks: [],
+  selectedAiTaskId: null,
   aiBaseUrl: "https://api.openai.com/v1",
   aiModel: "",
   aiApiKey: "",
@@ -224,6 +241,8 @@ export class WorkspaceController {
   private readonly gateway: WorkspaceGateway;
   private state: WorkspaceState;
   private readonly listeners = new Set<() => void>();
+  private readonly aiTaskManager: AiTaskManager;
+  private readonly mutations: WorkspaceMutationCoordinator;
   private compileTimer: number | null = null;
   private sessionTimer: number | null = null;
   private compileToken = 0;
@@ -241,6 +260,53 @@ export class WorkspaceController {
   constructor(gateway: WorkspaceGateway) {
     this.gateway = gateway;
     this.state = initialState(gateway.mode);
+    this.aiTaskManager = new AiTaskManager(gateway, (context) =>
+      this.runAiTaskExecution(context),
+    );
+    this.mutations = new WorkspaceMutationCoordinator({
+      read: async (path) => {
+        const tab = this.state.tabs.find((candidate) => candidate.path === path);
+        if (tab) {
+          return {
+            content: tab.content,
+            exists: true,
+            buffered: true,
+            dirty: tab.dirty,
+          };
+        }
+        try {
+          return {
+            content: await this.gateway.readFile(path, this.state.vaultPath),
+            exists: true,
+            buffered: false,
+            dirty: false,
+          };
+        } catch {
+          return { content: "", exists: false, buffered: false, dirty: false };
+        }
+      },
+      write: async (path, content, current) => {
+        const tab = this.state.tabs.find((candidate) => candidate.path === path);
+        if (tab?.dirty || (current.buffered && current.dirty)) {
+          this.update({
+            tabs: this.state.tabs.map((candidate) =>
+              candidate.path === path ? { ...candidate, content, dirty: true } : candidate,
+            ),
+          });
+          return { saved: false };
+        }
+        await this.gateway.writeFile(path, content, this.state.vaultPath);
+        if (tab) {
+          this.update({
+            tabs: this.state.tabs.map((candidate) =>
+              candidate.path === path ? { ...candidate, content, dirty: false } : candidate,
+            ),
+          });
+        }
+        return { saved: true };
+      },
+    });
+    this.aiTaskManager.subscribe(() => this.syncAiTaskState());
   }
 
   readonly subscribe = (listener: () => void) => {
@@ -257,6 +323,37 @@ export class WorkspaceController {
 
   private setStatus(statusText: string) {
     this.update({ statusText });
+  }
+
+  private syncAiTaskState() {
+    const tasks = this.aiTaskManager.getSnapshot();
+    const task = this.aiTaskManager.selectedTask;
+    const assistantMessages = task?.messages.filter((message) => message.role === "assistant") ?? [];
+    const lastAssistant = assistantMessages.at(-1);
+    const content = lastAssistant?.parts.filter(
+      (part): part is AiMessageContentPart =>
+        part.type === "text" || part.type === "reasoning" || part.type === "tool",
+    ) ?? [];
+    const tools = content.flatMap((part) => (part.type === "tool" ? [part.activity] : []));
+    this.update({
+      aiTasks: tasks,
+      selectedAiTaskId: task?.id ?? null,
+      dataChartTaskId: task?.id ?? null,
+      dataChartSourcePath: task?.source.path ?? "",
+      dataChartPending: task?.status === "running" || task?.status === "queued",
+      dataChartStage: (task?.stage ?? "idle") as AiChartStage,
+      dataChartProgress: task?.progress ?? 0,
+      dataChartOutput: task?.generatedSource ?? "",
+      dataChartResponse: lastAssistant ? aiTaskText(lastAssistant) : "",
+      dataChartReasoning: content
+        .flatMap((part) => (part.type === "reasoning" ? [part.text] : []))
+        .join("\n"),
+      dataChartTools: tools,
+      dataChartContent: content,
+      dataChartRepairs: task?.repairs ?? 0,
+      dataChartResult: task?.result ?? null,
+      dataError: task?.error ?? "",
+    });
   }
 
   get activeTab() {
@@ -312,6 +409,7 @@ export class WorkspaceController {
       const [session, fontCatalog] = await Promise.all([
         this.gateway.loadSession(),
         this.gateway.listFontFamilies().catch(() => ({ latin: [], cjk: [] })),
+        this.aiTaskManager.initialize(),
       ]);
       const latinFont = preferredFont(session.latinFont, fontCatalog.latin, [
         "Libertinus Serif",
@@ -380,6 +478,7 @@ export class WorkspaceController {
       dataChartResponse: "",
       dataChartReasoning: "",
       dataChartTools: [],
+      dataChartContent: [],
       dataChartRepairs: 0,
       dataChartResult: null,
       dataError: "",
@@ -672,10 +771,6 @@ export class WorkspaceController {
   }
 
   openDataChartTask(sourcePath = this.state.activePath) {
-    if (this.state.dataChartPending) {
-      this.update({ dataChartOpen: true });
-      return;
-    }
     if (
       sourcePath !== this.state.activePath ||
       !isDataFile(sourcePath) ||
@@ -685,34 +780,350 @@ export class WorkspaceController {
       return;
     }
 
-    this.dataChartSourceContext = {
+    const task = this.aiTaskManager.create({
+      kind: "data-figure",
+      vaultPath: this.state.vaultPath,
       path: sourcePath,
-      catalog: this.state.dataCatalog,
-      preview: this.state.dataPreview,
       query: {
         ...this.state.dataQuery,
         varyingDimensions: [...this.state.dataQuery.varyingDimensions],
         fixedDimensions: this.state.dataQuery.fixedDimensions.map((item) => ({ ...item })),
       },
-    };
+    });
     this.update({
       dataChartOpen: true,
-      dataChartTaskId: String(Date.now()),
-      dataChartSourcePath: sourcePath,
-      dataChartStage: "idle",
-      dataChartProgress: 0,
-      dataChartOutput: "",
-      dataChartResponse: "",
-      dataChartReasoning: "",
-      dataChartTools: [],
-      dataChartRepairs: 0,
-      dataChartResult: null,
+      dataChartTaskId: task.id,
       dataError: "",
     });
   }
 
   setDataChartOpen(open: boolean) {
     this.update({ dataChartOpen: open });
+  }
+
+  selectAiTask(taskId: string, openPage = false) {
+    this.aiTaskManager.select(taskId);
+    this.update({ dataChartOpen: !openPage, sidebarView: openPage ? "tasks" : this.state.sidebarView });
+  }
+
+  submitAiTask(taskId: string, request: string, contextPaths: string[]) {
+    this.aiTaskManager.submit(taskId, request, contextPaths);
+  }
+
+  cancelAiTask(taskId: string) {
+    this.aiTaskManager.cancel(taskId);
+  }
+
+  retryAiTask(taskId: string) {
+    this.aiTaskManager.retry(taskId);
+  }
+
+  archiveAiTask(taskId: string, archived = true) {
+    this.aiTaskManager.archive(taskId, archived);
+  }
+
+  private patchAiTask(taskId: string, patch: Partial<AiTask>) {
+    this.aiTaskManager.updateTask(taskId, (task) => ({ ...task, ...patch }));
+  }
+
+  private async runAiTaskExecution({
+    taskId,
+    input,
+    assistantMessageId,
+    signal,
+  }: AiTaskExecutionContext) {
+    const task = this.aiTaskManager.getTask(taskId);
+    if (!task) throw new Error("AI task not found");
+    if (!this.state.vaultPath || task.source.vaultPath !== this.state.vaultPath) {
+      throw new Error("Open the task's original workspace before resuming it");
+    }
+    if (!this.state.aiBaseUrl.trim() || !this.state.aiModel.trim()) {
+      throw new Error("Configure an OpenAI-compatible model in Settings before running this task");
+    }
+
+    const vaultPath = task.source.vaultPath;
+    const sourcePath = task.source.path;
+    const activeDataPath = relativePath(sourcePath, vaultPath);
+    const normalizeForComparison = (path: string) => {
+      const normalized = path.replaceAll("\\", "/");
+      return vaultPath.includes("\\") ? normalized.toLowerCase() : normalized;
+    };
+    const resolveExistingToolPath = (requestedPath: string) => {
+      const resolved = resolveWorkspacePath(requestedPath, vaultPath);
+      const comparable = normalizeForComparison(resolved);
+      const file = flattenFiles(this.state.tree).find(
+        (candidate) => normalizeForComparison(candidate.path) === comparable,
+      );
+      if (!file) throw new Error(`Workspace file not found: ${requestedPath}`);
+      return file.path;
+    };
+    const readTextFile = async (path: string) => {
+      if (isBinaryDataFile(path)) throw new Error("Use read_data_projection for binary data files");
+      if (!isWorkspaceTextFile(path)) {
+        throw new Error("Only UTF-8 text project files can be read with this tool");
+      }
+      return this.mutations.read(path);
+    };
+    const addFileChange = (
+      path: string,
+      operation: "created" | "updated" | "inserted",
+      saved: boolean,
+    ) => {
+      this.aiTaskManager.updateTask(taskId, (current) => ({
+        ...current,
+        fileChanges: [
+          ...current.fileChanges,
+          {
+            id: `change-${crypto.randomUUID()}`,
+            path,
+            operation,
+            saved,
+            createdAt: Date.now(),
+          },
+        ],
+      }));
+    };
+
+    const sourceCatalog = await this.gateway.inspectData({ path: sourcePath, vaultPath });
+    let projectionQuery = structuredClone(task.source.query);
+    let preparedFigure = task.result;
+    let figureInserted = false;
+    const ai = await import("@/application/ai/typst-chart-generator");
+    const updateStage = (stage: AiTaskStage, progress: number) =>
+      this.patchAiTask(taskId, { stage, progress });
+    const handlers: WorkspaceChartToolHandlers = {
+      listWorkspaceFiles: async ({ query }) => {
+        signal.throwIfAborted();
+        const normalizedQuery = query?.trim().toLowerCase() ?? "";
+        const files = flattenFiles(this.state.tree)
+          .map((file) => relativePath(file.path, vaultPath))
+          .filter((path) => !normalizedQuery || path.toLowerCase().includes(normalizedQuery))
+          .slice(0, 400);
+        updateStage("analyzing", 10);
+        return { files, truncated: files.length === 400 };
+      },
+      readWorkspaceFile: async ({ path }) => {
+        signal.throwIfAborted();
+        const resolved = resolveExistingToolPath(path);
+        const snapshot = await readTextFile(resolved);
+        if (snapshot.content.length > 160_000) {
+          throw new Error("The requested file is too large for chat context");
+        }
+        updateStage("analyzing", 18);
+        return {
+          path: relativePath(resolved, vaultPath),
+          content: snapshot.content,
+          revision: snapshot.revision,
+          buffered: snapshot.buffered,
+          dirty: snapshot.dirty,
+        };
+      },
+      readDataProjection: async (request) => {
+        signal.throwIfAborted();
+        const requested = request.path?.trim() || activeDataPath;
+        const path = resolveExistingToolPath(requested);
+        if (!isDataFile(path)) throw new Error("Choose a supported data file");
+        const sameAsSource = normalizeForComparison(path) === normalizeForComparison(sourcePath);
+        const catalog = sameAsSource
+          ? sourceCatalog
+          : await this.gateway.inspectData({ path, vaultPath });
+        const dataset =
+          catalog.datasets.find((candidate) => candidate.id === request.datasetId) ??
+          (sameAsSource
+            ? catalog.datasets.find((candidate) => candidate.id === projectionQuery.datasetId)
+            : null) ??
+          catalog.datasets[0];
+        if (!dataset) throw new Error("The data file contains no readable datasets");
+        const baseQuery =
+          sameAsSource && dataset.id === projectionQuery.datasetId
+            ? projectionQuery
+            : this.queryForDataset(dataset);
+        const query: DataQuery = {
+          ...baseQuery,
+          datasetId: dataset.id,
+          offset: Math.max(0, Math.floor(request.offset ?? baseQuery.offset)),
+          limit: Math.min(400, Math.max(1, Math.floor(request.limit ?? baseQuery.limit))),
+          varyingDimensions:
+            request.varyingDimensions
+              ?.map((value) => Math.max(0, Math.floor(value)))
+              .slice(0, 2) ?? baseQuery.varyingDimensions,
+          fixedDimensions:
+            request.fixedDimensions?.map(({ dimension, index }) => ({
+              dimension: Math.max(0, Math.floor(dimension)),
+              index: Math.max(0, Math.floor(index)),
+            })) ?? baseQuery.fixedDimensions,
+          exactStatistics: request.exactStatistics ?? baseQuery.exactStatistics,
+        };
+        const preview = await this.gateway.previewData({ path, vaultPath, query });
+        if (sameAsSource) projectionQuery = query;
+        updateStage("analyzing", 26);
+        return { path: relativePath(path, vaultPath), catalog, query, preview };
+      },
+      writeWorkspaceFile: async ({ path, content, expectedRevision }) => {
+        signal.throwIfAborted();
+        if (content.length > 200_000) throw new Error("The file content is too large");
+        const resolved = resolveWorkspacePath(path, vaultPath);
+        if (!isWorkspaceTextFile(resolved) || isBinaryDataFile(resolved)) {
+          throw new Error("The workspace write tool only supports UTF-8 text files");
+        }
+        const isFigureRepair =
+          preparedFigure &&
+          normalizeForComparison(resolved) === normalizeForComparison(preparedFigure.typstPath);
+        if (isFigureRepair) ai.validateTypstChartSource(content);
+        const result = await this.mutations.write(resolved, content, expectedRevision);
+        this.patchAiTask(taskId, {
+          stage: isFigureRepair ? "repairing" : "writing",
+          progress: isFigureRepair ? 72 : 48,
+          generatedSource:
+            isFigureRepair ? content : (this.aiTaskManager.getTask(taskId)?.generatedSource ?? ""),
+          repairs: isFigureRepair
+            ? (this.aiTaskManager.getTask(taskId)?.repairs ?? 0) + 1
+            : (this.aiTaskManager.getTask(taskId)?.repairs ?? 0),
+        });
+        addFileChange(resolved, "updated", result.saved);
+        await this.refreshTree();
+        return {
+          path: relativePath(resolved, vaultPath),
+          revision: result.revision,
+          characters: result.characters,
+          saved: result.saved,
+        };
+      },
+      writeDataFigure: async ({ title, typstSource }) => {
+        signal.throwIfAborted();
+        const source = ai.extractTypstSource(typstSource);
+        ai.validateTypstChartSource(source);
+        this.patchAiTask(taskId, { stage: "writing", progress: 44, generatedSource: source });
+        preparedFigure = await this.gateway.prepareDataFigure({
+          path: sourcePath,
+          vaultPath,
+          query: projectionQuery,
+          model: this.state.aiModel.trim(),
+          prompt: input.text,
+          title: title?.trim() || fileStem(sourcePath),
+          typstSource: source,
+        });
+        const figure = preparedFigure;
+        this.aiTaskManager.updateTask(taskId, (current) => ({
+          ...current,
+          result: figure,
+          artifacts: [
+            ...current.artifacts.filter((artifact) => artifact.path !== figure.typstPath),
+            {
+              id: figure.id,
+              kind: "typst-figure",
+              label: title?.trim() || fileStem(sourcePath),
+              path: figure.typstPath,
+              relatedPaths: [figure.dataPath, figure.metadataPath],
+              createdAt: Date.now(),
+            },
+          ],
+        }));
+        addFileChange(figure.typstPath, "created", true);
+        await this.refreshTree();
+        return {
+          id: figure.id,
+          typstPath: relativePath(figure.typstPath, vaultPath),
+          dataPath: relativePath(figure.dataPath, vaultPath),
+          metadataPath: relativePath(figure.metadataPath, vaultPath),
+        };
+      },
+      compileTypst: async ({ path }) => {
+        signal.throwIfAborted();
+        const resolved = resolveExistingToolPath(path);
+        if (!resolved.toLowerCase().endsWith(".typ")) {
+          throw new Error("compile_typst requires a .typ file");
+        }
+        const source = await readTextFile(resolved);
+        updateStage("compiling", 62);
+        const result = await this.gateway.compileSvg(
+          {
+            source: source.content,
+            vaultPath,
+            mainFile: resolved,
+            latinFont: this.state.latinFont,
+            cjkFont: this.state.cjkFont,
+            packageCachePath: this.state.packageCachePath,
+            packageDataPath: this.state.packageDataPath,
+          },
+          (progress) => {
+            if (!signal.aborted) updateStage("compiling", Math.min(84, 62 + Math.round(progress.value * 0.22)));
+          },
+        );
+        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+        updateStage(errors.length ? "repairing" : "compiling", errors.length ? 70 : 86);
+        return { success: errors.length === 0, diagnostics: result.diagnostics };
+      },
+      insertFigure: async ({ targetPath, placement }) => {
+        signal.throwIfAborted();
+        if (!preparedFigure) throw new Error("Create the figure bundle before inserting it");
+        const resolved = resolveExistingToolPath(targetPath);
+        if (!isFigureTarget(resolved)) {
+          throw new Error("Figures can only be inserted into Typst or Markdown documents");
+        }
+        updateStage("inserting", 92);
+        await this.mutations.withPaths([resolved], () =>
+          this.insertPreparedFigure(preparedFigure!, resolved, placement ?? "cursor", false),
+        );
+        figureInserted = true;
+        addFileChange(resolved, "inserted", false);
+        return {
+          targetPath: relativePath(resolved, vaultPath),
+          placement: placement ?? "cursor",
+          saved: false,
+        };
+      },
+    };
+
+    const priorMessages = task.messages
+      .filter(
+        (message) =>
+          message.id !== input.userMessageId &&
+          message.id !== assistantMessageId &&
+          message.role !== "system",
+      )
+      .map((message) => ({
+        role: message.role as "user" | "assistant",
+        text: aiTaskText(message),
+      }))
+      .filter((message) => message.text);
+    const result = await ai.runWorkspaceChartAgent({
+      config: {
+        baseUrl: this.state.aiBaseUrl,
+        model: this.state.aiModel,
+        apiKey: this.state.aiApiKey,
+      },
+      context: {
+        activeDataPath,
+        contextPaths: input.contextPaths.map((path) => relativePath(path, vaultPath)),
+        request: input.text,
+        priorMessages,
+      },
+      handlers,
+      abortSignal: signal,
+      fetch: (request, init) => this.gateway.aiFetch(request, init),
+      onContentUpdate: (content) =>
+        this.aiTaskManager.updateAssistant(taskId, assistantMessageId, content),
+    });
+    signal.throwIfAborted();
+    const finalFigure = preparedFigure ?? this.aiTaskManager.getTask(taskId)?.result;
+    if (!finalFigure) throw new Error("The AI finished without creating a figure bundle");
+    const finalContent: AiMessageContentPart[] = [
+      ...result.content,
+      {
+        id: `artifact-${finalFigure.id}`,
+        type: "artifact",
+        artifactId: finalFigure.id,
+      },
+    ];
+    this.aiTaskManager.updateAssistant(taskId, assistantMessageId, finalContent);
+    this.patchAiTask(taskId, {
+      result: finalFigure,
+      stage: "complete",
+      progress: 100,
+      error: "",
+    });
+    this.setStatus(figureInserted ? "Chart generated and inserted" : "Typst chart generated");
   }
 
   private async loadDataPreview(query: DataQuery) {
@@ -739,6 +1150,11 @@ export class WorkspaceController {
   }
 
   async generateDataChart(options: GenerateAiChartOptions): Promise<PreparedDataFigure | null> {
+    const selectedTask = this.aiTaskManager.selectedTask;
+    if (selectedTask) {
+      this.aiTaskManager.submit(selectedTask.id, options.request, options.contextPaths);
+      return null;
+    }
     const sourceContext = this.dataChartSourceContext;
     const sourcePath = sourceContext?.path ?? "";
     const catalog = sourceContext?.catalog ?? null;
@@ -774,8 +1190,10 @@ export class WorkspaceController {
     let figureInserted = false;
     let assistantFrame: number | null = null;
     let reasoningFrame: number | null = null;
+    let contentFrame: number | null = null;
     let pendingAssistant = "";
     let pendingReasoning = "";
+    let pendingContent: AiMessageContentPart[] = [];
 
     const publishAssistant = (assistant: string) => {
       pendingAssistant = assistant;
@@ -794,6 +1212,16 @@ export class WorkspaceController {
         reasoningFrame = null;
         if (this.aiAbortController !== abortController) return;
         this.update({ dataChartReasoning: pendingReasoning });
+      });
+    };
+
+    const publishContent = (content: AiMessageContentPart[]) => {
+      pendingContent = content;
+      if (contentFrame != null) return;
+      contentFrame = window.requestAnimationFrame(() => {
+        contentFrame = null;
+        if (this.aiAbortController !== abortController) return;
+        this.update({ dataChartContent: pendingContent });
       });
     };
 
@@ -833,6 +1261,7 @@ export class WorkspaceController {
       dataChartResponse: "",
       dataChartReasoning: "",
       dataChartTools: [],
+      dataChartContent: [],
       dataChartRepairs: 0,
       dataChartResult: null,
       dataError: "",
@@ -1082,6 +1511,7 @@ export class WorkspaceController {
         onAssistantUpdate: publishAssistant,
         onReasoningUpdate: publishReasoning,
         onToolUpdate: (tools) => this.update({ dataChartTools: tools }),
+        onContentUpdate: publishContent,
       });
       abortController.signal.throwIfAborted();
       const finalFigure = preparedFigure as PreparedDataFigure | null;
@@ -1090,10 +1520,13 @@ export class WorkspaceController {
       }
       if (assistantFrame != null) window.cancelAnimationFrame(assistantFrame);
       if (reasoningFrame != null) window.cancelAnimationFrame(reasoningFrame);
+      if (contentFrame != null) window.cancelAnimationFrame(contentFrame);
       assistantFrame = null;
       reasoningFrame = null;
+      contentFrame = null;
       pendingAssistant = result.assistant;
       pendingReasoning = result.reasoning;
+      pendingContent = result.content;
       if (!figureInserted) await this.openFile(finalFigure.typstPath);
       this.update({
         dataChartPending: false,
@@ -1102,6 +1535,7 @@ export class WorkspaceController {
         dataChartResponse: result.assistant,
         dataChartReasoning: result.reasoning,
         dataChartTools: result.tools,
+        dataChartContent: result.content,
         dataChartResult: finalFigure,
         statusText: figureInserted ? "Chart generated and inserted" : "Typst chart generated",
       });
@@ -1123,11 +1557,17 @@ export class WorkspaceController {
     } finally {
       if (assistantFrame != null) window.cancelAnimationFrame(assistantFrame);
       if (reasoningFrame != null) window.cancelAnimationFrame(reasoningFrame);
+      if (contentFrame != null) window.cancelAnimationFrame(contentFrame);
       if (this.aiAbortController === abortController) this.aiAbortController = null;
     }
   }
 
   cancelDataChart() {
+    const selectedTask = this.aiTaskManager.selectedTask;
+    if (selectedTask) {
+      this.aiTaskManager.cancel(selectedTask.id);
+      return;
+    }
     if (!this.aiAbortController) return;
     this.setStatus("Cancelling chart generation");
     this.aiAbortController.abort();
@@ -1142,6 +1582,7 @@ export class WorkspaceController {
     figure: PreparedDataFigure,
     targetPath: string,
     placement: FigurePlacement,
+    activate = true,
   ) {
     if (!isFigureTarget(targetPath)) throw new Error("Choose a Typst or Markdown document");
     const existing = this.state.tabs.find((tab) => tab.path === targetPath);
@@ -1169,15 +1610,15 @@ export class WorkspaceController {
           candidate.path === targetPath ? nextTab : candidate,
         )
       : [...this.state.tabs, nextTab];
-    this.lastDocumentPath = targetPath;
+    if (activate) this.lastDocumentPath = targetPath;
     this.update({
       tabs,
-      activePath: targetPath,
-      compactSurface: "editor",
-      revealLine: null,
+      activePath: activate ? targetPath : this.state.activePath,
+      compactSurface: activate ? "editor" : this.state.compactSurface,
+      revealLine: activate ? null : this.state.revealLine,
     });
     this.scheduleSessionSave();
-    await this.compileActive();
+    if (activate) await this.compileActive();
   }
 
   async compileActive() {

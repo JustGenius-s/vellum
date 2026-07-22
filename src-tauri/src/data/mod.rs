@@ -429,7 +429,7 @@ fn figure_slug(value: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-fn unique_figure_directory(
+fn create_unique_figure_directory(
     vault: &Path,
     source: &Path,
     title: Option<&str>,
@@ -452,8 +452,10 @@ fn unique_figure_directory(
             format!("{base}-{suffix}")
         };
         let candidate = figures.join(&id);
-        if !candidate.exists() {
-            return Ok((id, candidate));
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok((id, candidate)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
         }
     }
     Err("Could not find a free figure bundle name".into())
@@ -483,8 +485,7 @@ fn prepare_figure_sync(
                 .unwrap_or("Data figure")
                 .to_string()
         });
-    let (id, directory_path) = unique_figure_directory(vault, path, Some(&title))?;
-    std::fs::create_dir(&directory_path).map_err(|error| error.to_string())?;
+    let (id, directory_path) = create_unique_figure_directory(vault, path, Some(&title))?;
     let data_path = directory_path.join("projection.json");
     let typst_path = directory_path.join("chart.typ");
     let metadata_path = directory_path.join("metadata.toml");

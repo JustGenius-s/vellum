@@ -10,6 +10,7 @@ import {
   FolderOpenIcon,
   GearSixIcon,
   LinkSimpleIcon,
+  ListChecksIcon,
   ListBulletsIcon,
   MagnifyingGlassIcon,
   PackageIcon,
@@ -61,6 +62,7 @@ const sidebarViews: Array<{
   { id: "files", label: "Files", icon: FolderOpenIcon },
   { id: "search", label: "Search", icon: MagnifyingGlassIcon },
   { id: "outline", label: "Structure", icon: ListBulletsIcon },
+  { id: "tasks", label: "AI tasks", icon: ListChecksIcon },
   { id: "packages", label: "Packages", icon: PackageIcon },
 ];
 
@@ -547,7 +549,7 @@ export function AppSidebar() {
       : sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
-    if (view === "packages" || view === "settings") {
+    if (view === "tasks" || view === "packages" || view === "settings") {
       if (state.sidebarView !== view) controller.setSidebarView(view);
       if (isMobile) setOpenMobile(false);
       else setOpen(false);
@@ -633,7 +635,7 @@ export function AppSidebar() {
             </Tooltip>
           </nav>
 
-          {state.sidebarView !== "packages" && state.sidebarView !== "settings" ? (
+          {state.sidebarView !== "tasks" && state.sidebarView !== "packages" && state.sidebarView !== "settings" ? (
             <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
               <header className="flex h-12 shrink-0 items-center px-3">
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">

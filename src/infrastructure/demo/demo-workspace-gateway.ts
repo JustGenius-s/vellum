@@ -7,6 +7,7 @@ import type {
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
 import { dataFormat, type DataColumn, type DataPreview } from "@/domain/data";
+import { emptyAiTaskStore, type AiTaskStore } from "@/domain/ai-task";
 import type {
   CompileProgress,
   CompileSvgResult,
@@ -244,6 +245,7 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     aiModel: null,
     aiApiKey: null,
   };
+  private aiTaskStore: AiTaskStore = emptyAiTaskStore();
 
   async chooseVault() {
     return ROOT;
@@ -617,6 +619,14 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
 
   async saveSession(session: SavedSession) {
     this.session = structuredClone(session);
+  }
+
+  async loadAiTasks() {
+    return structuredClone(this.aiTaskStore);
+  }
+
+  async saveAiTasks(store: AiTaskStore) {
+    this.aiTaskStore = structuredClone(store);
   }
 
   private packageCatalog(directories: PackageDirectories): PackageCatalog {
