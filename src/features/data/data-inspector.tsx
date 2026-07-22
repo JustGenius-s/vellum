@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ArrowClockwiseIcon,
   ChartLineIcon,
@@ -37,7 +37,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SeriesStatistics, TensorPoint } from "@/domain/data";
 import { fileName } from "@/domain/workspace";
-import { ChartConversationPopover } from "@/features/data/chart-conversation-popover";
 
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
@@ -423,7 +422,6 @@ function DimensionControls() {
 
 export function DataInspector() {
   const { controller, state } = useWorkspace();
-  const [chartOpen, setChartOpen] = useState(false);
   const catalog = state.dataCatalog;
   const dataset = controller.selectedDataset;
   const activeName = fileName(state.activePath);
@@ -476,11 +474,13 @@ export function DataInspector() {
         <Button variant="outline" size="sm" disabled={state.dataPending} onClick={() => void controller.refreshDataPreview()}>
           <ArrowClockwiseIcon /> Refresh
         </Button>
-        <ChartConversationPopover open={chartOpen} onOpenChange={setChartOpen}>
-          <Button size="sm" disabled={state.dataPending || !state.dataPreview}>
-            <ChartLineIcon /> Generate chart
-          </Button>
-        </ChartConversationPopover>
+        <Button
+          size="sm"
+          disabled={state.dataPending || !state.dataPreview}
+          onClick={() => controller.openDataChartTask(state.activePath)}
+        >
+          <ChartLineIcon /> Generate chart
+        </Button>
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[15rem_minmax(0,1fr)]">

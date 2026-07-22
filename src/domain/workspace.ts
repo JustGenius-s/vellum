@@ -168,6 +168,32 @@ export function relativePath(path: string, vaultPath: string) {
     : fileName(path);
 }
 
+export function resolveWorkspacePath(path: string, vaultPath: string) {
+  const requested = path.trim();
+  if (!requested || requested.includes("\0")) {
+    throw new Error("Enter a workspace-relative path");
+  }
+  if (/^[a-zA-Z]:[\\/]/.test(requested) || /^[\\/]{1,2}/.test(requested)) {
+    throw new Error("Workspace tools only accept relative paths");
+  }
+
+  const segments: string[] = [];
+  for (const segment of requested.replaceAll("\\", "/").split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      throw new Error("Workspace paths cannot leave the open vault");
+    }
+    if (segment.includes(":")) {
+      throw new Error("Workspace paths cannot contain drive or stream prefixes");
+    }
+    segments.push(segment);
+  }
+  if (!segments.length) throw new Error("Enter a workspace-relative path");
+
+  const separator = vaultPath.includes("\\") ? "\\" : "/";
+  return `${vaultPath.replace(/[\\/]$/, "")}${separator}${segments.join(separator)}`;
+}
+
 export function parseOutline(source: string): OutlineHeading[] {
   const headings: OutlineHeading[] = [];
   let offset = 0;

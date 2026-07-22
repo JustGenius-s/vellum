@@ -5,6 +5,7 @@ import {
   fileStem,
   parseOutline,
   resolveDocumentTarget,
+  resolveWorkspacePath,
   type TreeNode,
 } from "@/domain/workspace";
 
@@ -89,5 +90,27 @@ describe("document targets", () => {
   it("does not guess when a stem is missing or ambiguous", () => {
     expect(resolveDocumentTarget(tree, "shared", "/vault/atlas.typ", vaultPath)).toBeNull();
     expect(resolveDocumentTarget(tree, "missing.typ", "/vault/atlas.typ", vaultPath)).toBeNull();
+  });
+});
+
+describe("workspace tool paths", () => {
+  it("resolves portable relative paths inside the vault", () => {
+    expect(resolveWorkspacePath("figures/chart.typ", "/vault")).toBe(
+      "/vault/figures/chart.typ",
+    );
+    expect(resolveWorkspacePath("notes\\draft.typ", "C:\\vault")).toBe(
+      "C:\\vault\\notes\\draft.typ",
+    );
+  });
+
+  it("rejects absolute paths and traversal", () => {
+    expect(() => resolveWorkspacePath("../outside.typ", "/vault")).toThrow(/cannot leave/);
+    expect(() => resolveWorkspacePath("/etc/passwd", "/vault")).toThrow(/relative paths/);
+    expect(() => resolveWorkspacePath("C:\\outside.typ", "C:\\vault")).toThrow(
+      /relative paths/,
+    );
+    expect(() => resolveWorkspacePath("notes/draft.typ:stream", "C:\\vault")).toThrow(
+      /stream prefixes/,
+    );
   });
 });

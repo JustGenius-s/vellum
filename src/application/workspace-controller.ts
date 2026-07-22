@@ -1,5 +1,8 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
-import type { TypstChartContext } from "@/application/ai/typst-chart-generator";
+import type {
+  AiToolActivity,
+  WorkspaceChartToolHandlers,
+} from "@/application/ai/typst-chart-generator";
 import {
   emptyDataQuery,
   isDataFile,
@@ -18,9 +21,11 @@ import {
   documentFormat,
   fileName,
   fileStem,
+  flattenFiles,
   parseOutline,
   relativePath,
   resolveDocumentTarget,
+  resolveWorkspacePath,
   type BacklinkIndex,
   type CompileDiagnostic,
   type CompileProgress,
@@ -55,10 +60,8 @@ export type AiChartStage =
   | "failed";
 
 export interface GenerateAiChartOptions {
-  title: string;
   request: string;
-  targetPath: string | null;
-  placement: FigurePlacement;
+  contextPaths: string[];
 }
 
 export interface WorkspaceState {
@@ -95,10 +98,16 @@ export interface WorkspaceState {
   dataPreview: DataPreview | null;
   dataQuery: DataQuery;
   dataPending: boolean;
+  dataChartOpen: boolean;
+  dataChartTaskId: string | null;
+  dataChartSourcePath: string;
   dataChartPending: boolean;
   dataChartStage: AiChartStage;
   dataChartProgress: number;
   dataChartOutput: string;
+  dataChartResponse: string;
+  dataChartReasoning: string;
+  dataChartTools: AiToolActivity[];
   dataChartRepairs: number;
   dataChartResult: PreparedDataFigure | null;
   dataError: string;
@@ -152,10 +161,16 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   dataPreview: null,
   dataQuery: emptyDataQuery(),
   dataPending: false,
+  dataChartOpen: false,
+  dataChartTaskId: null,
+  dataChartSourcePath: "",
   dataChartPending: false,
   dataChartStage: "idle",
   dataChartProgress: 0,
   dataChartOutput: "",
+  dataChartResponse: "",
+  dataChartReasoning: "",
+  dataChartTools: [],
   dataChartRepairs: 0,
   dataChartResult: null,
   dataError: "",
@@ -192,6 +207,14 @@ function isFigureTarget(path: string) {
   return /\.(?:typ|md)$/i.test(path) && !isDataFile(path);
 }
 
+function isWorkspaceTextFile(path: string) {
+  return /\.(?:typ|md|bib|txt|toml|ya?ml|csv|tsv|jsonl?|ndjson)$/i.test(path);
+}
+
+function isBinaryDataFile(path: string) {
+  return /\.(?:xlsx|parquet|h5|hdf5|mat|nc|cdf|netcdf)$/i.test(path);
+}
+
 function preferredFont(saved: string | null | undefined, available: string[], defaults: string[]) {
   if (saved && (available.length === 0 || available.includes(saved))) return saved;
   return defaults.find((family) => available.includes(family)) ?? available[0] ?? saved ?? "";
@@ -205,6 +228,12 @@ export class WorkspaceController {
   private sessionTimer: number | null = null;
   private compileToken = 0;
   private aiAbortController: AbortController | null = null;
+  private dataChartSourceContext: {
+    path: string;
+    catalog: DataCatalog;
+    preview: DataPreview;
+    query: DataQuery;
+  } | null = null;
   private readonly cursorOffsets = new Map<string, number>();
   private lastDocumentPath = "";
   private initialized = false;
@@ -327,6 +356,8 @@ export class WorkspaceController {
   }
 
   private async loadVault(vaultPath: string, openTabs: string[], activeTabPath: string | null) {
+    this.aiAbortController?.abort();
+    this.dataChartSourceContext = null;
     this.update({
       phase: "booting",
       vaultPath,
@@ -339,6 +370,18 @@ export class WorkspaceController {
       dataPreview: null,
       dataQuery: emptyDataQuery(),
       dataPending: false,
+      dataChartOpen: false,
+      dataChartTaskId: null,
+      dataChartSourcePath: "",
+      dataChartPending: false,
+      dataChartStage: "idle",
+      dataChartProgress: 0,
+      dataChartOutput: "",
+      dataChartResponse: "",
+      dataChartReasoning: "",
+      dataChartTools: [],
+      dataChartRepairs: 0,
+      dataChartResult: null,
       dataError: "",
       statusText: "Indexing workspace",
     });
@@ -628,6 +671,50 @@ export class WorkspaceController {
     await this.loadDataPreview(this.state.dataQuery);
   }
 
+  openDataChartTask(sourcePath = this.state.activePath) {
+    if (this.state.dataChartPending) {
+      this.update({ dataChartOpen: true });
+      return;
+    }
+    if (
+      sourcePath !== this.state.activePath ||
+      !isDataFile(sourcePath) ||
+      !this.state.dataCatalog ||
+      !this.state.dataPreview
+    ) {
+      return;
+    }
+
+    this.dataChartSourceContext = {
+      path: sourcePath,
+      catalog: this.state.dataCatalog,
+      preview: this.state.dataPreview,
+      query: {
+        ...this.state.dataQuery,
+        varyingDimensions: [...this.state.dataQuery.varyingDimensions],
+        fixedDimensions: this.state.dataQuery.fixedDimensions.map((item) => ({ ...item })),
+      },
+    };
+    this.update({
+      dataChartOpen: true,
+      dataChartTaskId: String(Date.now()),
+      dataChartSourcePath: sourcePath,
+      dataChartStage: "idle",
+      dataChartProgress: 0,
+      dataChartOutput: "",
+      dataChartResponse: "",
+      dataChartReasoning: "",
+      dataChartTools: [],
+      dataChartRepairs: 0,
+      dataChartResult: null,
+      dataError: "",
+    });
+  }
+
+  setDataChartOpen(open: boolean) {
+    this.update({ dataChartOpen: open });
+  }
+
   private async loadDataPreview(query: DataQuery) {
     const tab = this.activeTab;
     if (!tab || !isDataFile(tab.path) || !this.state.vaultPath) return;
@@ -652,25 +739,29 @@ export class WorkspaceController {
   }
 
   async generateDataChart(options: GenerateAiChartOptions): Promise<PreparedDataFigure | null> {
-    const tab = this.activeTab;
-    const catalog = this.state.dataCatalog;
-    const preview = this.state.dataPreview;
-    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath || !catalog || !preview) {
+    const sourceContext = this.dataChartSourceContext;
+    const sourcePath = sourceContext?.path ?? "";
+    const catalog = sourceContext?.catalog ?? null;
+    const preview = sourceContext?.preview ?? null;
+    const sourceQuery = sourceContext?.query ?? null;
+    if (
+      !sourcePath ||
+      !isDataFile(sourcePath) ||
+      !this.state.vaultPath ||
+      !catalog ||
+      !preview ||
+      !sourceQuery
+    ) {
       return null;
     }
 
     this.aiAbortController?.abort();
     const abortController = new AbortController();
     this.aiAbortController = abortController;
-    const title = options.title.trim() || fileStem(tab.path);
-    const context: TypstChartContext = {
-      sourcePath: relativePath(tab.path, this.state.vaultPath),
-      title,
-      request: options.request,
-      catalog,
-      preview,
-      query: this.state.dataQuery,
-    };
+    const activeDataPath = relativePath(sourcePath, this.state.vaultPath);
+    const contextPaths = [...new Set(options.contextPaths)]
+      .filter((path) => path !== sourcePath)
+      .map((path) => relativePath(path, this.state.vaultPath));
     const config = {
       baseUrl: this.state.aiBaseUrl,
       model: this.state.aiModel,
@@ -678,223 +769,360 @@ export class WorkspaceController {
     };
     const aiFetch: typeof globalThis.fetch = (input, init) =>
       this.gateway.aiFetch(input, init);
-    let repairs = 0;
-    const maxRepairs = 2;
     let preparedFigure: PreparedDataFigure | null = null;
-    let outputFrame: number | null = null;
-    let pendingOutput = "";
+    let projectionQuery = sourceQuery;
+    let figureInserted = false;
+    let assistantFrame: number | null = null;
+    let reasoningFrame: number | null = null;
+    let pendingAssistant = "";
+    let pendingReasoning = "";
 
-    const publishOutput = (
-      output: string,
-      stage: "generating" | "repairing",
-      progressStart: number,
-      progressEnd: number,
-    ) => {
-      pendingOutput = output;
-      if (outputFrame != null) return;
-      outputFrame = window.requestAnimationFrame(() => {
-        outputFrame = null;
+    const publishAssistant = (assistant: string) => {
+      pendingAssistant = assistant;
+      if (assistantFrame != null) return;
+      assistantFrame = window.requestAnimationFrame(() => {
+        assistantFrame = null;
         if (this.aiAbortController !== abortController) return;
-        const progress = Math.min(
-          progressEnd,
-          progressStart +
-            Math.round(
-              (Math.min(pendingOutput.length, 12_000) / 12_000) *
-                (progressEnd - progressStart),
-            ),
-        );
-        this.update({
-          dataChartStage: stage,
-          dataChartProgress: progress,
-          dataChartOutput: pendingOutput,
-          statusText:
-            stage === "generating"
-              ? "AI is streaming the Typst source"
-              : `AI is streaming repair ${repairs}/${maxRepairs}`,
-        });
+        this.update({ dataChartResponse: pendingAssistant });
       });
     };
 
-    const flushOutput = (output: string, stage: AiChartStage, progress: number) => {
-      if (outputFrame != null) window.cancelAnimationFrame(outputFrame);
-      outputFrame = null;
-      pendingOutput = output;
-      this.update({
-        dataChartStage: stage,
-        dataChartProgress: progress,
-        dataChartOutput: output,
+    const publishReasoning = (reasoning: string) => {
+      pendingReasoning = reasoning;
+      if (reasoningFrame != null) return;
+      reasoningFrame = window.requestAnimationFrame(() => {
+        reasoningFrame = null;
+        if (this.aiAbortController !== abortController) return;
+        this.update({ dataChartReasoning: pendingReasoning });
       });
+    };
+
+    const normalizeForComparison = (path: string) => {
+      const normalized = path.replaceAll("\\", "/");
+      return this.state.vaultPath.includes("\\") ? normalized.toLowerCase() : normalized;
+    };
+
+    const resolveExistingToolPath = (requestedPath: string) => {
+      const resolved = resolveWorkspacePath(requestedPath, this.state.vaultPath);
+      const comparable = normalizeForComparison(resolved);
+      const file = flattenFiles(this.state.tree).find(
+        (candidate) => normalizeForComparison(candidate.path) === comparable,
+      );
+      if (!file) throw new Error(`Workspace file not found: ${requestedPath}`);
+      return file.path;
+    };
+
+    const readTextFile = async (path: string) => {
+      if (isBinaryDataFile(path)) {
+        throw new Error("Use read_data_projection for binary data files");
+      }
+      if (!isWorkspaceTextFile(path)) {
+        throw new Error("Only UTF-8 text project files can be read with this tool");
+      }
+      return (
+        this.state.tabs.find((candidate) => candidate.path === path)?.content ??
+        (await this.gateway.readFile(path, this.state.vaultPath))
+      );
     };
 
     this.update({
       dataChartPending: true,
       dataChartStage: "analyzing",
-      dataChartProgress: 8,
+      dataChartProgress: 5,
       dataChartOutput: "",
+      dataChartResponse: "",
+      dataChartReasoning: "",
+      dataChartTools: [],
       dataChartRepairs: 0,
       dataChartResult: null,
       dataError: "",
-      statusText: "AI is analyzing the data",
+      statusText: "AI workspace agent started",
     });
 
     try {
       const ai = await import("@/application/ai/typst-chart-generator");
-      let source = "";
-
-      const repair = async (diagnostics: CompileDiagnostic[] | string[]) => {
-        if (repairs >= maxRepairs) {
-          throw new Error(
-            diagnostics
-              .map((diagnostic) =>
-                typeof diagnostic === "string" ? diagnostic : diagnostic.message,
-              )
-              .join("\n"),
+      const handlers: WorkspaceChartToolHandlers = {
+        listWorkspaceFiles: async ({ query }) => {
+          abortController.signal.throwIfAborted();
+          const normalizedQuery = query?.trim().toLowerCase() ?? "";
+          const files = flattenFiles(this.state.tree)
+            .map((file) => relativePath(file.path, this.state.vaultPath))
+            .filter((path) => !normalizedQuery || path.toLowerCase().includes(normalizedQuery))
+            .slice(0, 400);
+          this.update({
+            dataChartStage: "analyzing",
+            dataChartProgress: 10,
+            statusText: "AI listed workspace files",
+          });
+          return { files, truncated: files.length === 400 };
+        },
+        readWorkspaceFile: async ({ path }) => {
+          abortController.signal.throwIfAborted();
+          const resolved = resolveExistingToolPath(path);
+          const content = await readTextFile(resolved);
+          if (content.length > 160_000) {
+            throw new Error("The requested file is too large for chat context");
+          }
+          this.update({
+            dataChartStage: "analyzing",
+            dataChartProgress: 18,
+            statusText: `AI read ${fileName(resolved)}`,
+          });
+          return { path: relativePath(resolved, this.state.vaultPath), content };
+        },
+        readDataProjection: async (input) => {
+          abortController.signal.throwIfAborted();
+          const requested = input.path?.trim() || activeDataPath;
+          const path = resolveExistingToolPath(requested);
+          if (!isDataFile(path)) throw new Error("Choose a supported data file");
+          const sameAsSource = normalizeForComparison(path) === normalizeForComparison(sourcePath);
+          const dataCatalog = sameAsSource
+            ? catalog
+            : await this.gateway.inspectData({ path, vaultPath: this.state.vaultPath });
+          const dataset =
+            dataCatalog.datasets.find((candidate) => candidate.id === input.datasetId) ??
+            (sameAsSource && !input.datasetId
+              ? dataCatalog.datasets.find(
+                  (candidate) => candidate.id === sourceQuery.datasetId,
+                )
+              : null) ??
+            dataCatalog.datasets[0];
+          if (!dataset) throw new Error("The data file contains no readable datasets");
+          const useActiveSlice =
+            sameAsSource &&
+            !input.datasetId &&
+            input.offset == null &&
+            input.limit == null &&
+            input.varyingDimensions == null &&
+            input.fixedDimensions == null &&
+            input.exactStatistics == null;
+          const baseQuery =
+            sameAsSource && dataset.id === sourceQuery.datasetId
+              ? sourceQuery
+              : this.queryForDataset(dataset);
+          const query: DataQuery = {
+            ...baseQuery,
+            datasetId: dataset.id,
+            offset: Math.max(0, Math.floor(input.offset ?? baseQuery.offset)),
+            limit: Math.min(400, Math.max(1, Math.floor(input.limit ?? baseQuery.limit))),
+            varyingDimensions:
+              input.varyingDimensions?.map((value) => Math.max(0, Math.floor(value))).slice(0, 2) ??
+              baseQuery.varyingDimensions,
+            fixedDimensions:
+              input.fixedDimensions?.map(({ dimension, index }) => ({
+                dimension: Math.max(0, Math.floor(dimension)),
+                index: Math.max(0, Math.floor(index)),
+              })) ?? baseQuery.fixedDimensions,
+            exactStatistics: input.exactStatistics ?? baseQuery.exactStatistics,
+          };
+          const dataPreview =
+            useActiveSlice && preview
+              ? preview
+              : await this.gateway.previewData({
+                  path,
+                  vaultPath: this.state.vaultPath,
+                  query,
+                });
+          if (sameAsSource) projectionQuery = query;
+          this.update({
+            dataChartStage: "analyzing",
+            dataChartProgress: 26,
+            statusText: `AI read the ${fileName(path)} projection`,
+          });
+          return {
+            path: relativePath(path, this.state.vaultPath),
+            catalog: dataCatalog,
+            query,
+            preview: dataPreview,
+          };
+        },
+        writeWorkspaceFile: async ({ path, content }) => {
+          abortController.signal.throwIfAborted();
+          if (content.length > 200_000) throw new Error("The file content is too large");
+          const resolved = resolveWorkspacePath(path, this.state.vaultPath);
+          if (!isWorkspaceTextFile(resolved) || isBinaryDataFile(resolved)) {
+            throw new Error("The workspace write tool only supports UTF-8 text files");
+          }
+          const isFigureRepair =
+            preparedFigure &&
+            normalizeForComparison(resolved) === normalizeForComparison(preparedFigure.typstPath);
+          if (isFigureRepair) ai.validateTypstChartSource(content);
+          await this.gateway.writeFile(resolved, content, this.state.vaultPath);
+          const existingTab = this.state.tabs.find((candidate) => candidate.path === resolved);
+          if (existingTab) {
+            this.update({
+              tabs: this.state.tabs.map((candidate) =>
+                candidate.path === resolved ? { ...candidate, content, dirty: false } : candidate,
+              ),
+            });
+          }
+          if (isFigureRepair) {
+            this.update({
+              dataChartStage: "repairing",
+              dataChartProgress: 72,
+              dataChartOutput: content,
+              dataChartRepairs: this.state.dataChartRepairs + 1,
+              statusText: "AI repaired the Typst figure",
+            });
+          } else {
+            this.update({
+              dataChartStage: "writing",
+              dataChartProgress: 48,
+              statusText: `AI wrote ${fileName(resolved)}`,
+            });
+          }
+          await this.refreshTree();
+          return {
+            path: relativePath(resolved, this.state.vaultPath),
+            characters: content.length,
+          };
+        },
+        writeDataFigure: async ({ title, typstSource }) => {
+          abortController.signal.throwIfAborted();
+          const source = ai.extractTypstSource(typstSource);
+          ai.validateTypstChartSource(source);
+          this.update({
+            dataChartStage: "writing",
+            dataChartProgress: 44,
+            dataChartOutput: source,
+            statusText: "AI is writing the portable figure bundle",
+          });
+          preparedFigure = await this.gateway.prepareDataFigure({
+            path: sourcePath,
+            vaultPath: this.state.vaultPath,
+            query: projectionQuery,
+            model: this.state.aiModel.trim(),
+            prompt: options.request.trim(),
+            title: title?.trim() || fileStem(sourcePath),
+            typstSource: source,
+          });
+          await this.refreshTree();
+          return {
+            id: preparedFigure.id,
+            typstPath: relativePath(preparedFigure.typstPath, this.state.vaultPath),
+            dataPath: relativePath(preparedFigure.dataPath, this.state.vaultPath),
+            metadataPath: relativePath(preparedFigure.metadataPath, this.state.vaultPath),
+          };
+        },
+        compileTypst: async ({ path }) => {
+          abortController.signal.throwIfAborted();
+          const resolved = resolveExistingToolPath(path);
+          if (!resolved.toLowerCase().endsWith(".typ")) {
+            throw new Error("compile_typst requires a .typ file");
+          }
+          const source = await readTextFile(resolved);
+          this.update({
+            dataChartStage: "compiling",
+            dataChartProgress: 62,
+            statusText: `Compiling ${fileName(resolved)}`,
+          });
+          const result = await this.gateway.compileSvg(
+            {
+              source,
+              vaultPath: this.state.vaultPath,
+              mainFile: resolved,
+              latinFont: this.state.latinFont,
+              cjkFont: this.state.cjkFont,
+              packageCachePath: this.state.packageCachePath,
+              packageDataPath: this.state.packageDataPath,
+            },
+            (progress) => {
+              if (this.aiAbortController !== abortController) return;
+              this.update({
+                dataChartProgress: Math.min(84, 62 + Math.round(progress.value * 0.22)),
+                statusText: progress.label,
+              });
+            },
           );
-        }
-        repairs += 1;
-        this.update({
-          dataChartStage: "repairing",
-          dataChartProgress: 56 + repairs * 6,
-          dataChartRepairs: repairs,
-          statusText: `AI is repairing the Typst source (${repairs}/${maxRepairs})`,
-        });
-        const repaired = await ai.repairTypstChartSource({
-          config,
-          context,
-          source,
-          diagnostics,
-          abortSignal: abortController.signal,
-          fetch: aiFetch,
-          onTextUpdate: (output) =>
-            publishOutput(output, "repairing", 56 + repairs * 6, 63 + repairs * 7),
-        });
-        flushOutput(repaired, "repairing", 63 + repairs * 7);
-        return repaired;
+          const errors = result.diagnostics.filter(
+            (diagnostic) => diagnostic.severity === "error",
+          );
+          this.update({
+            dataChartStage: errors.length ? "repairing" : "compiling",
+            dataChartProgress: errors.length ? 70 : 86,
+            statusText: errors.length ? "Typst diagnostics returned to the AI" : "Typst compiled",
+          });
+          return {
+            success: errors.length === 0,
+            diagnostics: result.diagnostics,
+          };
+        },
+        insertFigure: async ({ targetPath, placement }) => {
+          abortController.signal.throwIfAborted();
+          if (!preparedFigure) throw new Error("Create the figure bundle before inserting it");
+          const resolved = resolveExistingToolPath(targetPath);
+          if (!isFigureTarget(resolved)) {
+            throw new Error("Figures can only be inserted into Typst or Markdown documents");
+          }
+          this.update({
+            dataChartStage: "inserting",
+            dataChartProgress: 92,
+            statusText: `Inserting the figure into ${fileName(resolved)}`,
+          });
+          await this.insertPreparedFigure(preparedFigure, resolved, placement ?? "cursor");
+          figureInserted = true;
+          return {
+            targetPath: relativePath(resolved, this.state.vaultPath),
+            placement: placement ?? "cursor",
+            saved: false,
+          };
+        },
       };
 
-      source = await ai.generateTypstChartSource({
+      const result = await ai.runWorkspaceChartAgent({
         config,
-        context,
+        context: {
+          activeDataPath,
+          contextPaths,
+          request: options.request,
+        },
+        handlers,
         abortSignal: abortController.signal,
         fetch: aiFetch,
-        onTextUpdate: (output) => publishOutput(output, "generating", 12, 38),
+        onAssistantUpdate: publishAssistant,
+        onReasoningUpdate: publishReasoning,
+        onToolUpdate: (tools) => this.update({ dataChartTools: tools }),
       });
-      flushOutput(source, "generating", 38);
-
-      while (true) {
-        try {
-          ai.validateTypstChartSource(source);
-          break;
-        } catch (error) {
-          source = await repair([String(error)]);
-        }
-      }
-
-      this.update({
-        dataChartStage: "writing",
-        dataChartProgress: 42,
-        statusText: "Writing the portable figure bundle",
-      });
-      const figure = await this.gateway.prepareDataFigure({
-        path: tab.path,
-        vaultPath: this.state.vaultPath,
-        query: this.state.dataQuery,
-        model: this.state.aiModel.trim(),
-        prompt: options.request.trim(),
-        title,
-        typstSource: source,
-      });
-      preparedFigure = figure;
-
-      while (true) {
-        abortController.signal.throwIfAborted();
-        this.update({
-          dataChartStage: "compiling",
-          dataChartProgress: 58 + repairs * 7,
-          statusText: "Compiling the generated Typst figure",
-        });
-        const result = await this.gateway.compileSvg(
-          {
-            source,
-            vaultPath: this.state.vaultPath,
-            mainFile: figure.typstPath,
-            latinFont: this.state.latinFont,
-            cjkFont: this.state.cjkFont,
-            packageCachePath: this.state.packageCachePath,
-            packageDataPath: this.state.packageDataPath,
-          },
-          (progress) => {
-            if (this.aiAbortController !== abortController) return;
-            this.update({
-              dataChartProgress: Math.min(
-                88,
-                54 + repairs * 6 + Math.round(progress.value * 0.28),
-              ),
-              statusText: progress.label,
-            });
-          },
-        );
-        abortController.signal.throwIfAborted();
-        const errors = result.diagnostics.filter(
-          (diagnostic) => diagnostic.severity === "error",
-        );
-        if (!errors.length) break;
-        source = await repair(errors);
-        while (true) {
-          try {
-            ai.validateTypstChartSource(source);
-            break;
-          } catch (error) {
-            source = await repair([String(error)]);
-          }
-        }
-        await this.gateway.writeFile(
-          figure.typstPath,
-          source,
-          this.state.vaultPath,
-        );
-      }
-
-      await this.refreshTree();
       abortController.signal.throwIfAborted();
-      this.update({
-        dataChartStage: "inserting",
-        dataChartProgress: 92,
-        statusText: options.targetPath
-          ? "Inserting the figure into the document"
-          : "Opening the generated figure",
-      });
-      if (options.targetPath) {
-        await this.insertPreparedFigure(figure, options.targetPath, options.placement);
-      } else {
-        await this.openFile(figure.typstPath);
+      const finalFigure = preparedFigure as PreparedDataFigure | null;
+      if (!finalFigure) {
+        throw new Error("The AI finished without creating a figure bundle");
       }
+      if (assistantFrame != null) window.cancelAnimationFrame(assistantFrame);
+      if (reasoningFrame != null) window.cancelAnimationFrame(reasoningFrame);
+      assistantFrame = null;
+      reasoningFrame = null;
+      pendingAssistant = result.assistant;
+      pendingReasoning = result.reasoning;
+      if (!figureInserted) await this.openFile(finalFigure.typstPath);
       this.update({
         dataChartPending: false,
         dataChartStage: "complete",
         dataChartProgress: 100,
-        dataChartOutput: source,
-        dataChartResult: figure,
-        statusText: options.targetPath
-          ? "Chart generated and inserted"
-          : "Typst chart generated",
+        dataChartResponse: result.assistant,
+        dataChartReasoning: result.reasoning,
+        dataChartTools: result.tools,
+        dataChartResult: finalFigure,
+        statusText: figureInserted ? "Chart generated and inserted" : "Typst chart generated",
       });
-      return figure;
+      return finalFigure;
     } catch (error) {
       const cancelled = abortController.signal.aborted;
+      const draftFigure = preparedFigure as PreparedDataFigure | null;
       this.update({
         dataChartPending: false,
         dataChartStage: cancelled ? "cancelled" : "failed",
         dataError: cancelled
           ? ""
           : `${String(error)}${
-              preparedFigure ? `\n\nThe editable draft remains at ${preparedFigure.typstPath}.` : ""
+              draftFigure ? `\n\nThe editable draft remains at ${draftFigure.typstPath}.` : ""
             }`,
         statusText: cancelled ? "Chart generation cancelled" : `Chart generation failed: ${String(error)}`,
       });
       return null;
     } finally {
-      if (outputFrame != null) window.cancelAnimationFrame(outputFrame);
+      if (assistantFrame != null) window.cancelAnimationFrame(assistantFrame);
+      if (reasoningFrame != null) window.cancelAnimationFrame(reasoningFrame);
       if (this.aiAbortController === abortController) this.aiAbortController = null;
     }
   }

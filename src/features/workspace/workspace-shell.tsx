@@ -1,8 +1,12 @@
 import { lazy, Suspense, useMemo } from "react";
 import {
+  ChartLineIcon,
+  CheckCircleIcon,
+  CircleNotchIcon,
   CommandIcon,
   DownloadSimpleIcon,
   FolderOpenIcon,
+  XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
 
@@ -34,6 +38,65 @@ const TypstEditor = lazy(() =>
 const DataInspector = lazy(() =>
   import("@/features/data/data-inspector").then((module) => ({ default: module.DataInspector })),
 );
+
+const ChartConversationPopover = lazy(() =>
+  import("@/features/data/chart-conversation-popover").then((module) => ({
+    default: module.ChartConversationPopover,
+  })),
+);
+
+function WorkspaceAiTaskDock() {
+  const { controller, state } = useWorkspace();
+  if (!state.dataChartTaskId || !state.dataChartSourcePath) return null;
+
+  const failed = state.dataChartStage === "failed";
+  const complete = state.dataChartStage === "complete";
+  const label = state.dataChartPending
+    ? "Generating figure"
+    : complete
+      ? "Figure ready"
+      : failed
+        ? "Figure needs attention"
+        : "Figure task";
+  const icon = state.dataChartPending ? (
+    <CircleNotchIcon className="animate-spin" />
+  ) : complete ? (
+    <CheckCircleIcon weight="fill" />
+  ) : failed ? (
+    <XCircleIcon />
+  ) : (
+    <ChartLineIcon />
+  );
+  const trigger = (
+    <Button
+      type="button"
+      variant={failed ? "destructive" : "outline"}
+      size="sm"
+      className="fixed right-3 bottom-3 z-40 h-9 max-w-[calc(100vw-1.5rem)] gap-2 rounded-full bg-background/95 px-3 shadow-md ring-1 ring-foreground/5 backdrop-blur-sm active:scale-[0.98] sm:right-4 sm:bottom-4"
+      aria-label={`Open AI task: ${label}`}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+      {state.dataChartPending ? (
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {state.dataChartProgress}%
+        </span>
+      ) : null}
+    </Button>
+  );
+
+  return (
+    <Suspense fallback={trigger}>
+      <ChartConversationPopover
+        key={state.dataChartTaskId}
+        open={state.dataChartOpen}
+        onOpenChange={(open) => controller.setDataChartOpen(open)}
+      >
+        {trigger}
+      </ChartConversationPopover>
+    </Suspense>
+  );
+}
 
 function CompactSurfaceSwitch() {
   const { controller, state } = useWorkspace();
@@ -358,6 +421,7 @@ export function WorkspaceShell() {
     <div className="flex min-h-[100dvh] w-full overflow-hidden bg-background">
       <AppSidebar />
       <WorkspaceMain />
+      <WorkspaceAiTaskDock />
     </div>
   );
 }
