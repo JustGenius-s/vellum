@@ -2,7 +2,7 @@ import type {
   CompileRequest,
   DataFileRequest,
   DataPreviewRequest,
-  GenerateDataChartRequest,
+  PrepareDataFigureRequest,
   TemplateProjectRequest,
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
@@ -182,6 +182,10 @@ function expandDemoMarkdown(source: string, mainFile: string, files: Map<string,
 
 export class DemoWorkspaceGateway implements WorkspaceGateway {
   readonly mode = "demo" as const;
+
+  aiFetch(input: RequestInfo | URL, init?: RequestInit) {
+    return globalThis.fetch(input, init);
+  }
   private readonly files = new Map(Object.entries(initialFiles));
   private packageEntries: PackageEntry[] = [
     {
@@ -236,6 +240,9 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     cjkFont: "Songti SC",
     packageCachePath: null,
     packageDataPath: null,
+    aiBaseUrl: "https://api.openai.com/v1",
+    aiModel: null,
+    aiApiKey: null,
   };
 
   async chooseVault() {
@@ -390,20 +397,45 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     };
   }
 
-  async generateDataChart(request: GenerateDataChartRequest) {
+  async prepareDataFigure(request: PrepareDataFigureRequest) {
     const preview = await this.previewData(request);
-    const numeric = preview.columns.filter((column) => column.numeric);
-    const xName = request.xColumn ?? numeric[0]?.name;
-    const yName = request.yColumn ?? numeric[1]?.name;
-    if (!xName || !yName) throw new Error("Choose two numeric columns");
-    const base = request.path.replace(/\.[^.]+$/, "-chart");
-    const typstPath = `${base}.typ`;
-    const dataPath = `${base}.json`;
-    const recipePath = `${base}.toml`;
-    this.files.set(dataPath, JSON.stringify(preview.rows, null, 2));
-    this.files.set(recipePath, `dataset = "$"\nx = "${xName}"\ny = "${yName}"\n`);
-    this.files.set(typstPath, `= ${request.title ?? "Data chart"}\n\nGenerated from ${request.path}.\n`);
-    return { typstPath, dataPath, recipePath };
+    const stem = (request.title?.trim() || request.path.split("/").pop()?.replace(/\.[^.]+$/, "") || "data")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "data-chart";
+    let id = stem;
+    let suffix = 2;
+    while (this.files.has(`${ROOT}/figures/${id}/chart.typ`)) id = `${stem}-${suffix++}`;
+    const directoryPath = `${ROOT}/figures/${id}`;
+    const typstPath = `${directoryPath}/chart.typ`;
+    const dataPath = `${directoryPath}/projection.json`;
+    const metadataPath = `${directoryPath}/metadata.toml`;
+    this.files.set(
+      dataPath,
+      JSON.stringify(
+        {
+          version: 1,
+          source: { file: request.path.split("/").pop(), format: dataFormat(request.path), dataset: preview.datasetId },
+          kind: preview.kind,
+          columns: preview.columns,
+          rows: preview.rows,
+          rowOffset: preview.rowOffset,
+          totalRows: preview.totalRows,
+          statistics: preview.statistics,
+          tensor: preview.tensor,
+          query: request.query,
+          sampled: preview.sampled,
+        },
+        null,
+        2,
+      ),
+    );
+    this.files.set(
+      metadataPath,
+      `version = 1\nid = ${JSON.stringify(id)}\nmodel = ${JSON.stringify(request.model)}\nprompt = ${JSON.stringify(request.prompt)}\n`,
+    );
+    this.files.set(typstPath, request.typstSource);
+    return { id, directoryPath, typstPath, dataPath, metadataPath };
   }
 
   async listFontFamilies() {

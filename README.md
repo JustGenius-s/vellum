@@ -11,13 +11,17 @@
 - CodeMirror 6
 - Tauri 2 + Rust
 - Typst 0.15，输出 SVG 实时预览与 PDF
+- Vercel AI SDK + OpenAI-compatible provider
 - 统一数据适配器：CSV、TSV、JSON、JSONL、XLSX、Parquet、HDF5、MAT 与 NetCDF
 
 ## 数据工作流
 
 数据文件保留在原始 Vault 中。表格型数据提供分页预览与列统计；HDF5、MAT、NetCDF
-通过变量目录、统计和一至二维切片检查。生成图表时，Vellum 会在源文件旁写入普通 JSON
-投影、TOML 配方和可编辑的 Typst 图表源文件，并使用 CeTZ/cetz-plot 渲染。
+通过变量目录、统计和一至二维切片检查。生成图表时，AI 直接根据数据摘要与用户要求编写
+Typst；Vellum 导出通用 JSON 投影，编译并将诊断返回 AI 自动修复，最后把可编辑的 figure
+bundle 写入 `figures/<slug>/`，并可在光标处或文档末尾插入引用。
+
+OpenAI-compatible endpoint 与模型保存在会话设置中，API key 只保留于当前应用内存。
 
 ## 命令
 

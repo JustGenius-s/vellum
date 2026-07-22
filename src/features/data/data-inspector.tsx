@@ -14,14 +14,6 @@ import {
 import { useWorkspace } from "@/app/workspace-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
@@ -33,13 +25,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,8 +35,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DataChartType, SeriesStatistics, TensorPoint } from "@/domain/data";
-import { fileName, fileStem } from "@/domain/workspace";
+import type { SeriesStatistics, TensorPoint } from "@/domain/data";
+import { fileName } from "@/domain/workspace";
+import { ChartConversationPopover } from "@/features/data/chart-conversation-popover";
 
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
@@ -435,116 +421,6 @@ function DimensionControls() {
   );
 }
 
-function ChartDialog({ open, onOpenChange }: { open: boolean; onOpenChange(open: boolean): void }) {
-  const { controller, state } = useWorkspace();
-  const preview = state.dataPreview;
-  const [chartType, setChartType] = useState<DataChartType>("line");
-  const numeric = preview?.columns.filter((column) => column.numeric) ?? [];
-  const [xColumn, setXColumn] = useState("");
-  const [yColumn, setYColumn] = useState("");
-  const [title, setTitle] = useState("");
-  const tensor = preview?.kind === "tensor";
-  const effectiveX =
-    numeric.some((column) => column.name === xColumn) ? xColumn : numeric[0]?.name || "";
-  const effectiveY =
-    numeric.some((column) => column.name === yColumn)
-      ? yColumn
-      : numeric.find((column) => column.name !== effectiveX)?.name || "";
-
-  async function generate() {
-    const result = await controller.generateDataChart(
-      chartType,
-      tensor ? null : effectiveX || null,
-      tensor ? null : effectiveY || null,
-      title.trim() || null,
-    );
-    if (result) onOpenChange(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Generate Typst chart</DialogTitle>
-          <DialogDescription>
-            Vellum writes a portable JSON projection, a TOML recipe, and editable Typst source next to the data file.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-2 text-xs font-medium">
-            Chart type
-            <Select value={chartType} onValueChange={(value) => setChartType(value as DataChartType)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="line">Line</SelectItem>
-                <SelectItem value="scatter">Scatter</SelectItem>
-                <SelectItem value="bar">Bar</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="grid gap-2 text-xs font-medium sm:col-span-2">
-            Caption
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={fileStem(state.activePath)} />
-          </label>
-          {!tensor ? (
-            <>
-              <label className="grid gap-2 text-xs font-medium">
-                X column
-                <Select value={effectiveX} onValueChange={setXColumn}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose a column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {numeric.map((column) => (
-                      <SelectItem key={column.name} value={column.name}>
-                        {column.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid gap-2 text-xs font-medium">
-                Y column
-                <Select value={effectiveY} onValueChange={setYColumn}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose a column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {numeric.map((column) => (
-                      <SelectItem key={column.name} value={column.name}>
-                        {column.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-            </>
-          ) : (
-            <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
-              The current dimension recipe will be exported as a numeric projection. Fixed dimensions and sampling remain recorded in the TOML recipe.
-            </p>
-          )}
-        </div>
-        {state.dataError ? <p className="text-xs text-destructive">{state.dataError}</p> : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={state.dataChartPending || (!tensor && (!effectiveX || !effectiveY))}
-            onClick={() => void generate()}
-          >
-            <ChartLineIcon />
-            {state.dataChartPending ? "Generating" : "Generate chart"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function DataInspector() {
   const { controller, state } = useWorkspace();
   const [chartOpen, setChartOpen] = useState(false);
@@ -600,9 +476,11 @@ export function DataInspector() {
         <Button variant="outline" size="sm" disabled={state.dataPending} onClick={() => void controller.refreshDataPreview()}>
           <ArrowClockwiseIcon /> Refresh
         </Button>
-        <Button size="sm" disabled={state.dataPending || !state.dataPreview} onClick={() => setChartOpen(true)}>
-          <ChartLineIcon /> Generate chart
-        </Button>
+        <ChartConversationPopover open={chartOpen} onOpenChange={setChartOpen}>
+          <Button size="sm" disabled={state.dataPending || !state.dataPreview}>
+            <ChartLineIcon /> Generate chart
+          </Button>
+        </ChartConversationPopover>
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[15rem_minmax(0,1fr)]">
@@ -713,8 +591,6 @@ export function DataInspector() {
           </div>
         </main>
       </div>
-
-      <ChartDialog open={chartOpen} onOpenChange={setChartOpen} />
     </section>
   );
 }

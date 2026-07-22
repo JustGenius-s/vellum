@@ -128,6 +128,9 @@ export interface SavedSession {
   cjkFont: string | null;
   packageCachePath: string | null;
   packageDataPath: string | null;
+  aiBaseUrl: string | null;
+  aiModel: string | null;
+  aiApiKey: string | null;
 }
 
 export interface OutlineHeading {

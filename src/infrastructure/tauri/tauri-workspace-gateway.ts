@@ -1,17 +1,18 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { fetch } from "@tauri-apps/plugin-http";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   CompileRequest,
   DataFileRequest,
   DataPreviewRequest,
-  GenerateDataChartRequest,
+  PrepareDataFigureRequest,
   TemplateProjectRequest,
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
-import type { DataCatalog, DataPreview, GeneratedDataChart } from "@/domain/data";
+import type { DataCatalog, DataPreview, PreparedDataFigure } from "@/domain/data";
 import type {
   BacklinkIndex,
   CompileProgress,
@@ -47,6 +48,10 @@ function normalizeTree(nodes: TauriTreeNode[]): TreeNode[] {
 
 export class TauriWorkspaceGateway implements WorkspaceGateway {
   readonly mode = "desktop" as const;
+
+  aiFetch(input: RequestInfo | URL, init?: RequestInit) {
+    return fetch(input, init);
+  }
 
   async chooseVault() {
     const selected = await open({ directory: true, multiple: false });
@@ -94,8 +99,8 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
     return invoke<DataPreview>("preview_data_file", { request });
   }
 
-  generateDataChart(request: GenerateDataChartRequest) {
-    return invoke<GeneratedDataChart>("generate_data_chart", { request });
+  prepareDataFigure(request: PrepareDataFigureRequest) {
+    return invoke<PreparedDataFigure>("prepare_data_figure", { request });
   }
 
   listFontFamilies() {

@@ -2,7 +2,7 @@ mod tabular;
 mod tensor;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Number, Value};
+use serde_json::{Number, Value};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -207,36 +207,32 @@ pub struct DataPreviewRequest {
     pub query: DataQuery,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DataChartType {
-    Line,
-    Scatter,
-    Bar,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GenerateDataChartRequest {
+pub struct PrepareDataFigureRequest {
     pub path: String,
     pub vault_path: String,
     pub query: DataQuery,
-    pub chart_type: DataChartType,
-    pub x_column: Option<String>,
-    pub y_column: Option<String>,
     pub title: Option<String>,
+    pub model: String,
+    pub prompt: String,
+    pub typst_source: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GeneratedDataChart {
+pub struct PreparedDataFigure {
+    pub id: String,
+    pub directory_path: String,
     pub typst_path: String,
     pub data_path: String,
-    pub recipe_path: String,
+    pub metadata_path: String,
 }
 
 pub(super) fn json_number(value: f64) -> Value {
-    Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null)
+    Number::from_f64(value)
+        .map(Value::Number)
+        .unwrap_or(Value::Null)
 }
 
 pub(super) fn infer_value(value: &str) -> Value {
@@ -296,8 +292,18 @@ pub(super) fn columns_from_rows(names: &[String], rows: &[Vec<Value>]) -> Vec<Da
         .collect()
 }
 
-pub(super) fn statistics(name: &str, values: &[Option<f64>], total: u64, sampled: bool) -> SeriesStatistics {
-    let mut numbers = values.iter().flatten().copied().filter(|value| value.is_finite()).collect::<Vec<_>>();
+pub(super) fn statistics(
+    name: &str,
+    values: &[Option<f64>],
+    total: u64,
+    sampled: bool,
+) -> SeriesStatistics {
+    let mut numbers = values
+        .iter()
+        .flatten()
+        .copied()
+        .filter(|value| value.is_finite())
+        .collect::<Vec<_>>();
     numbers.sort_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal));
     let count = if sampled { values.len() as u64 } else { total };
     let valid_count = numbers.len() as u64;
@@ -359,8 +365,11 @@ fn existing_data_path(path: &str, vault_path: &str) -> Result<PathBuf, String> {
 }
 
 fn inspect_sync(path: &Path) -> Result<DataCatalog, String> {
-    let format = DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?;
-    let size_bytes = std::fs::metadata(path).map_err(|error| error.to_string())?.len();
+    let format =
+        DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?;
+    let size_bytes = std::fs::metadata(path)
+        .map_err(|error| error.to_string())?
+        .len();
     let (datasets, warnings) = if format.is_tabular() {
         tabular::inspect(path, format)?
     } else {
@@ -377,7 +386,8 @@ fn inspect_sync(path: &Path) -> Result<DataCatalog, String> {
 }
 
 fn preview_sync(path: &Path, query: &DataQuery) -> Result<DataPreview, String> {
-    let format = DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?;
+    let format =
+        DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?;
     if format.is_tabular() {
         tabular::preview(path, format, query)
     } else {
@@ -401,175 +411,180 @@ pub async fn preview_data_file(request: DataPreviewRequest) -> Result<DataPrevie
         .map_err(|error| format!("Data preview task failed: {error}"))?
 }
 
-fn unique_chart_stem(source: &Path) -> Result<PathBuf, String> {
-    let parent = source.parent().ok_or_else(|| "Data file has no parent folder".to_string())?;
-    let stem = source.file_stem().and_then(|value| value.to_str()).unwrap_or("data");
+fn figure_slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut separator = false;
+    for character in value.chars().flat_map(char::to_lowercase) {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character);
+            separator = false;
+        } else if !separator && !slug.is_empty() {
+            slug.push('-');
+            separator = true;
+        }
+        if slug.len() >= 56 {
+            break;
+        }
+    }
+    slug.trim_matches('-').to_string()
+}
+
+fn unique_figure_directory(
+    vault: &Path,
+    source: &Path,
+    title: Option<&str>,
+) -> Result<(String, PathBuf), String> {
+    let figures = vault.join("figures");
+    std::fs::create_dir_all(&figures).map_err(|error| error.to_string())?;
+    let fallback = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("data");
+    let base = title
+        .filter(|value| !value.trim().is_empty())
+        .map(figure_slug)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| format!("{}-chart", figure_slug(fallback)));
     for suffix in 1..=999 {
-        let name = if suffix == 1 {
-            format!("{stem}-chart")
+        let id = if suffix == 1 {
+            base.clone()
         } else {
-            format!("{stem}-chart-{suffix}")
+            format!("{base}-{suffix}")
         };
-        let candidate = parent.join(name);
-        if !candidate.with_extension("typ").exists()
-            && !candidate.with_extension("json").exists()
-            && !candidate.with_extension("toml").exists()
-        {
-            return Ok(candidate);
+        let candidate = figures.join(&id);
+        if !candidate.exists() {
+            return Ok((id, candidate));
         }
     }
-    Err("Could not find a free chart file name".into())
+    Err("Could not find a free figure bundle name".into())
 }
 
-fn typst_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn typst_markup_escape(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-    for character in value.chars() {
-        if matches!(character, '\\' | '#' | '$' | '*' | '_' | '`' | '<' | '>' | '@' | '[' | ']') {
-            escaped.push('\\');
-        }
-        escaped.push(character);
-    }
-    escaped
-}
-
-fn chart_rows(preview: &DataPreview, x_column: Option<&str>, y_column: Option<&str>) -> Result<Vec<Value>, String> {
-    if let Some(tensor) = &preview.tensor {
-        return Ok(tensor
-            .points
-            .iter()
-            .enumerate()
-            .filter_map(|(index, point)| {
-                point.value.map(|value| {
-                    let mut row = Map::new();
-                    let x = point.coordinates.last().copied().unwrap_or(index as u64);
-                    row.insert("x".into(), Value::Number(x.into()));
-                    if point.coordinates.len() > 1 {
-                        row.insert("y".into(), Value::Number(point.coordinates[0].into()));
-                    }
-                    row.insert("value".into(), json_number(value));
-                    Value::Object(row)
-                })
-            })
-            .collect());
+fn prepare_figure_sync(
+    path: &Path,
+    vault: &Path,
+    request: PrepareDataFigureRequest,
+) -> Result<PreparedDataFigure, String> {
+    if request.typst_source.trim().is_empty() {
+        return Err("The AI returned empty Typst source".into());
     }
 
-    let numeric_columns = preview.columns.iter().filter(|column| column.numeric).collect::<Vec<_>>();
-    let x_name = x_column
-        .and_then(|name| preview.columns.iter().find(|column| column.name == name))
-        .or_else(|| numeric_columns.first().copied())
-        .ok_or_else(|| "Choose a numeric X column".to_string())?;
-    let y_name = y_column
-        .and_then(|name| preview.columns.iter().find(|column| column.name == name))
-        .or_else(|| numeric_columns.iter().copied().find(|column| column.name != x_name.name))
-        .ok_or_else(|| "Choose a numeric Y column".to_string())?;
-    let x_index = preview.columns.iter().position(|column| column.name == x_name.name).unwrap_or(0);
-    let y_index = preview.columns.iter().position(|column| column.name == y_name.name).unwrap_or(0);
-    Ok(preview
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let x = row.get(x_index)?.as_f64()?;
-            let y = row.get(y_index)?.as_f64()?;
-            let mut object = Map::new();
-            object.insert("x".into(), json_number(x));
-            object.insert("value".into(), json_number(y));
-            Some(Value::Object(object))
-        })
-        .collect())
-}
-
-fn generate_chart_sync(path: &Path, request: GenerateDataChartRequest) -> Result<GeneratedDataChart, String> {
     let mut query = request.query.clone();
     query.offset = 0;
     query.limit = Some(MAX_PREVIEW_LIMIT);
     let preview = preview_sync(path, &query)?;
-    let rows = chart_rows(&preview, request.x_column.as_deref(), request.y_column.as_deref())?;
-    if rows.is_empty() {
-        return Err("The selected projection has no numeric values to chart".into());
-    }
-
-    let base = unique_chart_stem(path)?;
-    let data_path = base.with_extension("json");
-    let typst_path = base.with_extension("typ");
-    let recipe_path = base.with_extension("toml");
-    let data_name = data_path.file_name().and_then(|value| value.to_str()).unwrap_or("chart.json");
+    let format =
+        DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?;
     let title = request
         .title
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| path.file_stem().and_then(|value| value.to_str()).unwrap_or("Data chart").to_string());
-    let body = match request.chart_type {
-        DataChartType::Bar => format!(
-            "#import \"@preview/cetz:0.5.2\"\n#import \"@preview/cetz-plot:0.1.4\": chart\n\n#let rows = json(\"{}\")\n\n#figure(\n  cetz.canvas({{\n    chart.columnchart(\n      rows,\n      label-key: \"x\",\n      value-key: \"value\",\n      size: (8, 5),\n    )\n  }}),\n  caption: [{}],\n)\n",
-            typst_escape(data_name),
-            typst_markup_escape(&title)
-        ),
-        DataChartType::Line | DataChartType::Scatter => {
-            let plot_call = if matches!(request.chart_type, DataChartType::Scatter) {
-                "plot.add(points, mark: \"o\", style: (stroke: none))"
-            } else {
-                "plot.add(points, line: \"linear\")"
-            };
-            format!(
-                "#import \"@preview/cetz:0.5.2\"\n#import \"@preview/cetz-plot:0.1.4\": plot\n\n#let rows = json(\"{}\")\n#let points = rows.map(row => (row.x, row.value))\n\n#figure(\n  cetz.canvas({{\n    plot.plot(size: (8, 5), {{\n      {plot_call}\n    }})\n  }}),\n  caption: [{}],\n)\n",
-                typst_escape(data_name),
-                typst_markup_escape(&title)
-            )
-        }
-    };
+        .unwrap_or_else(|| {
+            path.file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("Data figure")
+                .to_string()
+        });
+    let (id, directory_path) = unique_figure_directory(vault, path, Some(&title))?;
+    std::fs::create_dir(&directory_path).map_err(|error| error.to_string())?;
+    let data_path = directory_path.join("projection.json");
+    let typst_path = directory_path.join("chart.typ");
+    let metadata_path = directory_path.join("metadata.toml");
+
+    let projection = serde_json::json!({
+        "version": 1,
+        "source": {
+            "file": path.file_name().and_then(|value| value.to_str()).unwrap_or("data"),
+            "format": format,
+            "dataset": &request.query.dataset_id,
+        },
+        "kind": &preview.kind,
+        "columns": &preview.columns,
+        "rows": &preview.rows,
+        "rowOffset": preview.row_offset,
+        "totalRows": preview.total_rows,
+        "statistics": &preview.statistics,
+        "tensor": &preview.tensor,
+        "query": &query,
+        "sampled": preview.sampled,
+    });
+
     #[derive(Serialize)]
-    struct ChartRecipe<'a> {
+    #[serde(rename_all = "camelCase")]
+    struct FigureMetadata<'a> {
         version: u8,
+        id: &'a str,
         source: String,
         format: DataFormat,
         dataset: &'a str,
-        chart_type: DataChartType,
-        x_column: &'a Option<String>,
-        y_column: &'a Option<String>,
+        kind: DatasetKind,
         title: &'a str,
+        model: &'a str,
+        prompt: &'a str,
+        projection_rows: usize,
+        source_rows: Option<u64>,
+        sampled: bool,
         query: &'a DataQuery,
     }
-    let recipe = toml::to_string_pretty(&ChartRecipe {
+
+    let projection_rows = preview
+        .rows
+        .len()
+        .max(preview.tensor.as_ref().map(|tensor| tensor.points.len()).unwrap_or(0));
+    let metadata = toml::to_string_pretty(&FigureMetadata {
         version: 1,
-        source: path.file_name().and_then(|value| value.to_str()).unwrap_or("data").to_string(),
-        format: DataFormat::from_path(path).ok_or_else(|| "Unsupported data format".to_string())?,
+        id: &id,
+        source: path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("data")
+            .to_string(),
+        format,
         dataset: &request.query.dataset_id,
-        chart_type: request.chart_type,
-        x_column: &request.x_column,
-        y_column: &request.y_column,
+        kind: preview.kind.clone(),
         title: &title,
+        model: &request.model,
+        prompt: &request.prompt,
+        projection_rows,
+        source_rows: preview.total_rows,
+        sampled: preview.sampled,
         query: &query,
     })
     .map_err(|error| error.to_string())?;
 
-    std::fs::write(&data_path, serde_json::to_vec_pretty(&rows).map_err(|error| error.to_string())?)
+    let write_result = (|| {
+        std::fs::write(
+            &data_path,
+            serde_json::to_vec_pretty(&projection).map_err(|error| error.to_string())?,
+        )
         .map_err(|error| error.to_string())?;
-    if let Err(error) = std::fs::write(&recipe_path, recipe) {
-        let _ = std::fs::remove_file(&data_path);
-        return Err(error.to_string());
-    }
-    if let Err(error) = std::fs::write(&typst_path, body) {
-        let _ = std::fs::remove_file(&data_path);
-        let _ = std::fs::remove_file(&recipe_path);
-        return Err(error.to_string());
+        std::fs::write(&metadata_path, metadata).map_err(|error| error.to_string())?;
+        std::fs::write(&typst_path, request.typst_source).map_err(|error| error.to_string())?;
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_dir_all(&directory_path);
+        return Err(error);
     }
 
-    Ok(GeneratedDataChart {
+    Ok(PreparedDataFigure {
+        id,
+        directory_path: directory_path.to_string_lossy().to_string(),
         typst_path: typst_path.to_string_lossy().to_string(),
         data_path: data_path.to_string_lossy().to_string(),
-        recipe_path: recipe_path.to_string_lossy().to_string(),
+        metadata_path: metadata_path.to_string_lossy().to_string(),
     })
 }
 
 #[tauri::command]
-pub async fn generate_data_chart(request: GenerateDataChartRequest) -> Result<GeneratedDataChart, String> {
+pub async fn prepare_data_figure(
+    request: PrepareDataFigureRequest,
+) -> Result<PreparedDataFigure, String> {
     let path = existing_data_path(&request.path, &request.vault_path)?;
-    tauri::async_runtime::spawn_blocking(move || generate_chart_sync(&path, request))
+    let vault = Path::new(&request.vault_path)
+        .canonicalize()
+        .map_err(|error| format!("Invalid vault path: {error}"))?;
+    tauri::async_runtime::spawn_blocking(move || prepare_figure_sync(&path, &vault, request))
         .await
-        .map_err(|error| format!("Chart generation task failed: {error}"))?
+        .map_err(|error| format!("Figure preparation task failed: {error}"))?
 }
 
 #[cfg(test)]

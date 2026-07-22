@@ -5,6 +5,7 @@ src/
 ├── domain/             纯类型与文档解析规则
 ├── application/
 │   ├── commands/       命令注册、条件与快捷键解析
+│   ├── ai/             AI SDK 的 Typst 生成、校验与修复
 │   ├── ports/          文件系统/编译/会话端口
 │   └── workspace-controller.ts
 ├── infrastructure/
@@ -32,13 +33,18 @@ src-tauri/src/
 
 ## 数据适配器
 
-数据功能沿用应用端口边界：React 只通过 `WorkspaceGateway` 请求 catalog、preview 和 chart
-generation，Tauri 端由格式注册表分派解析器。表格格式统一输出列与分页记录；多维格式统一输出
-dataset、shape、dimension、统计与最多二维的切片投影。图表层只依赖投影和 `DataQuery`，不感知
-CSV、Parquet、HDF5 等源格式。
+数据功能沿用应用端口边界：React 只通过 `WorkspaceGateway` 请求 catalog、preview 和 figure
+bundle，Tauri 端由格式注册表分派解析器。表格格式统一输出列与分页记录；多维格式统一输出
+dataset、shape、dimension、统计与一至二维的交互切片。通用 `projection.json` 保留列、行、统计
+或 tensor 坐标，不感知 CSV、Parquet、HDF5 等源格式。
 
-转换产物使用 JSON、TOML 和 Typst，不依赖私有数据库。MAT v7.3 复用 HDF5 适配器；NetCDF-4
-与 HDF5 使用纯 Rust 解码器，避免桌面安装包依赖系统 HDF5/NetCDF 动态库。
+图表没有 ChartSpec 或另一层 DSL。AI SDK 通过可配置的 OpenAI-compatible provider 直接生成
+`chart.typ`；Tauri HTTP plugin 提供不受 WebView CORS 约束的 fetch。应用使用真实 Typst 编译器
+校验结果，最多把两轮 diagnostics 返回模型修复。正文只由确定性的引用插入器修改，figure bundle
+固定为 `chart.typ`、`projection.json` 和 `metadata.toml`。
+
+转换产物只使用 JSON、TOML 和 Typst，不依赖私有数据库。MAT v7.3 复用 HDF5 适配器；
+NetCDF-4 与 HDF5 使用纯 Rust 解码器，避免桌面安装包依赖系统 HDF5/NetCDF 动态库。
 
 ## 预览交互
 

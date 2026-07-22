@@ -22,6 +22,7 @@ import { isDataFile } from "@/domain/data";
 import { documentFormat, fileName, fileStem, flattenFiles } from "@/domain/workspace";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { PackageManagerPage } from "@/features/packages/package-manager-page";
+import { SettingsPage } from "@/features/settings/settings-page";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
 import { ProblemsPanel } from "@/features/workspace/problems-panel";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -235,6 +236,7 @@ function EditorPane() {
               diagnostics={state.diagnostics}
               revealLine={state.revealLine}
               onChange={(value) => controller.updateSource(value)}
+              onCursorChange={(path, offset) => controller.recordCursor(path, offset)}
               onRevealComplete={() => controller.clearRevealLine()}
             />
           </Suspense>
@@ -321,6 +323,14 @@ function WorkspaceMain() {
     return (
       <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
         <PackageManagerPage />
+      </SidebarInset>
+    );
+  }
+
+  if (state.sidebarView === "settings") {
+    return (
+      <SidebarInset className="h-[100dvh] min-h-0 overflow-hidden bg-background">
+        <SettingsPage />
       </SidebarInset>
     );
   }

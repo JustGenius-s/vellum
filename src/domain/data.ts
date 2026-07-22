@@ -96,12 +96,12 @@ export interface DataPreview {
   sampled: boolean;
 }
 
-export type DataChartType = "line" | "scatter" | "bar";
-
-export interface GeneratedDataChart {
+export interface PreparedDataFigure {
+  id: string;
+  directoryPath: string;
   typstPath: string;
   dataPath: string;
-  recipePath: string;
+  metadataPath: string;
 }
 
 export const emptyDataQuery = (): DataQuery => ({

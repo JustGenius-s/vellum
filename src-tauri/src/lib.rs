@@ -8,6 +8,7 @@ mod world;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -16,7 +17,7 @@ pub fn run() {
             compiler::compile_typst_svg,
             data::inspect_data_file,
             data::preview_data_file,
-            data::generate_data_chart,
+            data::prepare_data_figure,
             world::list_font_families,
             packages::list_packages,
             packages::install_package,

@@ -1,14 +1,19 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { TypstChartContext } from "@/application/ai/typst-chart-generator";
 import {
   emptyDataQuery,
   isDataFile,
   type DataCatalog,
-  type DataChartType,
   type DataPreview,
   type DataQuery,
   type DatasetDescriptor,
-  type GeneratedDataChart,
+  type PreparedDataFigure,
 } from "@/domain/data";
+import {
+  figureReference,
+  insertFigureReference,
+  type FigurePlacement,
+} from "@/domain/figure";
 import {
   documentFormat,
   fileName,
@@ -37,6 +42,24 @@ export type SidebarView = "files" | "search" | "outline" | "packages" | "setting
 export type CompactSurface = "editor" | "preview";
 export type CompilePhase = "idle" | "queued" | "compiling" | "ready" | "failed";
 export type WorkspacePhase = "booting" | "ready" | "error";
+export type AiChartStage =
+  | "idle"
+  | "analyzing"
+  | "generating"
+  | "writing"
+  | "compiling"
+  | "repairing"
+  | "inserting"
+  | "complete"
+  | "cancelled"
+  | "failed";
+
+export interface GenerateAiChartOptions {
+  title: string;
+  request: string;
+  targetPath: string | null;
+  placement: FigurePlacement;
+}
 
 export interface WorkspaceState {
   mode: RuntimeMode;
@@ -73,7 +96,15 @@ export interface WorkspaceState {
   dataQuery: DataQuery;
   dataPending: boolean;
   dataChartPending: boolean;
+  dataChartStage: AiChartStage;
+  dataChartProgress: number;
+  dataChartOutput: string;
+  dataChartRepairs: number;
+  dataChartResult: PreparedDataFigure | null;
   dataError: string;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKey: string;
   revealLine: number | null;
   revision: number;
 }
@@ -122,7 +153,15 @@ const initialState = (mode: RuntimeMode): WorkspaceState => ({
   dataQuery: emptyDataQuery(),
   dataPending: false,
   dataChartPending: false,
+  dataChartStage: "idle",
+  dataChartProgress: 0,
+  dataChartOutput: "",
+  dataChartRepairs: 0,
+  dataChartResult: null,
   dataError: "",
+  aiBaseUrl: "https://api.openai.com/v1",
+  aiModel: "",
+  aiApiKey: "",
   revealLine: null,
   revision: 0,
 });
@@ -149,6 +188,10 @@ function parentPath(path: string) {
   return normalized.slice(0, normalized.lastIndexOf("/")) || normalized;
 }
 
+function isFigureTarget(path: string) {
+  return /\.(?:typ|md)$/i.test(path) && !isDataFile(path);
+}
+
 function preferredFont(saved: string | null | undefined, available: string[], defaults: string[]) {
   if (saved && (available.length === 0 || available.includes(saved))) return saved;
   return defaults.find((family) => available.includes(family)) ?? available[0] ?? saved ?? "";
@@ -161,6 +204,9 @@ export class WorkspaceController {
   private compileTimer: number | null = null;
   private sessionTimer: number | null = null;
   private compileToken = 0;
+  private aiAbortController: AbortController | null = null;
+  private readonly cursorOffsets = new Map<string, number>();
+  private lastDocumentPath = "";
   private initialized = false;
 
   constructor(gateway: WorkspaceGateway) {
@@ -192,6 +238,10 @@ export class WorkspaceController {
     return Boolean(this.state.activePath && isDataFile(this.state.activePath));
   }
 
+  get preferredFigureTargetPath() {
+    return isFigureTarget(this.lastDocumentPath) ? this.lastDocumentPath : "";
+  }
+
   get selectedDataset(): DatasetDescriptor | null {
     return (
       this.state.dataCatalog?.datasets.find(
@@ -219,6 +269,10 @@ export class WorkspaceController {
       cachePath: this.state.packageCachePath,
       dataPath: this.state.packageDataPath,
     };
+  }
+
+  private rememberActiveDocument() {
+    if (isFigureTarget(this.state.activePath)) this.lastDocumentPath = this.state.activePath;
   }
 
   async initialize() {
@@ -249,6 +303,9 @@ export class WorkspaceController {
         fontsPending: false,
         packageCachePath: session.packageCachePath ?? null,
         packageDataPath: session.packageDataPath ?? null,
+        aiBaseUrl: session.aiBaseUrl?.trim() || "https://api.openai.com/v1",
+        aiModel: session.aiModel ?? "",
+        aiApiKey: session.aiApiKey ?? "",
       });
       if (!session.vaultPath) {
         this.update({ phase: "ready", statusText: "Open a vault to begin" });
@@ -301,6 +358,8 @@ export class WorkspaceController {
       );
       const activePath =
         opened.find((tab) => tab.path === activeTabPath)?.path ?? opened[0]?.path ?? "";
+      this.lastDocumentPath =
+        [activePath, ...opened.map((tab) => tab.path)].find((path) => isFigureTarget(path)) ?? "";
 
       this.update({
         phase: "ready",
@@ -331,6 +390,7 @@ export class WorkspaceController {
   }
 
   async openFile(path: string, line?: number) {
+    if (path !== this.state.activePath) this.rememberActiveDocument();
     const existing = this.state.tabs.find((tab) => tab.path === path);
     if (existing) {
       this.update({
@@ -365,6 +425,7 @@ export class WorkspaceController {
 
   switchTab(path: string) {
     if (path === this.state.activePath) return;
+    this.rememberActiveDocument();
     this.update({ activePath: path, revealLine: null });
     this.scheduleSessionSave();
     void this.compileActive();
@@ -590,37 +651,305 @@ export class WorkspaceController {
     }
   }
 
-  async generateDataChart(
-    chartType: DataChartType,
-    xColumn: string | null,
-    yColumn: string | null,
-    title: string | null,
-  ): Promise<GeneratedDataChart | null> {
+  async generateDataChart(options: GenerateAiChartOptions): Promise<PreparedDataFigure | null> {
     const tab = this.activeTab;
-    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath) return null;
-    this.update({ dataChartPending: true, dataError: "", statusText: "Generating Typst chart" });
+    const catalog = this.state.dataCatalog;
+    const preview = this.state.dataPreview;
+    if (!tab || !isDataFile(tab.path) || !this.state.vaultPath || !catalog || !preview) {
+      return null;
+    }
+
+    this.aiAbortController?.abort();
+    const abortController = new AbortController();
+    this.aiAbortController = abortController;
+    const title = options.title.trim() || fileStem(tab.path);
+    const context: TypstChartContext = {
+      sourcePath: relativePath(tab.path, this.state.vaultPath),
+      title,
+      request: options.request,
+      catalog,
+      preview,
+      query: this.state.dataQuery,
+    };
+    const config = {
+      baseUrl: this.state.aiBaseUrl,
+      model: this.state.aiModel,
+      apiKey: this.state.aiApiKey,
+    };
+    const aiFetch: typeof globalThis.fetch = (input, init) =>
+      this.gateway.aiFetch(input, init);
+    let repairs = 0;
+    const maxRepairs = 2;
+    let preparedFigure: PreparedDataFigure | null = null;
+    let outputFrame: number | null = null;
+    let pendingOutput = "";
+
+    const publishOutput = (
+      output: string,
+      stage: "generating" | "repairing",
+      progressStart: number,
+      progressEnd: number,
+    ) => {
+      pendingOutput = output;
+      if (outputFrame != null) return;
+      outputFrame = window.requestAnimationFrame(() => {
+        outputFrame = null;
+        if (this.aiAbortController !== abortController) return;
+        const progress = Math.min(
+          progressEnd,
+          progressStart +
+            Math.round(
+              (Math.min(pendingOutput.length, 12_000) / 12_000) *
+                (progressEnd - progressStart),
+            ),
+        );
+        this.update({
+          dataChartStage: stage,
+          dataChartProgress: progress,
+          dataChartOutput: pendingOutput,
+          statusText:
+            stage === "generating"
+              ? "AI is streaming the Typst source"
+              : `AI is streaming repair ${repairs}/${maxRepairs}`,
+        });
+      });
+    };
+
+    const flushOutput = (output: string, stage: AiChartStage, progress: number) => {
+      if (outputFrame != null) window.cancelAnimationFrame(outputFrame);
+      outputFrame = null;
+      pendingOutput = output;
+      this.update({
+        dataChartStage: stage,
+        dataChartProgress: progress,
+        dataChartOutput: output,
+      });
+    };
+
+    this.update({
+      dataChartPending: true,
+      dataChartStage: "analyzing",
+      dataChartProgress: 8,
+      dataChartOutput: "",
+      dataChartRepairs: 0,
+      dataChartResult: null,
+      dataError: "",
+      statusText: "AI is analyzing the data",
+    });
+
     try {
-      const result = await this.gateway.generateDataChart({
+      const ai = await import("@/application/ai/typst-chart-generator");
+      let source = "";
+
+      const repair = async (diagnostics: CompileDiagnostic[] | string[]) => {
+        if (repairs >= maxRepairs) {
+          throw new Error(
+            diagnostics
+              .map((diagnostic) =>
+                typeof diagnostic === "string" ? diagnostic : diagnostic.message,
+              )
+              .join("\n"),
+          );
+        }
+        repairs += 1;
+        this.update({
+          dataChartStage: "repairing",
+          dataChartProgress: 56 + repairs * 6,
+          dataChartRepairs: repairs,
+          statusText: `AI is repairing the Typst source (${repairs}/${maxRepairs})`,
+        });
+        const repaired = await ai.repairTypstChartSource({
+          config,
+          context,
+          source,
+          diagnostics,
+          abortSignal: abortController.signal,
+          fetch: aiFetch,
+          onTextUpdate: (output) =>
+            publishOutput(output, "repairing", 56 + repairs * 6, 63 + repairs * 7),
+        });
+        flushOutput(repaired, "repairing", 63 + repairs * 7);
+        return repaired;
+      };
+
+      source = await ai.generateTypstChartSource({
+        config,
+        context,
+        abortSignal: abortController.signal,
+        fetch: aiFetch,
+        onTextUpdate: (output) => publishOutput(output, "generating", 12, 38),
+      });
+      flushOutput(source, "generating", 38);
+
+      while (true) {
+        try {
+          ai.validateTypstChartSource(source);
+          break;
+        } catch (error) {
+          source = await repair([String(error)]);
+        }
+      }
+
+      this.update({
+        dataChartStage: "writing",
+        dataChartProgress: 42,
+        statusText: "Writing the portable figure bundle",
+      });
+      const figure = await this.gateway.prepareDataFigure({
         path: tab.path,
         vaultPath: this.state.vaultPath,
         query: this.state.dataQuery,
-        chartType,
-        xColumn,
-        yColumn,
+        model: this.state.aiModel.trim(),
+        prompt: options.request.trim(),
         title,
+        typstSource: source,
       });
-      this.update({ dataChartPending: false, statusText: "Typst chart generated" });
+      preparedFigure = figure;
+
+      while (true) {
+        abortController.signal.throwIfAborted();
+        this.update({
+          dataChartStage: "compiling",
+          dataChartProgress: 58 + repairs * 7,
+          statusText: "Compiling the generated Typst figure",
+        });
+        const result = await this.gateway.compileSvg(
+          {
+            source,
+            vaultPath: this.state.vaultPath,
+            mainFile: figure.typstPath,
+            latinFont: this.state.latinFont,
+            cjkFont: this.state.cjkFont,
+            packageCachePath: this.state.packageCachePath,
+            packageDataPath: this.state.packageDataPath,
+          },
+          (progress) => {
+            if (this.aiAbortController !== abortController) return;
+            this.update({
+              dataChartProgress: Math.min(
+                88,
+                54 + repairs * 6 + Math.round(progress.value * 0.28),
+              ),
+              statusText: progress.label,
+            });
+          },
+        );
+        abortController.signal.throwIfAborted();
+        const errors = result.diagnostics.filter(
+          (diagnostic) => diagnostic.severity === "error",
+        );
+        if (!errors.length) break;
+        source = await repair(errors);
+        while (true) {
+          try {
+            ai.validateTypstChartSource(source);
+            break;
+          } catch (error) {
+            source = await repair([String(error)]);
+          }
+        }
+        await this.gateway.writeFile(
+          figure.typstPath,
+          source,
+          this.state.vaultPath,
+        );
+      }
+
       await this.refreshTree();
-      await this.openFile(result.typstPath);
-      return result;
-    } catch (error) {
+      abortController.signal.throwIfAborted();
+      this.update({
+        dataChartStage: "inserting",
+        dataChartProgress: 92,
+        statusText: options.targetPath
+          ? "Inserting the figure into the document"
+          : "Opening the generated figure",
+      });
+      if (options.targetPath) {
+        await this.insertPreparedFigure(figure, options.targetPath, options.placement);
+      } else {
+        await this.openFile(figure.typstPath);
+      }
       this.update({
         dataChartPending: false,
-        dataError: String(error),
-        statusText: `Chart generation failed: ${String(error)}`,
+        dataChartStage: "complete",
+        dataChartProgress: 100,
+        dataChartOutput: source,
+        dataChartResult: figure,
+        statusText: options.targetPath
+          ? "Chart generated and inserted"
+          : "Typst chart generated",
+      });
+      return figure;
+    } catch (error) {
+      const cancelled = abortController.signal.aborted;
+      this.update({
+        dataChartPending: false,
+        dataChartStage: cancelled ? "cancelled" : "failed",
+        dataError: cancelled
+          ? ""
+          : `${String(error)}${
+              preparedFigure ? `\n\nThe editable draft remains at ${preparedFigure.typstPath}.` : ""
+            }`,
+        statusText: cancelled ? "Chart generation cancelled" : `Chart generation failed: ${String(error)}`,
       });
       return null;
+    } finally {
+      if (outputFrame != null) window.cancelAnimationFrame(outputFrame);
+      if (this.aiAbortController === abortController) this.aiAbortController = null;
     }
+  }
+
+  cancelDataChart() {
+    if (!this.aiAbortController) return;
+    this.setStatus("Cancelling chart generation");
+    this.aiAbortController.abort();
+  }
+
+  recordCursor(path: string, offset: number) {
+    if (!isFigureTarget(path)) return;
+    this.cursorOffsets.set(path, Math.max(0, offset));
+  }
+
+  private async insertPreparedFigure(
+    figure: PreparedDataFigure,
+    targetPath: string,
+    placement: FigurePlacement,
+  ) {
+    if (!isFigureTarget(targetPath)) throw new Error("Choose a Typst or Markdown document");
+    const existing = this.state.tabs.find((tab) => tab.path === targetPath);
+    const content =
+      existing?.content ?? (await this.gateway.readFile(targetPath, this.state.vaultPath));
+    const reference = figureReference(
+      targetPath,
+      figure.typstPath,
+      figure.id,
+    );
+    const nextContent = insertFigureReference(
+      content,
+      reference,
+      placement,
+      this.cursorOffsets.get(targetPath),
+    );
+    const nextTab: DocumentTab = {
+      path: targetPath,
+      name: fileName(targetPath),
+      content: nextContent,
+      dirty: true,
+    };
+    const tabs = existing
+      ? this.state.tabs.map((candidate) =>
+          candidate.path === targetPath ? nextTab : candidate,
+        )
+      : [...this.state.tabs, nextTab];
+    this.lastDocumentPath = targetPath;
+    this.update({
+      tabs,
+      activePath: targetPath,
+      compactSurface: "editor",
+      revealLine: null,
+    });
+    this.scheduleSessionSave();
+    await this.compileActive();
   }
 
   async compileActive() {
@@ -1190,6 +1519,24 @@ export class WorkspaceController {
     void this.compileActive();
   }
 
+  setAiBaseUrl(aiBaseUrl: string) {
+    if (this.state.aiBaseUrl === aiBaseUrl) return;
+    this.update({ aiBaseUrl });
+    this.scheduleSessionSave();
+  }
+
+  setAiModel(aiModel: string) {
+    if (this.state.aiModel === aiModel) return;
+    this.update({ aiModel });
+    this.scheduleSessionSave();
+  }
+
+  setAiApiKey(aiApiKey: string) {
+    if (this.state.aiApiKey === aiApiKey) return;
+    this.update({ aiApiKey });
+    this.scheduleSessionSave();
+  }
+
   private async refreshBacklinks() {
     if (!this.state.vaultPath) return;
     try {
@@ -1211,6 +1558,9 @@ export class WorkspaceController {
         cjkFont: this.state.cjkFont || null,
         packageCachePath: this.state.packageCachePath,
         packageDataPath: this.state.packageDataPath,
+        aiBaseUrl: this.state.aiBaseUrl.trim() || null,
+        aiModel: this.state.aiModel.trim() || null,
+        aiApiKey: this.state.aiApiKey || null,
       });
     }, 500);
   }

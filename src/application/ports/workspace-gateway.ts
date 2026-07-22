@@ -16,10 +16,9 @@ import type {
 } from "@/domain/workspace";
 import type {
   DataCatalog,
-  DataChartType,
   DataPreview,
   DataQuery,
-  GeneratedDataChart,
+  PreparedDataFigure,
 } from "@/domain/data";
 
 export interface CompileRequest {
@@ -48,15 +47,16 @@ export interface DataPreviewRequest extends DataFileRequest {
   query: DataQuery;
 }
 
-export interface GenerateDataChartRequest extends DataPreviewRequest {
-  chartType: DataChartType;
-  xColumn: string | null;
-  yColumn: string | null;
+export interface PrepareDataFigureRequest extends DataPreviewRequest {
   title: string | null;
+  model: string;
+  prompt: string;
+  typstSource: string;
 }
 
 export interface WorkspaceGateway {
   readonly mode: RuntimeMode;
+  aiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   chooseVault(): Promise<string | null>;
   listTree(vaultPath: string): Promise<TreeNode[]>;
   readFile(path: string, vaultPath: string): Promise<string>;
@@ -68,7 +68,7 @@ export interface WorkspaceGateway {
   indexBacklinks(vaultPath: string): Promise<BacklinkIndex>;
   inspectData(request: DataFileRequest): Promise<DataCatalog>;
   previewData(request: DataPreviewRequest): Promise<DataPreview>;
-  generateDataChart(request: GenerateDataChartRequest): Promise<GeneratedDataChart>;
+  prepareDataFigure(request: PrepareDataFigureRequest): Promise<PreparedDataFigure>;
   listFontFamilies(): Promise<FontCatalog>;
   choosePackageDirectory(location: PackageLocation): Promise<string | null>;
   listPackages(directories: PackageDirectories): Promise<PackageCatalog>;

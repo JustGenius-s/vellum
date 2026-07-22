@@ -181,6 +181,7 @@ export function TypstEditor({
   diagnostics,
   revealLine,
   onChange,
+  onCursorChange,
   onRevealComplete,
 }: {
   value: string;
@@ -189,12 +190,14 @@ export function TypstEditor({
   diagnostics: CompileDiagnostic[];
   revealLine: number | null;
   onChange(value: string): void;
+  onCursorChange(path: string, offset: number): void;
   onRevealComplete(): void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const pathRef = useRef(activePath);
   const onChangeRef = useRef(onChange);
+  const onCursorChangeRef = useRef(onCursorChange);
   const fileNamesRef = useRef(fileNames);
   const initialValueRef = useRef(value);
   const applyingRef = useRef(false);
@@ -202,6 +205,7 @@ export function TypstEditor({
   const languageRef = useRef(new Compartment());
 
   onChangeRef.current = onChange;
+  onCursorChangeRef.current = onCursorChange;
   fileNamesRef.current = fileNames;
 
   useEffect(() => {
@@ -236,6 +240,9 @@ export function TypstEditor({
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !applyingRef.current) {
               onChangeRef.current(update.state.doc.toString());
+            }
+            if ((update.docChanged || update.selectionSet) && !applyingRef.current) {
+              onCursorChangeRef.current(pathRef.current, update.state.selection.main.head);
             }
           }),
         ],

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
-  ArrowClockwiseIcon,
   BookOpenTextIcon,
   BooksIcon,
   CaretDownIcon,
@@ -34,13 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import { Input } from "@/components/ui/input";
 import {
@@ -470,105 +462,6 @@ function OutlinePanel() {
   );
 }
 
-function SettingsPanel() {
-  const { controller, state } = useWorkspace();
-
-  return (
-    <div className="space-y-4 px-1 pb-6 group-data-[collapsible=icon]:hidden">
-      <section className="space-y-2 px-2">
-        <p className="text-xs font-medium text-sidebar-foreground/60">Typography</p>
-        <FontPicker
-          label="English font"
-          value={state.latinFont}
-          options={state.fontCatalog.latin}
-          pending={state.fontsPending}
-          onValueChange={(family) => controller.setFontPreference("latin", family)}
-        />
-        <FontPicker
-          label="Chinese font"
-          value={state.cjkFont}
-          options={state.fontCatalog.cjk}
-          pending={state.fontsPending}
-          onValueChange={(family) => controller.setFontPreference("cjk", family)}
-        />
-      </section>
-
-      <section>
-        <div className="px-2 pb-2">
-          <p className="text-xs font-medium text-sidebar-foreground/60">Workspace</p>
-          <p
-            className="mt-1 truncate text-xs text-sidebar-foreground/42"
-            title={state.vaultPath || undefined}
-          >
-            {state.vaultPath || "No local workspace is open"}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 w-full justify-start px-2 text-xs font-normal text-sidebar-foreground/68"
-          onClick={() => void controller.refreshTree()}
-          disabled={!state.vaultPath}
-        >
-          <ArrowClockwiseIcon data-icon="inline-start" />
-          Refresh workspace
-        </Button>
-      </section>
-    </div>
-  );
-}
-
-function FontPicker({
-  label,
-  value,
-  options,
-  pending,
-  onValueChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  pending: boolean;
-  onValueChange(value: string): void;
-}) {
-  const placeholder = pending ? "Loading fonts" : "No fonts found";
-
-  return (
-    <div className="grid gap-1.5">
-      <span className="text-[11px] text-sidebar-foreground/48">{label}</span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 w-full min-w-0 justify-between border-sidebar-border bg-background px-2 text-xs font-normal shadow-none"
-            disabled={pending || options.length === 0}
-          >
-            <span className="truncate" style={value ? { fontFamily: value } : undefined}>
-              {value || placeholder}
-            </span>
-            <CaretDownIcon className="size-3 shrink-0 text-sidebar-foreground/40" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-72">
-          <DropdownMenuRadioGroup value={value} onValueChange={onValueChange}>
-            {options.map((family) => (
-              <DropdownMenuRadioItem
-                key={family}
-                value={family}
-                className="min-h-8 text-xs"
-                style={{ fontFamily: family }}
-              >
-                <span className="truncate">{family}</span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
 function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): void }) {
   const { controller } = useWorkspace();
   const [name, setName] = useState("");
@@ -654,7 +547,7 @@ export function AppSidebar() {
       : sidebarViews.find((view) => view.id === state.sidebarView)!;
 
   function selectView(view: SidebarView) {
-    if (view === "packages") {
+    if (view === "packages" || view === "settings") {
       if (state.sidebarView !== view) controller.setSidebarView(view);
       if (isMobile) setOpenMobile(false);
       else setOpen(false);
@@ -740,7 +633,7 @@ export function AppSidebar() {
             </Tooltip>
           </nav>
 
-          {state.sidebarView !== "packages" ? (
+          {state.sidebarView !== "packages" && state.sidebarView !== "settings" ? (
             <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
               <header className="flex h-12 shrink-0 items-center px-3">
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
@@ -753,10 +646,8 @@ export function AppSidebar() {
                   <FilesPanel onDialog={setDialog} />
                 ) : state.sidebarView === "search" ? (
                   <SearchPanel />
-                ) : state.sidebarView === "outline" ? (
-                  <OutlinePanel />
                 ) : (
-                  <SettingsPanel />
+                  <OutlinePanel />
                 )}
               </div>
             </div>

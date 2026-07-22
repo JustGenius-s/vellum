@@ -17,6 +17,12 @@ pub struct SavedState {
     package_cache_path: Option<String>,
     #[serde(alias = "package_data_path")]
     package_data_path: Option<String>,
+    #[serde(alias = "ai_base_url")]
+    ai_base_url: Option<String>,
+    #[serde(alias = "ai_model")]
+    ai_model: Option<String>,
+    #[serde(alias = "ai_api_key")]
+    ai_api_key: Option<String>,
 }
 
 fn state_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -56,6 +62,9 @@ mod tests {
             cjk_font: Some("Songti SC".into()),
             package_cache_path: Some("/packages/downloaded".into()),
             package_data_path: Some("/packages/local".into()),
+            ai_base_url: Some("https://api.example.com/v1".into()),
+            ai_model: Some("example-model".into()),
+            ai_api_key: Some("example-key".into()),
         })
         .expect("serialize session");
         assert_eq!(value["vaultPath"], "/notes");
@@ -64,5 +73,8 @@ mod tests {
         assert_eq!(value["cjkFont"], "Songti SC");
         assert_eq!(value["packageCachePath"], "/packages/downloaded");
         assert_eq!(value["packageDataPath"], "/packages/local");
+        assert_eq!(value["aiBaseUrl"], "https://api.example.com/v1");
+        assert_eq!(value["aiModel"], "example-model");
+        assert_eq!(value["aiApiKey"], "example-key");
     }
 }
