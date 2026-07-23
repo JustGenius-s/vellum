@@ -1,14 +1,16 @@
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { BooksIcon } from "@phosphor-icons/react";
-import { useWorkspacePluginRegistry, useWorkspacePlugins } from "@/app/plugins/plugin-context";
+import {
+  useWorkspacePluginRegistry,
+  useWorkspacePlugins,
+  WorkspacePluginScopeProvider,
+} from "@/app/plugins/plugin-context";
 import type { SidebarView } from "@/application/workspace-state";
 import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Sidebar, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName } from "@/domain/workspace";
-import { EntryDialog } from "@/features/workspace/sidebar/entry-dialog";
-import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
 export function AppSidebar() {
   const controller = useWorkspaceController();
@@ -19,7 +21,6 @@ export function AppSidebar() {
     shallowEqual,
   );
   const { state: sidebarState, setOpen, setOpenMobile, isMobile } = useSidebar();
-  const [dialog, setDialog] = useState<EntryDialogState>(null);
   const vaultName = useMemo(
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
     [state.vaultPath],
@@ -33,7 +34,7 @@ export function AppSidebar() {
     const view = pluginRegistry.view(viewId);
     if (view.location === "page") {
       if (state.sidebarView !== viewId) controller.setSidebarView(viewId);
-      view.onActivate?.(controller);
+      view.onActivate?.(pluginRegistry.scope(view.pluginId));
       if (isMobile) setOpenMobile(false);
       else setOpen(false);
       return;
@@ -45,7 +46,7 @@ export function AppSidebar() {
     }
 
     controller.setSidebarView(viewId);
-    view.onActivate?.(controller);
+    view.onActivate?.(pluginRegistry.scope(view.pluginId));
     if (isMobile) setOpenMobile(false);
     else setOpen(true);
   }
@@ -114,14 +115,15 @@ export function AppSidebar() {
               </header>
               <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 <Suspense fallback={<div className="h-20 animate-pulse rounded-md bg-sidebar-accent/60" />}>
-                  <ActivePanel requestEntryDialog={setDialog} />
+                  <WorkspacePluginScopeProvider pluginId={activeView.pluginId}>
+                    <ActivePanel />
+                  </WorkspacePluginScopeProvider>
                 </Suspense>
               </div>
             </div>
           ) : null}
         </div>
       </Sidebar>
-      <EntryDialog state={dialog} onClose={() => setDialog(null)} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { emptyDataQuery, type DataCatalog, type DataPreview, type DataQuery } from "@/domain/data";
 import type { AiTask } from "@/domain/ai-task";
+import type { EditorRequest } from "@/application/document-edit";
 import type {
   BacklinkIndex,
   CompileDiagnostic,
@@ -31,6 +32,7 @@ export interface DocumentWorkspaceState {
   activePath: string;
   backlinks: BacklinkIndex["links"];
   revealLine: number | null;
+  editorRequest: EditorRequest | null;
 }
 
 export interface PreviewWorkspaceState {
@@ -146,6 +148,7 @@ export function createWorkspaceState(mode: RuntimeMode): WorkspaceState {
     aiModel: "",
     aiApiKey: "",
     revealLine: null,
+    editorRequest: null,
     revision: 0,
   };
 }

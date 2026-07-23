@@ -47,13 +47,25 @@ src-tauri/src/
 清理已激活插件。React 只通过 `WorkspacePluginProvider` 订阅不可变快照，因此后续注册视图或命令不需要
 修改侧栏、页面壳层和命令面板。
 
+宿主能力使用带稳定字符串 ID 的类型化 `CapabilityToken<T>`。Manifest 的 `requires` 不再只是可用性
+标签：运行时为每个插件创建 scope，`get(token)` 只能取得该插件已声明的能力。命令、视图激活和视图
+组件使用同一 scope，不接收 `WorkspaceController`。Controller 仅在组合根的 capability adapter 内出现。
+
+插件可在 `activate` 中通过 `provide` 注册私有 service。Service 按插件 ID 隔离，视图通过
+`usePluginService` 获取，并随插件停用、注销或激活回滚自动释放。局部状态使用实现 `subscribe` 与
+`getSnapshot` 的 external store，通过 `usePluginStore` 订阅，不需要加入全局 `WorkspaceState`。
+
+通用文档修改通过 `DocumentsCapability.applyEdit` 提交，事务包含原文 revision、文本 ranges、修改后
+selection、激活和焦点请求。宿主负责更新 `DocumentBufferStore`、dirty/revision、编译调度和 CodeMirror
+焦点；插件不能直接操作编辑器实例。
+
 内置 Files、Search、Outline、Tasks、Packages 与 Settings 也使用同一接口，以保证插件路径不是只为
 未来代码保留的旁路。新增内置插件时使用 `defineWorkspacePlugin`，在 `builtinWorkspacePlugins` 注册，
 功能实现继续放在 `src/features/<feature>`，UI 基础组件继续统一经过 `src/components/ui`。
 
-当前边界面向随应用构建和加载的可信进程内插件。`apiVersion` 与 `requires` 用于兼容性协商，不是安全
-沙箱；远程插件下载、签名、权限授权、隔离执行和持久化启停状态不在当前运行时中。引入第三方插件前，
-需要先把 `WorkspaceController` 收敛为按能力授权的宿主 API，并增加独立加载器，不能直接执行未知代码。
+当前边界面向随应用构建和加载的可信进程内插件。Capability scope 是模块依赖约束，不是安全沙箱；
+远程插件下载、签名、权限授权、隔离执行和持久化启停状态不在当前运行时中。引入未知第三方代码前仍需
+增加独立加载器和进程或 Web Worker 隔离。
 
 ## 数据适配器
 

@@ -23,7 +23,7 @@ import {
   useWorkspacePluginRegistry,
   useWorkspacePlugins,
 } from "@/app/plugins/plugin-context";
-import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceSelector } from "@/app/workspace-context";
 
 export type PaletteMode = "commands" | "files";
 
@@ -48,7 +48,6 @@ function detectPrimaryModifier(): PrimaryModifier {
 }
 
 export function CommandProvider({ children }: { children: ReactNode }) {
-  const controller = useWorkspaceController();
   const pluginRegistry = useWorkspacePluginRegistry();
   const pluginSnapshot = useWorkspacePlugins();
   const state = useWorkspaceSelector(
@@ -114,12 +113,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         keybinding: "Mod+K",
         handler: () => openPalette("commands"),
       },
-      ...pluginRegistry.commands({ controller, openPalette, problemsOpen: state.problemsOpen }),
+      ...pluginRegistry.commands({ openPalette }),
     ];
 
     const dispose = commands.map(register);
     return () => dispose.forEach((release) => release());
-  }, [controller, openPalette, pluginRegistry, pluginSnapshot.revision, register, state.problemsOpen]);
+  }, [openPalette, pluginRegistry, pluginSnapshot.revision, register, state.problemsOpen]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

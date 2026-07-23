@@ -9,6 +9,18 @@ import {
 } from "@phosphor-icons/react";
 
 import {
+  AI_CAPABILITY,
+  COMPILE_CAPABILITY,
+  DATA_CAPABILITY,
+  DOCUMENTS_CAPABILITY,
+  FILES_CAPABILITY,
+  PACKAGES_CAPABILITY,
+  PREVIEW_CAPABILITY,
+  SESSION_CAPABILITY,
+  SETTINGS_CAPABILITY,
+  WORKBENCH_CAPABILITY,
+} from "@/app/plugins/capabilities";
+import {
   defineWorkspacePlugin,
   WORKSPACE_PLUGIN_API_VERSION,
   type WorkspacePluginManifest,
@@ -19,7 +31,14 @@ const documentsPlugin = defineWorkspacePlugin({
   name: "Documents",
   version: "1.0.0",
   apiVersion: WORKSPACE_PLUGIN_API_VERSION,
-  requires: ["files", "compile", "preview", "session"],
+  requires: [
+    FILES_CAPABILITY,
+    DOCUMENTS_CAPABILITY,
+    COMPILE_CAPABILITY,
+    WORKBENCH_CAPABILITY,
+    PREVIEW_CAPABILITY,
+    SESSION_CAPABILITY,
+  ],
   contributes: {
     views: [
       {
@@ -59,73 +78,80 @@ const documentsPlugin = defineWorkspacePlugin({
         ),
       },
     ],
-    commands: ({ controller, openPalette, problemsOpen }) => [
-      {
-        id: "file.quick-open",
-        title: "Quick open document",
-        description: "Jump to any Typst file in the vault",
-        group: "Navigate",
-        keybinding: "Mod+P",
-        when: "hasVault",
-        handler: () => openPalette("files"),
-      },
-      {
-        id: "workspace.open",
-        title: "Open vault",
-        description: "Choose a local folder as the active workspace",
-        group: "Workspace",
-        keybinding: "Mod+O",
-        handler: () => controller.openVault(),
-      },
-      {
-        id: "file.save",
-        title: "Save active document",
-        group: "Document",
-        keybinding: "Mod+S",
-        when: "hasActiveFile",
-        handler: () => controller.saveActive(),
-      },
-      {
-        id: "file.export-pdf",
-        title: "Export active document as PDF",
-        group: "Document",
-        keybinding: "Mod+Shift+P",
-        when: "hasActiveFile",
-        handler: () => controller.exportPdf(),
-      },
-      {
-        id: "document.compile",
-        title: "Compile preview now",
-        group: "Document",
-        keybinding: "Mod+Enter",
-        when: "hasActiveFile",
-        handler: () => controller.compileActive(),
-      },
-      {
-        id: "view.editor",
-        title: "Focus editor",
-        group: "View",
-        keybinding: "Mod+1",
-        when: "hasActiveFile",
-        handler: () => controller.setCompactSurface("editor"),
-      },
-      {
-        id: "view.preview",
-        title: "Focus preview",
-        group: "View",
-        keybinding: "Mod+2",
-        when: "hasActiveFile",
-        handler: () => controller.setCompactSurface("preview"),
-      },
-      {
-        id: "view.problems",
-        title: problemsOpen ? "Hide problems" : "Show problems",
-        group: "View",
-        keybinding: "Mod+J",
-        when: "hasActiveFile",
-        handler: () => controller.setProblemsOpen(!problemsOpen),
-      },
-    ],
+    commands: ({ get, openPalette }) => {
+      const files = get(FILES_CAPABILITY);
+      const documents = get(DOCUMENTS_CAPABILITY);
+      const compile = get(COMPILE_CAPABILITY);
+      const workbench = get(WORKBENCH_CAPABILITY);
+      const { problemsOpen } = workbench.getSnapshot();
+      return [
+        {
+          id: "file.quick-open",
+          title: "Quick open document",
+          description: "Jump to any Typst file in the vault",
+          group: "Navigate",
+          keybinding: "Mod+P",
+          when: "hasVault",
+          handler: () => openPalette("files"),
+        },
+        {
+          id: "workspace.open",
+          title: "Open vault",
+          description: "Choose a local folder as the active workspace",
+          group: "Workspace",
+          keybinding: "Mod+O",
+          handler: () => files.openVault(),
+        },
+        {
+          id: "file.save",
+          title: "Save active document",
+          group: "Document",
+          keybinding: "Mod+S",
+          when: "hasActiveFile",
+          handler: () => documents.saveActive(),
+        },
+        {
+          id: "file.export-pdf",
+          title: "Export active document as PDF",
+          group: "Document",
+          keybinding: "Mod+Shift+P",
+          when: "hasActiveFile",
+          handler: () => compile.exportPdf(),
+        },
+        {
+          id: "document.compile",
+          title: "Compile preview now",
+          group: "Document",
+          keybinding: "Mod+Enter",
+          when: "hasActiveFile",
+          handler: () => compile.compileActive(),
+        },
+        {
+          id: "view.editor",
+          title: "Focus editor",
+          group: "View",
+          keybinding: "Mod+1",
+          when: "hasActiveFile",
+          handler: () => workbench.setCompactSurface("editor"),
+        },
+        {
+          id: "view.preview",
+          title: "Focus preview",
+          group: "View",
+          keybinding: "Mod+2",
+          when: "hasActiveFile",
+          handler: () => workbench.setCompactSurface("preview"),
+        },
+        {
+          id: "view.problems",
+          title: problemsOpen ? "Hide problems" : "Show problems",
+          group: "View",
+          keybinding: "Mod+J",
+          when: "hasActiveFile",
+          handler: () => workbench.setProblemsOpen(!problemsOpen),
+        },
+      ];
+    },
   },
 });
 
@@ -134,7 +160,7 @@ const tasksPlugin = defineWorkspacePlugin({
   name: "AI tasks",
   version: "1.0.0",
   apiVersion: WORKSPACE_PLUGIN_API_VERSION,
-  requires: ["ai", "files", "compile"],
+  requires: [AI_CAPABILITY, FILES_CAPABILITY, COMPILE_CAPABILITY],
   contributes: {
     views: [
       {
@@ -158,7 +184,7 @@ const packagesPlugin = defineWorkspacePlugin({
   name: "Typst packages",
   version: "1.0.0",
   apiVersion: WORKSPACE_PLUGIN_API_VERSION,
-  requires: ["packages", "compile"],
+  requires: [PACKAGES_CAPABILITY, COMPILE_CAPABILITY],
   contributes: {
     views: [
       {
@@ -167,7 +193,7 @@ const packagesPlugin = defineWorkspacePlugin({
         icon: PackageIcon,
         location: "page",
         placement: "primary",
-        onActivate: (controller) => controller.ensurePackagesLoaded(),
+        onActivate: ({ get }) => get(PACKAGES_CAPABILITY).ensureLoaded(),
         component: lazy(() =>
           import("@/features/packages/package-manager-page").then((module) => ({
             default: module.PackageManagerPage,
@@ -183,7 +209,15 @@ const settingsPlugin = defineWorkspacePlugin({
   name: "Settings",
   version: "1.0.0",
   apiVersion: WORKSPACE_PLUGIN_API_VERSION,
-  requires: ["session", "compile", "ai", "packages"],
+  requires: [
+    SETTINGS_CAPABILITY,
+    FILES_CAPABILITY,
+    SESSION_CAPABILITY,
+    COMPILE_CAPABILITY,
+    AI_CAPABILITY,
+    PACKAGES_CAPABILITY,
+    DATA_CAPABILITY,
+  ],
   contributes: {
     views: [
       {

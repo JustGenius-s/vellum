@@ -1,12 +1,13 @@
 import { builtinWorkspacePlugins } from "@/app/plugins/builtin-plugins";
-import { WORKSPACE_CAPABILITIES, type WorkspacePluginManifest } from "@/app/plugins/plugin-api";
+import { createWorkspaceCapabilityHost } from "@/app/plugins/host-capabilities";
+import type { WorkspacePluginManifest } from "@/app/plugins/plugin-api";
 import { createWorkspacePluginRegistry } from "@/app/plugins/plugin-registry";
 import type { WorkspaceController } from "@/application/workspace-controller";
 
 export function createWorkspacePluginRuntime(controller: WorkspaceController) {
-  const registry = createWorkspacePluginRegistry(WORKSPACE_CAPABILITIES);
+  const registry = createWorkspacePluginRegistry(createWorkspaceCapabilityHost(controller));
   builtinWorkspacePlugins.forEach((plugin) => registry.register(plugin));
-  registry.start({ controller });
+  registry.start();
 
   return {
     registry,

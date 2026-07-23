@@ -9,7 +9,8 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 
-import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
+import { FILES_CAPABILITY, SETTINGS_CAPABILITY } from "@/app/plugins/capabilities";
+import { usePluginCapability, usePluginStore } from "@/app/plugins/plugin-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,17 +103,9 @@ function FontSelect({
 }
 
 function EditorSettings() {
-  const controller = useWorkspaceController();
-  const state = useWorkspaceSelector(
-    (workspace) => ({
-      cjkFont: workspace.cjkFont,
-      fontCatalog: workspace.fontCatalog,
-      fontsPending: workspace.fontsPending,
-      latinFont: workspace.latinFont,
-      vaultPath: workspace.vaultPath,
-    }),
-    shallowEqual,
-  );
+  const settings = usePluginCapability(SETTINGS_CAPABILITY);
+  const files = usePluginCapability(FILES_CAPABILITY);
+  const state = usePluginStore(settings);
 
   return (
     <div className="divide-y">
@@ -129,7 +122,7 @@ function EditorSettings() {
             value={state.latinFont}
             options={state.fontCatalog.latin}
             pending={state.fontsPending}
-            onValueChange={(family) => controller.setFontPreference("latin", family)}
+            onValueChange={(family) => settings.setFontPreference("latin", family)}
           />
           <FontSelect
             id="cjk-font"
@@ -138,7 +131,7 @@ function EditorSettings() {
             value={state.cjkFont}
             options={state.fontCatalog.cjk}
             pending={state.fontsPending}
-            onValueChange={(family) => controller.setFontPreference("cjk", family)}
+            onValueChange={(family) => settings.setFontPreference("cjk", family)}
           />
         </FieldGroup>
       </SettingsSection>
@@ -173,7 +166,7 @@ function EditorSettings() {
               variant="outline"
               size="sm"
               className="h-9 active:translate-y-px"
-              onClick={() => void controller.refreshTree()}
+              onClick={() => void files.refreshTree()}
               disabled={!state.vaultPath}
             >
               <ArrowClockwiseIcon data-icon="inline-start" />
@@ -187,15 +180,8 @@ function EditorSettings() {
 }
 
 function AiSettings() {
-  const controller = useWorkspaceController();
-  const state = useWorkspaceSelector(
-    (workspace) => ({
-      aiApiKey: workspace.aiApiKey,
-      aiBaseUrl: workspace.aiBaseUrl,
-      aiModel: workspace.aiModel,
-    }),
-    shallowEqual,
-  );
+  const settings = usePluginCapability(SETTINGS_CAPABILITY);
+  const state = usePluginStore(settings);
   const configured = Boolean(state.aiBaseUrl.trim() && state.aiModel.trim());
 
   return (
@@ -223,7 +209,7 @@ function AiSettings() {
             <Input
               id="ai-base-url"
               value={state.aiBaseUrl}
-              onChange={(event) => controller.setAiBaseUrl(event.target.value)}
+              onChange={(event) => settings.setAiBaseUrl(event.target.value)}
               placeholder="https://api.openai.com/v1"
               className="h-9 font-mono text-xs"
               spellCheck={false}
@@ -239,7 +225,7 @@ function AiSettings() {
             <Input
               id="ai-model"
               value={state.aiModel}
-              onChange={(event) => controller.setAiModel(event.target.value)}
+              onChange={(event) => settings.setAiModel(event.target.value)}
               placeholder="Your model ID"
               className="h-9 font-mono text-xs"
               spellCheck={false}
@@ -256,7 +242,7 @@ function AiSettings() {
               id="ai-api-key"
               type="password"
               value={state.aiApiKey}
-              onChange={(event) => controller.setAiApiKey(event.target.value)}
+              onChange={(event) => settings.setAiApiKey(event.target.value)}
               placeholder="Optional for local endpoints"
               className="h-9 font-mono text-xs"
               autoComplete="new-password"

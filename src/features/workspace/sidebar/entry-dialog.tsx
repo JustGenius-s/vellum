@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useWorkspaceController } from "@/app/workspace-context";
+import { FILES_CAPABILITY } from "@/app/plugins/capabilities";
+import { usePluginCapability } from "@/app/plugins/plugin-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +15,7 @@ import { fileStem } from "@/domain/workspace";
 import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
 export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): void }) {
-  const controller = useWorkspaceController();
+  const files = usePluginCapability(FILES_CAPABILITY);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -38,8 +39,8 @@ export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClo
     setPending(true);
     setError("");
     try {
-      if (state.kind === "rename") await controller.renameEntry(state.path, name.trim());
-      else await controller.createEntry(state.parent, name.trim(), state.kind === "folder");
+      if (state.kind === "rename") await files.renameEntry(state.path, name.trim());
+      else await files.createEntry(state.parent, name.trim(), state.kind === "folder");
       onClose();
     } catch (reason) {
       setError(String(reason));

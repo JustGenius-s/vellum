@@ -1,5 +1,9 @@
 import { Suspense, useEffect } from "react";
-import { useWorkspacePluginRegistry, useWorkspacePlugins } from "@/app/plugins/plugin-context";
+import {
+  useWorkspacePluginRegistry,
+  useWorkspacePlugins,
+  WorkspacePluginScopeProvider,
+} from "@/app/plugins/plugin-context";
 import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/workspace/app-sidebar";
@@ -53,7 +57,9 @@ function WorkspaceMain() {
       {pageActive ? (
         <div className="absolute inset-0 min-h-0 overflow-hidden bg-background">
           <Suspense fallback={<div className="h-full animate-pulse bg-muted/20" />}>
-            <FeaturePage requestEntryDialog={() => undefined} />
+            <WorkspacePluginScopeProvider pluginId={feature.pluginId}>
+              <FeaturePage />
+            </WorkspacePluginScopeProvider>
           </Suspense>
         </div>
       ) : null}

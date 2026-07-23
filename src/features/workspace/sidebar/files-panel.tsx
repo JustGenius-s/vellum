@@ -7,9 +7,9 @@ import {
   FolderOpenIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
-import type { WorkspaceViewProps } from "@/app/plugins/plugin-api";
 import { useConfirmation } from "@/app/confirmation-context";
-import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
+import { FILES_CAPABILITY } from "@/app/plugins/capabilities";
+import { usePluginCapability, usePluginStore } from "@/app/plugins/plugin-context";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/sidebar";
 import { fileStem, type TreeNode } from "@/domain/workspace";
 import { EmptySidebar } from "@/features/workspace/sidebar/empty-sidebar";
+import { EntryDialog } from "@/features/workspace/sidebar/entry-dialog";
+import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
 function TreeRow({
   node,
@@ -34,15 +36,19 @@ function TreeRow({
   onCreate,
   onRename,
   onDelete,
+  activePath,
+  onOpenFile,
+  onOpenVault,
 }: {
   node: TreeNode;
   depth: number;
   onCreate(parent: string, kind: "file" | "folder"): void;
   onRename(target: TreeNode): void;
   onDelete(target: TreeNode): void;
+  activePath: string;
+  onOpenFile(path: string): void;
+  onOpenVault(): void;
 }) {
-  const controller = useWorkspaceController();
-  const activePath = useWorkspaceSelector((state) => state.activePath);
   const { setOpenMobile } = useSidebar();
   const [expanded, setExpanded] = useState(depth < 1);
   const isActive = activePath === node.path;
@@ -68,7 +74,7 @@ function TreeRow({
                   setExpanded((value) => !value);
                   return;
                 }
-                void controller.openFile(node.path);
+                onOpenFile(node.path);
                 setOpenMobile(false);
               }}
             >
@@ -123,7 +129,7 @@ function TreeRow({
             Delete
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={() => void controller.openVault()}>
+          <ContextMenuItem onSelect={onOpenVault}>
             <FolderOpenIcon />
             Open another vault
           </ContextMenuItem>
@@ -140,6 +146,9 @@ function TreeRow({
               onCreate={onCreate}
               onRename={onRename}
               onDelete={onDelete}
+              activePath={activePath}
+              onOpenFile={onOpenFile}
+              onOpenVault={onOpenVault}
             />
           ))}
           {node.children.length === 0 ? (
@@ -151,17 +160,11 @@ function TreeRow({
   );
 }
 
-export function FilesPanel({ requestEntryDialog }: WorkspaceViewProps) {
-  const controller = useWorkspaceController();
+export function FilesPanel() {
+  const files = usePluginCapability(FILES_CAPABILITY);
   const confirm = useConfirmation();
-  const state = useWorkspaceSelector(
-    (workspace) => ({
-      phase: workspace.phase,
-      tree: workspace.tree,
-      vaultPath: workspace.vaultPath,
-    }),
-    shallowEqual,
-  );
+  const state = usePluginStore(files);
+  const [dialog, setDialog] = useState<EntryDialogState>(null);
 
   async function requestDelete(target: TreeNode) {
     const confirmed = await confirm({
@@ -172,7 +175,7 @@ export function FilesPanel({ requestEntryDialog }: WorkspaceViewProps) {
       confirmLabel: target.isDir ? "Delete folder" : "Delete file",
       destructive: true,
     });
-    if (confirmed) await controller.deleteEntry(target.path);
+    if (confirmed) await files.deleteEntry(target.path);
   }
 
   if (state.phase === "booting") {
@@ -194,7 +197,7 @@ export function FilesPanel({ requestEntryDialog }: WorkspaceViewProps) {
         title="No vault open"
         description="Choose a folder of documents and research data. Vellum keeps every source local and portable."
         action={
-          <Button size="sm" onClick={() => void controller.openVault()}>
+          <Button size="sm" onClick={() => void files.openVault()}>
             <FolderOpenIcon data-icon="inline-start" /> Open vault
           </Button>
         }
@@ -203,60 +206,66 @@ export function FilesPanel({ requestEntryDialog }: WorkspaceViewProps) {
   }
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div className="min-h-full group-data-[collapsible=icon]:hidden">
-          {state.tree.length === 0 ? (
-            <EmptySidebar
-              icon={FilePlusIcon}
-              title="The vault is empty"
-              description="Create the first document or text data file and keep the workspace in durable local formats."
-              action={
-                <Button
-                  size="sm"
-                  onClick={() => requestEntryDialog({ kind: "file", parent: state.vaultPath })}
-                >
-                  <PlusIcon data-icon="inline-start" /> New document
-                </Button>
-              }
-            />
-          ) : (
-            <div className="px-1 pb-6">
-              {state.tree.map((node) => (
-                <TreeRow
-                  key={node.path}
-                  node={node}
-                  depth={0}
-                  onCreate={(parent, kind) => requestEntryDialog({ kind, parent })}
-                  onRename={(target) =>
-                    requestEntryDialog({ kind: "rename", path: target.path, name: target.name })
-                  }
-                  onDelete={(target) => void requestDelete(target)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-40">
-        <ContextMenuItem
-          onSelect={() => requestEntryDialog({ kind: "file", parent: state.vaultPath })}
-        >
-          New document
-        </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={() => requestEntryDialog({ kind: "folder", parent: state.vaultPath })}
-        >
-          New folder
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => void controller.refreshTree()}>Refresh</ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => void controller.openVault()}>
-          <FolderOpenIcon />
-          Open another vault
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="min-h-full group-data-[collapsible=icon]:hidden">
+            {state.tree.length === 0 ? (
+              <EmptySidebar
+                icon={FilePlusIcon}
+                title="The vault is empty"
+                description="Create the first document or text data file and keep the workspace in durable local formats."
+                action={
+                  <Button
+                    size="sm"
+                    onClick={() => setDialog({ kind: "file", parent: state.vaultPath })}
+                  >
+                    <PlusIcon data-icon="inline-start" /> New document
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="px-1 pb-6">
+                {state.tree.map((node) => (
+                  <TreeRow
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    onCreate={(parent, kind) => setDialog({ kind, parent })}
+                    onRename={(target) =>
+                      setDialog({ kind: "rename", path: target.path, name: target.name })
+                    }
+                    onDelete={(target) => void requestDelete(target)}
+                    activePath={state.activePath}
+                    onOpenFile={(path) => void files.openFile(path)}
+                    onOpenVault={() => void files.openVault()}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-40">
+          <ContextMenuItem
+            onSelect={() => setDialog({ kind: "file", parent: state.vaultPath })}
+          >
+            New document
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => setDialog({ kind: "folder", parent: state.vaultPath })}
+          >
+            New folder
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => void files.refreshTree()}>Refresh</ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => void files.openVault()}>
+            <FolderOpenIcon />
+            Open another vault
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <EntryDialog state={dialog} onClose={() => setDialog(null)} />
+    </>
   );
 }

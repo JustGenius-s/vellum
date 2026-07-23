@@ -55,6 +55,7 @@ function EditorPane() {
       tree: workspace.tree,
       diagnostics: workspace.diagnostics,
       revealLine: workspace.revealLine,
+      editorRequest: workspace.editorRequest,
     }),
     shallowEqual,
   );
@@ -65,7 +66,7 @@ function EditorPane() {
       <div className="min-h-0 flex-1">
         {active ? (
           <Suspense fallback={<div className="space-y-3 px-[clamp(2rem,6vw,5rem)] py-14"><div className="h-3 w-2/3 animate-pulse rounded bg-muted" /><div className="h-3 w-full animate-pulse rounded bg-muted" /><div className="h-3 w-5/6 animate-pulse rounded bg-muted" /></div>}>
-            <TypstEditor document={controller.documentBuffers.getText(active.path)} revision={active.revision} activePath={active.path} fileNames={fileNames} diagnostics={state.diagnostics} revealLine={state.revealLine} onChange={(value) => controller.updateSource(value)} onCursorChange={(path, offset) => controller.recordCursor(path, offset)} onRevealComplete={() => controller.clearRevealLine()} />
+            <TypstEditor document={controller.documentBuffers.getText(active.path)} revision={active.revision} activePath={active.path} fileNames={fileNames} diagnostics={state.diagnostics} revealLine={state.revealLine} editorRequest={state.editorRequest} onChange={(value) => controller.updateSource(value)} onCursorChange={(path, offset) => controller.recordCursor(path, offset)} onRevealComplete={() => controller.clearRevealLine()} onEditorRequestComplete={(requestId) => controller.clearEditorRequest(requestId)} />
           </Suspense>
         ) : <EmptyWorkspace />}
       </div>

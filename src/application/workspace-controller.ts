@@ -1,5 +1,9 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
 import type { Text } from "@codemirror/state";
+import {
+  applyDocumentChanges,
+  type DocumentEdit,
+} from "@/application/document-edit";
 import { CompileProgressStore } from "@/application/compile-progress-store";
 import {
   collectCompileOverlays,
@@ -66,6 +70,7 @@ export class WorkspaceController {
   private readonly packages: WorkspacePackageService;
   private sessionTimer: number | null = null;
   private readonly cursorOffsets = new Map<string, number>();
+  private editorRequestId = 0;
   private lastDocumentPath = "";
   private initialized = false;
   readonly documentBuffers = new DocumentBufferStore();
@@ -582,6 +587,104 @@ export class WorkspaceController {
   recordCursor(path: string, offset: number) {
     if (!isFigureTarget(path)) return;
     this.cursorOffsets.set(path, Math.max(0, offset));
+  }
+
+  getCursorOffset(path: string) {
+    return this.cursorOffsets.get(path) ?? null;
+  }
+
+  async readDocumentText(path: string) {
+    if (!isWorkspaceTextFile(path)) throw new Error("Expected a workspace text document");
+    if (this.documentBuffers.has(path)) return this.documentBuffers.getString(path);
+    return this.gateway.readFile(path, this.state.vaultPath);
+  }
+
+  async applyDocumentEdit(edit: DocumentEdit) {
+    if (!isWorkspaceTextFile(edit.path)) throw new Error("Expected a workspace text document");
+    const existing = this.state.tabs.find((tab) => tab.path === edit.path);
+    if (!existing) {
+      const content = await this.gateway.readFile(edit.path, this.state.vaultPath);
+      this.documentBuffers.open(edit.path, content);
+    }
+    const currentRevision = this.documentBuffers.getRevision(edit.path);
+    if (edit.expectedRevision != null && edit.expectedRevision !== currentRevision) {
+      throw new Error(
+        `Document ${fileName(edit.path)} changed from revision ${edit.expectedRevision} to ${currentRevision}`,
+      );
+    }
+
+    const nextDocument = applyDocumentChanges(
+      this.documentBuffers.getText(edit.path),
+      edit.changes,
+    );
+    const revision = this.documentBuffers.replace(edit.path, nextDocument);
+    const changed = revision !== currentRevision;
+    const nextTab: DocumentTab = {
+      path: edit.path,
+      name: fileName(edit.path),
+      dirty: changed || existing?.dirty === true,
+      revision,
+    };
+    const tabs = existing
+      ? this.state.tabs.map((tab) => (tab.path === edit.path ? nextTab : tab))
+      : [...this.state.tabs, nextTab];
+    const activate = edit.activate === true || edit.focus === true || edit.selectionAfter != null;
+    const selection =
+      edit.selectionAfter == null
+        ? null
+        : Math.min(Math.max(0, edit.selectionAfter), nextDocument.length);
+    const editorRequest =
+      edit.focus || selection != null
+        ? {
+            id: (this.editorRequestId += 1),
+            path: edit.path,
+            selection,
+            focus: edit.focus === true,
+          }
+        : this.state.editorRequest;
+    const activeAfterEdit = activate || this.state.activePath === edit.path;
+    const isBibliography = documentFormat(edit.path) === "bibliography";
+
+    this.update({
+      tabs,
+      activePath: activate ? edit.path : this.state.activePath,
+      compactSurface: activate ? "editor" : this.state.compactSurface,
+      revealLine: activate ? null : this.state.revealLine,
+      editorRequest,
+      compilePhase: activeAfterEdit && changed
+        ? isBibliography
+          ? "idle"
+          : "queued"
+        : this.state.compilePhase,
+      statusText: changed
+        ? isBibliography
+          ? "Bibliography changed"
+          : "Draft changed"
+        : this.state.statusText,
+    });
+    this.scheduleSessionSave();
+    if (activeAfterEdit && changed) {
+      this.compileProgress.publish(
+        isBibliography
+          ? { phase: "idle", progress: null }
+          : {
+              phase: "queued",
+              progress: {
+                stage: "queued",
+                value: 4,
+                label: "Waiting to compile",
+                detail: fileName(edit.path),
+              },
+            },
+        true,
+      );
+      if (!isBibliography) this.scheduleCompile();
+    }
+    return revision;
+  }
+
+  clearEditorRequest(requestId: number) {
+    if (this.state.editorRequest?.id === requestId) this.update({ editorRequest: null });
   }
 
   private async insertPreparedFigure(

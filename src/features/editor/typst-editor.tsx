@@ -14,6 +14,7 @@ import {
 } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 
+import type { EditorRequest } from "@/application/document-edit";
 import { documentFormat, type CompileDiagnostic } from "@/domain/workspace";
 import { createEditorSearchPanel } from "@/features/editor/editor-search-panel";
 import { markdownLanguage } from "@/features/editor/markdown-language";
@@ -181,9 +182,11 @@ export function TypstEditor({
   fileNames,
   diagnostics,
   revealLine,
+  editorRequest,
   onChange,
   onCursorChange,
   onRevealComplete,
+  onEditorRequestComplete,
 }: {
   document: Text;
   revision: number;
@@ -191,9 +194,11 @@ export function TypstEditor({
   fileNames: string[];
   diagnostics: CompileDiagnostic[];
   revealLine: number | null;
+  editorRequest: EditorRequest | null;
   onChange(value: Text): void;
   onCursorChange(path: string, offset: number): void;
   onRevealComplete(): void;
+  onEditorRequestComplete(requestId: number): void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -318,6 +323,20 @@ export function TypstEditor({
     view.focus();
     onRevealComplete();
   }, [onRevealComplete, revealLine]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !editorRequest || editorRequest.path !== activePath) return;
+    if (editorRequest.selection != null) {
+      const selection = Math.min(Math.max(0, editorRequest.selection), view.state.doc.length);
+      view.dispatch({
+        selection: { anchor: selection },
+        effects: EditorView.scrollIntoView(selection, { y: "center" }),
+      });
+    }
+    if (editorRequest.focus) view.focus();
+    onEditorRequestComplete(editorRequest.id);
+  }, [activePath, editorRequest, onEditorRequestComplete]);
 
   return (
     <div
