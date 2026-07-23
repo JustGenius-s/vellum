@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useWorkspace } from "@/app/workspace-context";
+import { useWorkspaceController } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import { fileStem } from "@/domain/workspace";
 import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
 export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClose(): void }) {
-  const { controller } = useWorkspace();
+  const controller = useWorkspaceController();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -83,4 +83,3 @@ export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClo
     </Dialog>
   );
 }
-

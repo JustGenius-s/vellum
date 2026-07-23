@@ -7,7 +7,7 @@ import {
   FolderOpenIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -38,10 +38,11 @@ function TreeRow({
   onCreate(parent: string, kind: "file" | "folder"): void;
   onRename(target: TreeNode): void;
 }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const activePath = useWorkspaceSelector((state) => state.activePath);
   const { setOpenMobile } = useSidebar();
   const [expanded, setExpanded] = useState(depth < 1);
-  const isActive = state.activePath === node.path;
+  const isActive = activePath === node.path;
   const FolderEntryIcon = expanded ? FolderOpenIcon : FolderIcon;
 
   return (
@@ -150,7 +151,15 @@ function TreeRow({
 }
 
 export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      phase: workspace.phase,
+      tree: workspace.tree,
+      vaultPath: workspace.vaultPath,
+    }),
+    shallowEqual,
+  );
 
   if (state.phase === "booting") {
     return (
@@ -230,4 +239,3 @@ export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): vo
     </ContextMenu>
   );
 }
-

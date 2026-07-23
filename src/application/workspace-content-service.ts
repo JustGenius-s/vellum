@@ -1,27 +1,77 @@
-import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { CompileProgressStore } from "@/application/compile-progress-store";
+import { PreviewCompileCoordinator } from "@/application/preview-compile-coordinator";
+import type {
+  CompileOverlay,
+  CompilePort,
+  CompileRequest,
+  DataPort,
+} from "@/application/ports/workspace-gateway";
 import type { WorkspaceState } from "@/application/workspace-state";
 import { emptyDataQuery, isDataFile, type DataQuery, type DatasetDescriptor } from "@/domain/data";
-import { documentFormat, fileName, fileStem, type DocumentTab } from "@/domain/workspace";
+import {
+  documentFormat,
+  fileName,
+  fileStem,
+  type CompileSvgResult,
+  type DocumentTab,
+  type PreviewPage,
+} from "@/domain/workspace";
 
 interface WorkspaceContentHost {
-  gateway: WorkspaceGateway;
+  gateway: CompilePort & DataPort;
   getState(): WorkspaceState;
   getActiveTab(): DocumentTab | null;
+  getCompileOverlays(mainPath: string): CompileOverlay[];
+  getCachedPageIds(): string[];
+  mergePreviewPages(result: CompileSvgResult): PreviewPage[];
+  compileProgress: CompileProgressStore;
   update(patch: Partial<WorkspaceState>): void;
 }
 
 export class WorkspaceContentService {
   private readonly host: WorkspaceContentHost;
-  private compileTimer: number | null = null;
   private operationToken = 0;
+  private readonly coordinator: PreviewCompileCoordinator;
 
   constructor(host: WorkspaceContentHost) {
     this.host = host;
+    this.coordinator = new PreviewCompileCoordinator({
+      delay: 250,
+      run: (request, onProgress) => this.host.gateway.compileSvg(request, onProgress),
+      onStart: (request) => {
+        this.host.update({ compilePhase: "compiling", statusText: "Compiling Typst" });
+        this.host.compileProgress.publish(
+          {
+            phase: "compiling",
+            progress: {
+              stage: "preparing",
+              value: 8,
+              label: "Preparing source",
+              detail: fileName(request.mainFile),
+            },
+          },
+          true,
+        );
+      },
+      onProgress: (progress) => {
+        this.host.compileProgress.publish({ phase: "compiling", progress });
+      },
+      onResult: (result) => this.applyCompileResult(result),
+      onDiscardedResult: (result) => {
+        if (!result.diagnostics.some((item) => item.severity === "error")) {
+          try {
+            this.host.mergePreviewPages(result);
+          } catch {
+            // A later current request will repair any incomplete cache lineage.
+          }
+        }
+      },
+      onError: (error) => this.applyCompileError(error),
+    });
   }
 
   scheduleCompile() {
-    if (this.compileTimer) window.clearTimeout(this.compileTimer);
-    this.compileTimer = window.setTimeout(() => void this.compileActive(), 420);
+    this.coordinator.schedule(() => this.createCompileRequest("preview"));
   }
 
   queryForDataset(dataset: DatasetDescriptor): DataQuery {
@@ -60,7 +110,6 @@ export class WorkspaceContentService {
     const token = ++this.operationToken;
     this.host.update({
       compilePhase: "idle",
-      compileProgress: null,
       previewPages: [],
       diagnostics: [],
       problemsOpen: false,
@@ -68,6 +117,7 @@ export class WorkspaceContentService {
       dataError: "",
       statusText: `Inspecting ${tab.name}`,
     });
+    this.host.compileProgress.reset();
     try {
       const catalog = await this.host.gateway.inspectData({ path: tab.path, vaultPath: state.vaultPath });
       if (token !== this.operationToken) return;
@@ -179,14 +229,12 @@ export class WorkspaceContentService {
   }
 
   async compileActive() {
-    if (this.compileTimer) {
-      window.clearTimeout(this.compileTimer);
-      this.compileTimer = null;
-    }
     const tab = this.host.getActiveTab();
     const state = this.host.getState();
     if (!tab || !state.vaultPath) {
-      this.host.update({ compilePhase: "idle", compileProgress: null, previewPages: [], diagnostics: [] });
+      this.coordinator.invalidate();
+      this.host.compileProgress.reset();
+      this.host.update({ compilePhase: "idle", previewPages: [], diagnostics: [] });
       return;
     }
     if (isDataFile(tab.path)) {
@@ -204,9 +252,10 @@ export class WorkspaceContentService {
     }
     if (documentFormat(tab.path) === "bibliography") {
       ++this.operationToken;
+      this.coordinator.invalidate();
+      this.host.compileProgress.reset();
       this.host.update({
         compilePhase: "idle",
-        compileProgress: null,
         previewPages: [],
         diagnostics: [],
         problemsOpen: false,
@@ -214,69 +263,11 @@ export class WorkspaceContentService {
       });
       return;
     }
-
-    const token = ++this.operationToken;
-    this.host.update({
-      compilePhase: "compiling",
-      compileProgress: { stage: "preparing", value: 8, label: "Preparing source", detail: fileName(tab.path) },
-      statusText: "Compiling Typst",
-    });
-    try {
-      const result = await this.host.gateway.compileSvg(
-        {
-          source: tab.content,
-          vaultPath: state.vaultPath,
-          mainFile: tab.path,
-          latinFont: state.latinFont,
-          cjkFont: state.cjkFont,
-          packageCachePath: state.packageCachePath,
-          packageDataPath: state.packageDataPath,
-        },
-        (compileProgress) => {
-          if (token === this.operationToken) this.host.update({ compileProgress });
-        },
-      );
-      if (token !== this.operationToken) return;
-      const current = this.host.getState();
-      const errorCount = result.diagnostics.filter((item) => item.severity === "error").length;
-      const warningCount = result.diagnostics.length - errorCount;
-      const pageCount = result.pages?.length ?? 0;
-      this.host.update({
-        previewPages: result.pages ?? current.previewPages,
-        diagnostics: result.diagnostics,
-        compilePhase: errorCount ? "failed" : "ready",
-        compileProgress: {
-          stage: "complete",
-          value: 100,
-          label: errorCount ? "Compile failed" : warningCount ? "Preview updated with warnings" : "Preview updated",
-          detail: errorCount
-            ? `${errorCount} error${errorCount === 1 ? "" : "s"}`
-            : warningCount
-              ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
-              : `${pageCount} page${pageCount === 1 ? "" : "s"}`,
-        },
-        problemsOpen: errorCount > 0 ? true : current.problemsOpen,
-        statusText: errorCount
-          ? `${errorCount} compile error${errorCount === 1 ? "" : "s"}`
-          : warningCount
-            ? `${warningCount} compile warning${warningCount === 1 ? "" : "s"}`
-            : "Preview is current",
-      });
-    } catch (error) {
-      if (token !== this.operationToken) return;
-      this.host.update({
-        compilePhase: "failed",
-        compileProgress: { stage: "complete", value: 100, label: "Compile failed", detail: String(error) },
-        problemsOpen: true,
-        diagnostics: [{ severity: "error", message: String(error), line: null, column: null, path: null, hints: [] }],
-        statusText: `Compile failed: ${String(error)}`,
-      });
-    }
+    this.coordinator.runNow(() => this.createCompileRequest("preview"));
   }
 
   async exportPdf() {
     const tab = this.host.getActiveTab();
-    const state = this.host.getState();
     if (!tab) return;
     if (isDataFile(tab.path)) {
       this.host.update({ statusText: "Generate or open a Typst chart before exporting PDF" });
@@ -289,20 +280,86 @@ export class WorkspaceContentService {
     this.host.update({ statusText: "Preparing PDF" });
     try {
       await this.host.gateway.exportPdf(
-        {
-          source: tab.content,
-          vaultPath: state.vaultPath,
-          mainFile: tab.path,
-          latinFont: state.latinFont,
-          cjkFont: state.cjkFont,
-          packageCachePath: state.packageCachePath,
-          packageDataPath: state.packageDataPath,
-        },
+        this.createCompileRequest("export", tab.path),
         `${fileStem(tab.name)}.pdf`,
       );
       this.host.update({ statusText: "PDF exported" });
     } catch (error) {
       this.host.update({ statusText: `Export failed: ${String(error)}` });
     }
+  }
+
+  private createCompileRequest(intent: CompileRequest["intent"], mainPath?: string): CompileRequest {
+    const state = this.host.getState();
+    const mainFile = mainPath ?? this.host.getActiveTab()?.path ?? "";
+    if (!mainFile || !state.vaultPath) throw new Error("Open a document before compiling");
+    return {
+      requestId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      intent,
+      vaultPath: state.vaultPath,
+      mainFile,
+      latinFont: state.latinFont,
+      cjkFont: state.cjkFont,
+      packageCachePath: state.packageCachePath,
+      packageDataPath: state.packageDataPath,
+      cachedPageIds: this.host.getCachedPageIds(),
+      overlays: this.host.getCompileOverlays(mainFile),
+    };
+  }
+
+  private applyCompileResult(result: CompileSvgResult) {
+    const current = this.host.getState();
+    const errorCount = result.diagnostics.filter((item) => item.severity === "error").length;
+    const warningCount = result.diagnostics.length - errorCount;
+    let previewPages = current.previewPages;
+    if (!errorCount) {
+      try {
+        previewPages = this.host.mergePreviewPages(result);
+      } catch (error) {
+        this.applyCompileError(error);
+        return;
+      }
+    }
+    const detail = errorCount
+      ? `${errorCount} error${errorCount === 1 ? "" : "s"}`
+      : warningCount
+        ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
+        : `${previewPages.length} page${previewPages.length === 1 ? "" : "s"} · ${Math.round(result.metrics.timings.totalMs)}ms`;
+    const label = errorCount
+      ? "Compile failed"
+      : warningCount
+        ? "Preview updated with warnings"
+        : "Preview updated";
+    this.host.update({
+      previewPages,
+      diagnostics: result.diagnostics,
+      compilePhase: errorCount ? "failed" : "ready",
+      problemsOpen: errorCount > 0 ? true : current.problemsOpen,
+      statusText: errorCount
+        ? `${errorCount} compile error${errorCount === 1 ? "" : "s"}`
+        : warningCount
+          ? `${warningCount} compile warning${warningCount === 1 ? "" : "s"}`
+          : `Preview is current · ${result.metrics.reusedPages} pages reused`,
+    });
+    this.host.compileProgress.publish(
+      { phase: errorCount ? "failed" : "ready", progress: { stage: "complete", value: 100, label, detail } },
+      true,
+    );
+  }
+
+  private applyCompileError(error: unknown) {
+    this.host.update({
+      compilePhase: "failed",
+      problemsOpen: true,
+      diagnostics: [{ severity: "error", message: String(error), line: null, column: null, path: null, hints: [] }],
+      statusText: `Compile failed: ${String(error)}`,
+    });
+    this.host.compileProgress.publish(
+      {
+        phase: "failed",
+        progress: { stage: "complete", value: 100, label: "Compile failed", detail: String(error) },
+      },
+      true,
+    );
   }
 }

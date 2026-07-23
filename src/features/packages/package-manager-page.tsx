@@ -13,7 +13,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -354,7 +354,19 @@ function PackageDirectoryRow({
 }
 
 export function PackageManagerPage() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      packageCachePath: workspace.packageCachePath,
+      packageCatalog: workspace.packageCatalog,
+      packageDataPath: workspace.packageDataPath,
+      packageError: workspace.packageError,
+      packageMutationPending: workspace.packageMutationPending,
+      packagesLoaded: workspace.packagesLoaded,
+      packagesPending: workspace.packagesPending,
+    }),
+    shallowEqual,
+  );
   const [query, setQuery] = useState("");
   const [installSpec, setInstallSpec] = useState("@preview/tiaoma:0.3.0");
   const [installError, setInstallError] = useState("");

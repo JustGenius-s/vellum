@@ -8,7 +8,8 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
+import { isDataFile } from "@/domain/data";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -73,13 +74,21 @@ function groupDiagnostics(diagnostics: CompileDiagnostic[]): DiagnosticGroup[] {
 }
 
 export function ProblemsPanel() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      diagnostics: workspace.diagnostics,
+      problemsOpen: workspace.problemsOpen,
+    }),
+    shallowEqual,
+  );
   if (!state.problemsOpen) return null;
 
   const groups = groupDiagnostics(state.diagnostics);
   const fileCount = groups.filter((group) => group.key !== "__compiler__").length;
   const canFixWithAi = Boolean(
-    state.diagnostics.length && controller.activeTab && !controller.activeIsData,
+    state.diagnostics.length && state.activePath && !isDataFile(state.activePath),
   );
 
   return (

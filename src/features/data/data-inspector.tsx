@@ -11,7 +11,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,7 +137,15 @@ function StatisticsView({ statistics }: { statistics: SeriesStatistics[] }) {
 }
 
 function TablePreview() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      dataPending: workspace.dataPending,
+      dataPreview: workspace.dataPreview,
+      dataQuery: workspace.dataQuery,
+    }),
+    shallowEqual,
+  );
   const preview = state.dataPreview;
   if (!preview) return null;
   const canPrevious = preview.rowOffset > 0;
@@ -303,7 +311,7 @@ function normalizeTensorPoints(points: TensorPoint[]) {
 }
 
 function TensorPlot() {
-  const preview = useWorkspace().state.dataPreview?.tensor;
+  const preview = useWorkspaceSelector((state) => state.dataPreview?.tensor);
   if (!preview || !preview.points.length) {
     return (
       <div className="flex min-h-64 items-center justify-center rounded-lg border text-sm text-muted-foreground">
@@ -364,8 +372,19 @@ function TensorPlot() {
 }
 
 function DimensionControls() {
-  const { controller, state } = useWorkspace();
-  const dataset = controller.selectedDataset;
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      dataCatalog: workspace.dataCatalog,
+      dataPending: workspace.dataPending,
+      dataQuery: workspace.dataQuery,
+    }),
+    shallowEqual,
+  );
+  const dataset =
+    state.dataCatalog?.datasets.find((item) => item.id === state.dataQuery.datasetId) ??
+    state.dataCatalog?.datasets[0] ??
+    null;
   if (!dataset || dataset.kind !== "tensor") return null;
 
   return (
@@ -421,9 +440,23 @@ function DimensionControls() {
 }
 
 export function DataInspector() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      dataCatalog: workspace.dataCatalog,
+      dataError: workspace.dataError,
+      dataPending: workspace.dataPending,
+      dataPreview: workspace.dataPreview,
+      dataQuery: workspace.dataQuery,
+    }),
+    shallowEqual,
+  );
   const catalog = state.dataCatalog;
-  const dataset = controller.selectedDataset;
+  const dataset =
+    catalog?.datasets.find((item) => item.id === state.dataQuery.datasetId) ??
+    catalog?.datasets[0] ??
+    null;
   const activeName = fileName(state.activePath);
   const shapeLabel = dataset?.shape.length ? dataset.shape.join(" × ") : "scalar";
   const datasetSummary = useMemo(() => {

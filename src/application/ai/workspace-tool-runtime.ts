@@ -201,13 +201,16 @@ export class WorkspaceToolRuntime {
     const state = this.host.getState();
     const result = await this.host.gateway.compileSvg(
       {
-        source: source.content,
+        requestId: crypto.randomUUID(),
+        intent: "validate",
         vaultPath: this.vaultPath,
         mainFile: resolved,
         latinFont: state.latinFont,
         cjkFont: state.cjkFont,
         packageCachePath: state.packageCachePath,
         packageDataPath: state.packageDataPath,
+        cachedPageIds: [],
+        overlays: this.host.compileOverlays(resolved, source.content),
       },
       (progress) => {
         if (!this.signal.aborted) {

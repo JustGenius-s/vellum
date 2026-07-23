@@ -1,7 +1,7 @@
-use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::time::SystemTime;
 use tauri::ipc::Channel;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
@@ -11,13 +11,77 @@ use typst::{Library, LibraryExt, World};
 use typst_kit::datetime::Time;
 use walkdir::WalkDir;
 
-use crate::packages;
-
-static WIKILINK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("valid wikilink regex")
-});
+use crate::{compiler::preprocess_source, packages};
 
 static FONT_LIBRARY: LazyLock<FontLibrary> = LazyLock::new(FontLibrary::load);
+static FILE_CACHE: LazyLock<Mutex<FileSnapshotCache>> =
+    LazyLock::new(|| Mutex::new(FileSnapshotCache::new(64 * 1024 * 1024)));
+
+#[derive(Clone)]
+struct FileSnapshot {
+    modified: Option<SystemTime>,
+    len: u64,
+    bytes: Vec<u8>,
+    last_used: u64,
+}
+
+struct FileSnapshotCache {
+    entries: HashMap<PathBuf, FileSnapshot>,
+    bytes: usize,
+    capacity: usize,
+    clock: u64,
+}
+
+impl FileSnapshotCache {
+    fn new(capacity: usize) -> Self {
+        Self { entries: HashMap::new(), bytes: 0, capacity, clock: 0 }
+    }
+
+    fn read(&mut self, path: &Path) -> Result<(Vec<u8>, bool), typst::diag::FileError> {
+        let metadata = std::fs::metadata(path)
+            .map_err(|_| typst::diag::FileError::NotFound(path.to_path_buf()))?;
+        let modified = metadata.modified().ok();
+        let len = metadata.len();
+        self.clock = self.clock.wrapping_add(1);
+        if let Some(snapshot) = self.entries.get_mut(path) {
+            if snapshot.modified == modified && snapshot.len == len {
+                snapshot.last_used = self.clock;
+                return Ok((snapshot.bytes.clone(), true));
+            }
+        }
+        let bytes = std::fs::read(path)
+            .map_err(|_| typst::diag::FileError::NotFound(path.to_path_buf()))?;
+        if let Some(previous) = self.entries.remove(path) {
+            self.bytes = self.bytes.saturating_sub(previous.bytes.len());
+        }
+        self.bytes += bytes.len();
+        self.entries.insert(path.to_path_buf(), FileSnapshot {
+            modified,
+            len,
+            bytes: bytes.clone(),
+            last_used: self.clock,
+        });
+        while self.bytes > self.capacity && self.entries.len() > 1 {
+            let Some(oldest) = self.entries.iter().min_by_key(|(_, value)| value.last_used).map(|(path, _)| path.clone()) else { break; };
+            if let Some(removed) = self.entries.remove(&oldest) {
+                self.bytes = self.bytes.saturating_sub(removed.bytes.len());
+            }
+        }
+        Ok((bytes, false))
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct WorldMetrics {
+    pub file_cache_hits: usize,
+    pub file_cache_misses: usize,
+}
+
+pub struct WorldOverlay {
+    pub path: String,
+    pub revision: u64,
+    pub content: String,
+}
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -298,28 +362,6 @@ pub async fn list_font_families() -> Result<FontCatalog, String> {
     .map_err(|error| format!("Font discovery task failed: {error}"))
 }
 
-fn expand_wikilinks(source: &str) -> String {
-    WIKILINK_RE
-        .replace_all(source, |captures: &regex::Captures| {
-            let target = captures.get(1).map(|value| value.as_str()).unwrap_or("");
-            let label = captures
-                .get(2)
-                .map(|value| value.as_str())
-                .unwrap_or(target);
-            let target = if Path::new(target).extension().is_some() {
-                target.to_string()
-            } else {
-                format!("{target}.typ")
-            };
-            format!(
-                "#link(\"{}\")[{}]",
-                target.replace('\\', "\\\\").replace('"', "\\\""),
-                label.replace('\\', "\\\\").replace('"', "\\\"")
-            )
-        })
-        .into_owned()
-}
-
 pub struct TypstWorld {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
@@ -330,6 +372,8 @@ pub struct TypstWorld {
     package_cache_path: Option<String>,
     package_data_path: Option<String>,
     progress: Option<CompileProgressReporter>,
+    overlays: HashMap<String, (u64, String)>,
+    metrics: Arc<Mutex<WorldMetrics>>,
     time: Time,
 }
 
@@ -341,7 +385,8 @@ impl TypstWorld {
         package_cache_path: Option<String>,
         package_data_path: Option<String>,
         progress: Option<CompileProgressReporter>,
-    ) -> Self {
+        overlays: Vec<WorldOverlay>,
+    ) -> Result<Self, String> {
         let library = Library::default();
         let book = FONT_LIBRARY.book.clone();
         let relative = main_file
@@ -352,7 +397,30 @@ impl TypstWorld {
             .unwrap_or_else(|_| VirtualPath::new("/main.typ").expect("valid fallback path"));
         let main = FileId::new(RootedPath::new(VirtualRoot::Project, main_vpath.clone()));
 
-        Self {
+        let vault = Path::new(&vault_path)
+            .canonicalize()
+            .map_err(|error| format!("Invalid vault path: {error}"))?;
+        let mut normalized_overlays = HashMap::new();
+        for overlay in overlays {
+            let requested = Path::new(&overlay.path);
+            let absolute = if requested.is_absolute() {
+                requested.to_path_buf()
+            } else {
+                vault.join(requested)
+            };
+            let resolved = absolute
+                .canonicalize()
+                .map_err(|error| format!("Invalid overlay path {}: {error}", overlay.path))?;
+            let relative = resolved
+                .strip_prefix(&vault)
+                .map_err(|_| format!("Overlay leaves the open vault: {}", overlay.path))?;
+            normalized_overlays.insert(
+                relative.to_string_lossy().replace('\\', "/"),
+                (overlay.revision, overlay.content),
+            );
+        }
+
+        Ok(Self {
             library: LazyHash::new(library),
             book: LazyHash::new(book),
             main,
@@ -362,8 +430,10 @@ impl TypstWorld {
             package_cache_path,
             package_data_path,
             progress,
+            overlays: normalized_overlays,
+            metrics: Arc::new(Mutex::new(WorldMetrics::default())),
             time: Time::system(),
-        }
+        })
     }
 
     fn resolve_project_to_disk(
@@ -386,6 +456,29 @@ impl TypstWorld {
             return Err(typst::diag::FileError::NotFound(requested));
         }
         Ok(resolved)
+    }
+
+    fn relative_key(&self, id: FileId) -> String {
+        id.vpath().get_without_slash().replace('\\', "/")
+    }
+
+    fn read_project_bytes(&self, id: FileId) -> Result<Vec<u8>, typst::diag::FileError> {
+        if let Some((_, content)) = self.overlays.get(&self.relative_key(id)) {
+            return Ok(content.as_bytes().to_vec());
+        }
+        let path = self.resolve_project_to_disk(id)?;
+        let (bytes, hit) = FILE_CACHE
+            .lock()
+            .map_err(|_| typst::diag::FileError::Other(Some("File cache is unavailable".into())))?
+            .read(&path)?;
+        if let Ok(mut metrics) = self.metrics.lock() {
+            if hit { metrics.file_cache_hits += 1; } else { metrics.file_cache_misses += 1; }
+        }
+        Ok(bytes)
+    }
+
+    pub fn metrics(&self) -> WorldMetrics {
+        self.metrics.lock().map(|value| value.clone()).unwrap_or_default()
     }
 }
 
@@ -412,18 +505,10 @@ impl World for TypstWorld {
 
         let content = match id.root() {
             VirtualRoot::Project => {
-                let path = self.resolve_project_to_disk(id)?;
-                let content = std::fs::read_to_string(&path)
-                    .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
-                if path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|value| value.eq_ignore_ascii_case("typ"))
-                {
-                    expand_wikilinks(&content)
-                } else {
-                    content
-                }
+                let bytes = self.read_project_bytes(id)?;
+                let content = String::from_utf8(bytes)
+                    .map_err(|_| typst::diag::FileError::InvalidUtf8)?;
+                preprocess_source(id.vpath().get_without_slash(), &content)
             }
             VirtualRoot::Package(spec) => {
                 let bytes = packages::load_package_file(
@@ -446,10 +531,7 @@ impl World for TypstWorld {
         }
         match id.root() {
             VirtualRoot::Project => {
-                let path = self.resolve_project_to_disk(id)?;
-                let bytes = std::fs::read(&path)
-                    .map_err(|_| typst::diag::FileError::NotFound(path.clone()))?;
-                Ok(Bytes::new(bytes))
+                Ok(Bytes::new(self.read_project_bytes(id)?))
             }
             VirtualRoot::Package(spec) => packages::load_package_file(
                 spec,

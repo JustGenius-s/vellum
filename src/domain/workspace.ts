@@ -10,8 +10,8 @@ export interface TreeNode {
 export interface DocumentTab {
   path: string;
   name: string;
-  content: string;
   dirty: boolean;
+  revision: number;
 }
 
 export interface CompileDiagnostic {
@@ -23,9 +23,46 @@ export interface CompileDiagnostic {
   hints: string[];
 }
 
+export type CompileIntent = "preview" | "validate" | "export";
+
+export interface PreviewPageOrder {
+  id: string;
+  width: number;
+  height: number;
+}
+
+export interface ChangedPreviewPage {
+  id: string;
+  svg: string;
+}
+
+export interface CompileTimings {
+  queueMs: number;
+  prepareMs: number;
+  compileMs: number;
+  renderMs: number;
+  totalMs: number;
+}
+
+export interface CompileMetrics {
+  timings: CompileTimings;
+  fileCacheHits: number;
+  fileCacheMisses: number;
+  renderedPages: number;
+  reusedPages: number;
+  svgBytes: number;
+}
+
 export interface CompileSvgResult {
-  pages: string[] | null;
+  requestId: string;
   diagnostics: CompileDiagnostic[];
+  pageOrder: PreviewPageOrder[];
+  changedPages: ChangedPreviewPage[];
+  metrics: CompileMetrics;
+}
+
+export interface PreviewPage extends PreviewPageOrder {
+  svg: string;
 }
 
 export type CompileProgressStage =

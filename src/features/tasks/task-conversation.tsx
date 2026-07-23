@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import type { SourceDocumentUIPart } from "ai";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import {
   Attachment,
   AttachmentInfo,
@@ -74,7 +74,7 @@ function attachment(path: string, vaultPath: string): AttachmentData {
 }
 
 function TaskPart({ part, task, streaming }: { part: AiMessageContentPart; task: AiTask; streaming: boolean }) {
-  const { controller } = useWorkspace();
+  const controller = useWorkspaceController();
   if (part.type === "reasoning") {
     return (
       <Reasoning isStreaming={streaming} className="mb-0">
@@ -170,7 +170,16 @@ function AssistantMessage({ task, messageIndex }: { task: AiTask; messageIndex: 
 }
 
 export function TaskConversation({ task, compact = false }: { task: AiTask; compact?: boolean }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      aiBaseUrl: workspace.aiBaseUrl,
+      aiModel: workspace.aiModel,
+      tree: workspace.tree,
+      vaultPath: workspace.vaultPath,
+    }),
+    shallowEqual,
+  );
   const [request, setRequest] = useState("");
   const [contextPaths, setContextPaths] = useState<string[]>([]);
   const [contextOpen, setContextOpen] = useState(false);

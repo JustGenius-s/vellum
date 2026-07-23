@@ -1,4 +1,11 @@
 import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { Text } from "@codemirror/state";
+import { CompileProgressStore } from "@/application/compile-progress-store";
+import {
+  collectCompileOverlays,
+  DocumentBufferStore,
+} from "@/application/document-buffer-store";
+import { PreviewPageCache } from "@/application/preview-page-cache";
 import { WorkspaceContentService } from "@/application/workspace-content-service";
 import { WorkspaceFileService } from "@/application/workspace-file-service";
 import { WorkspacePackageService } from "@/application/workspace-package-service";
@@ -61,6 +68,9 @@ export class WorkspaceController {
   private readonly cursorOffsets = new Map<string, number>();
   private lastDocumentPath = "";
   private initialized = false;
+  readonly documentBuffers = new DocumentBufferStore();
+  readonly compileProgress = new CompileProgressStore();
+  private readonly previewPageCache = new PreviewPageCache();
 
   constructor(gateway: WorkspaceGateway) {
     this.gateway = gateway;
@@ -70,7 +80,7 @@ export class WorkspaceController {
         const tab = this.state.tabs.find((candidate) => candidate.path === path);
         if (tab) {
           return {
-            content: tab.content,
+            content: this.documentBuffers.getString(path),
             exists: true,
             buffered: true,
             dirty: tab.dirty,
@@ -90,18 +100,20 @@ export class WorkspaceController {
       write: async (path, content, current) => {
         const tab = this.state.tabs.find((candidate) => candidate.path === path);
         if (tab?.dirty || (current.buffered && current.dirty)) {
+          const revision = this.documentBuffers.replace(path, content);
           this.update({
             tabs: this.state.tabs.map((candidate) =>
-              candidate.path === path ? { ...candidate, content, dirty: true } : candidate,
+              candidate.path === path ? { ...candidate, revision, dirty: true } : candidate,
             ),
           });
           return { saved: false };
         }
         await this.gateway.writeFile(path, content, this.state.vaultPath);
         if (tab) {
+          const revision = this.documentBuffers.replace(path, content);
           this.update({
             tabs: this.state.tabs.map((candidate) =>
-              candidate.path === path ? { ...candidate, content, dirty: false } : candidate,
+              candidate.path === path ? { ...candidate, revision, dirty: false } : candidate,
             ),
           });
         }
@@ -112,6 +124,10 @@ export class WorkspaceController {
       gateway: this.gateway,
       getState: () => this.state,
       getActiveTab: () => this.activeTab,
+      getCompileOverlays: (mainPath) => this.createCompileOverlays(mainPath),
+      getCachedPageIds: () => this.previewPageCache.ids(),
+      mergePreviewPages: (result) => this.previewPageCache.merge(result.pageOrder, result.changedPages),
+      compileProgress: this.compileProgress,
       update: (patch) => this.update(patch),
     });
     this.aiTasks = new WorkspaceAiCoordinator(this.gateway, {
@@ -120,6 +136,8 @@ export class WorkspaceController {
       getState: () => this.state,
       queryForDataset: (dataset) => this.content.queryForDataset(dataset),
       refreshTree: () => this.refreshTree(),
+      compileOverlays: (mainPath, mainContent) =>
+        this.createCompileOverlays(mainPath, mainContent),
       insertFigure: (figure, path, placement) =>
         this.insertPreparedFigure(figure, path, placement, false),
       setStatus: (status) => this.setStatus(status),
@@ -144,6 +162,8 @@ export class WorkspaceController {
       compileActive: () => this.compileActive(),
       revealLine: (line) => this.revealLine(line),
       getActiveStem: () => this.activeStem,
+      renameBuffers: (path, nextPath) => this.renameBuffers(path, nextPath),
+      closeBuffers: (paths) => paths.forEach((path) => this.documentBuffers.close(path)),
     });
     this.aiTasks.subscribe(() => this.syncAiTaskState());
   }
@@ -196,7 +216,7 @@ export class WorkspaceController {
   }
 
   get outline(): OutlineHeading[] {
-    return parseOutline(this.activeTab?.content ?? "");
+    return parseOutline(this.state.activePath ? this.documentBuffers.getString(this.state.activePath) : "");
   }
 
   get activeStem() {
@@ -264,6 +284,8 @@ export class WorkspaceController {
   }
 
   private async loadVault(vaultPath: string, openTabs: string[], activeTabPath: string | null) {
+    this.documentBuffers.clear();
+    this.compileProgress.reset();
     this.update({
       phase: "booting",
       vaultPath,
@@ -287,12 +309,11 @@ export class WorkspaceController {
         this.gateway.indexBacklinks(vaultPath),
       ]);
       const opened = await Promise.all(
-        openTabs.map(async (path) => ({
-          path,
-          name: fileName(path),
-          content: isDataFile(path) ? "" : await this.gateway.readFile(path, vaultPath),
-          dirty: false,
-        })),
+        openTabs.map(async (path) => {
+          const content = isDataFile(path) ? "" : await this.gateway.readFile(path, vaultPath);
+          this.documentBuffers.open(path, content);
+          return { path, name: fileName(path), dirty: false, revision: 0 };
+        }),
       );
       const activePath =
         opened.find((tab) => tab.path === activeTabPath)?.path ?? opened[0]?.path ?? "";
@@ -346,7 +367,8 @@ export class WorkspaceController {
       const content = isDataFile(path)
         ? ""
         : await this.gateway.readFile(path, this.state.vaultPath);
-      const tab: DocumentTab = { path, name: fileName(path), content, dirty: false };
+      this.documentBuffers.open(path, content);
+      const tab: DocumentTab = { path, name: fileName(path), dirty: false, revision: 0 };
       this.update({
         tabs: [...this.state.tabs, tab],
         activePath: path,
@@ -406,30 +428,39 @@ export class WorkspaceController {
       diagnostics: activePath ? this.state.diagnostics : [],
       statusText,
     });
+    confirmedPaths.forEach((path) => this.documentBuffers.close(path));
     this.scheduleSessionSave();
     if (activeWasClosed && activePath) void this.compileActive();
   }
 
-  updateSource(content: string) {
+  updateSource(content: Text | string) {
     const active = this.activeTab;
-    if (!active || isDataFile(active.path) || active.content === content) return;
+    if (!active || isDataFile(active.path)) return;
+    const revision = this.documentBuffers.replace(active.path, content);
+    if (revision === active.revision) return;
     const tabs = this.state.tabs.map((tab) =>
-      tab.path === active.path ? { ...tab, content, dirty: true } : tab,
+      tab.path === active.path ? { ...tab, revision, dirty: true } : tab,
     );
     const isBibliography = documentFormat(active.path) === "bibliography";
     this.update({
       tabs,
       compilePhase: isBibliography ? "idle" : "queued",
-      compileProgress: isBibliography
-        ? null
-        : {
-            stage: "queued",
-            value: 4,
-            label: "Waiting to compile",
-            detail: fileName(active.path),
-          },
       statusText: isBibliography ? "Bibliography changed" : "Draft changed",
     });
+    this.compileProgress.publish(
+      isBibliography
+        ? { phase: "idle", progress: null }
+        : {
+            phase: "queued",
+            progress: {
+              stage: "queued",
+              value: 4,
+              label: "Waiting to compile",
+              detail: fileName(active.path),
+            },
+          },
+      true,
+    );
     if (!isBibliography) this.scheduleCompile();
   }
 
@@ -442,7 +473,8 @@ export class WorkspaceController {
     const tab = this.state.tabs.find((candidate) => candidate.path === path);
     if (!tab) return;
     try {
-      await this.gateway.writeFile(path, tab.content, this.state.vaultPath);
+      const content = this.documentBuffers.getString(path);
+      await this.gateway.writeFile(path, content, this.state.vaultPath);
       this.update({
         tabs: this.state.tabs.map((candidate) =>
           candidate.path === path ? { ...candidate, dirty: false } : candidate,
@@ -565,8 +597,9 @@ export class WorkspaceController {
   ) {
     if (!isFigureTarget(targetPath)) throw new Error("Choose a Typst or Markdown document");
     const existing = this.state.tabs.find((tab) => tab.path === targetPath);
-    const content =
-      existing?.content ?? (await this.gateway.readFile(targetPath, this.state.vaultPath));
+    const content = existing
+      ? this.documentBuffers.getString(targetPath)
+      : await this.gateway.readFile(targetPath, this.state.vaultPath);
     const reference = figureReference(
       targetPath,
       figure.typstPath,
@@ -578,11 +611,13 @@ export class WorkspaceController {
       placement,
       this.cursorOffsets.get(targetPath),
     );
+    if (!existing) this.documentBuffers.open(targetPath, content);
+    const revision = this.documentBuffers.replace(targetPath, nextContent);
     const nextTab: DocumentTab = {
       path: targetPath,
       name: fileName(targetPath),
-      content: nextContent,
       dirty: true,
+      revision,
     };
     const tabs = existing
       ? this.state.tabs.map((candidate) =>
@@ -793,5 +828,22 @@ export class WorkspaceController {
 
   activeRelativePath() {
     return this.state.activePath ? relativePath(this.state.activePath, this.state.vaultPath) : "";
+  }
+
+  private renameBuffers(path: string, nextPath: string) {
+    for (const tab of this.state.tabs) {
+      if (tab.path === path || tab.path.startsWith(`${path}/`) || tab.path.startsWith(`${path}\\`)) {
+        this.documentBuffers.rename(tab.path, `${nextPath}${tab.path.slice(path.length)}`);
+      }
+    }
+  }
+
+  private createCompileOverlays(mainPath: string, mainContent?: string) {
+    return collectCompileOverlays(
+      this.state.tabs,
+      this.documentBuffers,
+      mainPath,
+      mainContent,
+    );
   }
 }

@@ -4,7 +4,7 @@ import { defaultKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter, setDiagnostics, type Diagnostic as EditorDiagnostic } from "@codemirror/lint";
 import { search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, Text, type Extension } from "@codemirror/state";
 import {
   EditorView,
   highlightActiveLine,
@@ -175,7 +175,8 @@ function toEditorDiagnostics(
 }
 
 export function TypstEditor({
-  value,
+  document,
+  revision,
   activePath,
   fileNames,
   diagnostics,
@@ -184,12 +185,13 @@ export function TypstEditor({
   onCursorChange,
   onRevealComplete,
 }: {
-  value: string;
+  document: Text;
+  revision: number;
   activePath: string;
   fileNames: string[];
   diagnostics: CompileDiagnostic[];
   revealLine: number | null;
-  onChange(value: string): void;
+  onChange(value: Text): void;
   onCursorChange(path: string, offset: number): void;
   onRevealComplete(): void;
 }) {
@@ -199,7 +201,7 @@ export function TypstEditor({
   const onChangeRef = useRef(onChange);
   const onCursorChangeRef = useRef(onCursorChange);
   const fileNamesRef = useRef(fileNames);
-  const initialValueRef = useRef(value);
+  const initialDocumentRef = useRef(document);
   const applyingRef = useRef(false);
   const sessionsRef = useRef(new Map<string, EditorSession>());
   const languageRef = useRef(new Compartment());
@@ -221,7 +223,7 @@ export function TypstEditor({
       };
     };
 
-    const createState = (doc: string) =>
+    const createState = (doc: Text) =>
       EditorState.create({
         doc,
         extensions: [
@@ -239,7 +241,7 @@ export function TypstEditor({
           editorTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !applyingRef.current) {
-              onChangeRef.current(update.state.doc.toString());
+              onChangeRef.current(update.state.doc);
             }
             if ((update.docChanged || update.selectionSet) && !applyingRef.current) {
               onCursorChangeRef.current(pathRef.current, update.state.selection.main.head);
@@ -249,7 +251,7 @@ export function TypstEditor({
       });
 
     const view = new EditorView({
-      state: createState(initialValueRef.current),
+      state: createState(initialDocumentRef.current),
       parent: hostRef.current,
     });
     viewRef.current = view;
@@ -274,12 +276,17 @@ export function TypstEditor({
       const session = sessionsRef.current.get(activePath);
       if (session) {
         view.setState(session.state);
+        if (view.state.doc !== document) {
+          applyingRef.current = true;
+          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: document } });
+          applyingRef.current = false;
+        }
         requestAnimationFrame(() => {
           view.scrollDOM.scrollTo(session.scrollLeft, session.scrollTop);
         });
       } else {
         applyingRef.current = true;
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: document } });
         applyingRef.current = false;
         view.scrollDOM.scrollTo(0, 0);
       }
@@ -287,12 +294,12 @@ export function TypstEditor({
         effects: languageRef.current.reconfigure(languageForDocument(activePath)),
       });
       pathRef.current = activePath;
-    } else if (view.state.doc.toString() !== value) {
+    } else if (view.state.doc !== document) {
       applyingRef.current = true;
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: document } });
       applyingRef.current = false;
     }
-  }, [activePath, value]);
+  }, [activePath, document, revision]);
 
   useEffect(() => {
     const view = viewRef.current;

@@ -181,8 +181,18 @@ function expandDemoMarkdown(source: string, mainFile: string, files: Map<string,
     .join("\n");
 }
 
+interface DemoCompileJob {
+  request: CompileRequest;
+  onProgress(progress: CompileProgress): void;
+  resolve(result: CompileSvgResult): void;
+  reject(error: unknown): void;
+}
+
 export class DemoWorkspaceGateway implements WorkspaceGateway {
   readonly mode = "demo" as const;
+  private readonly svgPages = new Map<string, string>();
+  private readonly compileQueue: DemoCompileJob[] = [];
+  private compileActive = false;
 
   aiFetch(input: RequestInfo | URL, init?: RequestInit) {
     return globalThis.fetch(input, init);
@@ -559,6 +569,48 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     request: CompileRequest,
     onProgress: (progress: CompileProgress) => void,
   ): Promise<CompileSvgResult> {
+    onProgress({ stage: "queued", value: 2, label: "Queued for compilation", detail: request.requestId });
+    return new Promise((resolve, reject) => {
+      if (request.intent === "preview") {
+        for (let index = this.compileQueue.length - 1; index >= 0; index -= 1) {
+          if (this.compileQueue[index].request.intent === "preview") {
+            this.compileQueue.splice(index, 1)[0].reject(new Error("Preview request superseded"));
+          }
+        }
+      }
+      if (this.compileQueue.length >= 16) {
+        reject(new Error("Compile queue is full"));
+        return;
+      }
+      this.compileQueue.push({ request, onProgress, resolve, reject });
+      this.runNextCompile();
+    });
+  }
+
+  private runNextCompile() {
+    if (this.compileActive || !this.compileQueue.length) return;
+    const priority = { preview: 3, export: 2, validate: 1 } as const;
+    let selected = 0;
+    for (let index = 1; index < this.compileQueue.length; index += 1) {
+      if (priority[this.compileQueue[index].request.intent] > priority[this.compileQueue[selected].request.intent]) {
+        selected = index;
+      }
+    }
+    const job = this.compileQueue.splice(selected, 1)[0];
+    this.compileActive = true;
+    void this.compileSvgNow(job.request, job.onProgress)
+      .then(job.resolve, job.reject)
+      .finally(() => {
+        this.compileActive = false;
+        this.runNextCompile();
+      });
+  }
+
+  private async compileSvgNow(
+    request: CompileRequest,
+    onProgress: (progress: CompileProgress) => void,
+  ): Promise<CompileSvgResult> {
+    const startedAt = performance.now();
     const name = request.mainFile.split(/[\\/]/).pop() ?? request.mainFile;
     onProgress({ stage: "preparing", value: 10, label: "Preparing source", detail: name });
     await new Promise((resolve) => setTimeout(resolve, 70));
@@ -566,27 +618,56 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
     await new Promise((resolve) => setTimeout(resolve, 90));
     onProgress({ stage: "rendering", value: 78, label: "Laying out pages", detail: null });
     await new Promise((resolve) => setTimeout(resolve, 60));
-    const diagnostics = request.source.includes("#error")
+    const files = new Map(this.files);
+    for (const overlay of request.overlays) files.set(overlay.path, overlay.content);
+    const mainOverlay = request.overlays.find(
+      (overlay) => overlay.path.replaceAll("\\", "/") === request.mainFile.replaceAll("\\", "/"),
+    );
+    if (!mainOverlay) throw new Error("The main document is missing from compile overlays");
+    const source = mainOverlay.content;
+    const diagnostics = source.includes("#error")
       ? [
           {
             severity: "error",
             message: "Demo compiler found an explicit #error marker.",
-            line: request.source.split("\n").findIndex((line) => line.includes("#error")) + 1,
+            line: source.split("\n").findIndex((line) => line.includes("#error")) + 1,
             column: 1,
             path: request.mainFile.slice(ROOT.length + 1),
             hints: ["Remove the marker to resume preview rendering."],
           },
         ]
       : [];
-    const source = request.mainFile.toLowerCase().endsWith(".md")
-      ? expandDemoMarkdown(request.source, request.mainFile, this.files)
-      : request.source;
+    const prepared = request.mainFile.toLowerCase().endsWith(".md")
+      ? expandDemoMarkdown(source, request.mainFile, files)
+      : source;
     onProgress({ stage: "rendering", value: 94, label: "Rendering preview", detail: "Page 1 of 1" });
+    const svg = renderDemoSvg(prepared, request.latinFont, request.cjkFont);
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < svg.length; index += 1) {
+      hash ^= svg.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    const id = `${(hash >>> 0).toString(16).padStart(8, "0")}`.repeat(4);
+    const frontendHasPage = request.cachedPageIds.includes(id);
+    const changedPages = diagnostics.length || request.intent === "validate" || frontendHasPage
+      ? []
+      : [{ id, svg }];
+    const cached = frontendHasPage || this.svgPages.has(id);
+    this.svgPages.set(id, svg);
+    const totalMs = performance.now() - startedAt;
     return {
-      pages: diagnostics.length
-        ? null
-        : [renderDemoSvg(source, request.latinFont, request.cjkFont)],
+      requestId: request.requestId,
       diagnostics,
+      pageOrder: diagnostics.length ? [] : [{ id, width: 794, height: 1123 }],
+      changedPages,
+      metrics: {
+        timings: { queueMs: 0, prepareMs: 70, compileMs: 90, renderMs: 60, totalMs },
+        fileCacheHits: request.overlays.length,
+        fileCacheMisses: 0,
+        renderedPages: cached ? 0 : 1,
+        reusedPages: cached ? 1 : 0,
+        svgBytes: changedPages.reduce((bytes, page) => bytes + page.svg.length, 0),
+      },
     };
   }
 

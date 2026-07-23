@@ -1,7 +1,7 @@
 import { AiTaskManager, type AiTaskExecutionContext } from "@/application/ai/ai-task-manager";
 import type { WorkspaceTaskHost } from "@/application/ai/workspace-task-host";
 import { WorkspaceTaskRunner } from "@/application/ai/workspace-task-runner";
-import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { AiPort, CompilePort, DataPort } from "@/application/ports/workspace-gateway";
 import type { AiTaskSource } from "@/domain/ai-task";
 
 type WorkspaceAiHost = Omit<
@@ -12,7 +12,7 @@ type WorkspaceAiHost = Omit<
 export class WorkspaceAiCoordinator {
   private readonly manager: AiTaskManager;
 
-  constructor(gateway: WorkspaceGateway, host: WorkspaceAiHost) {
+  constructor(gateway: AiPort & CompilePort & DataPort, host: WorkspaceAiHost) {
     let manager!: AiTaskManager;
     const runner = new WorkspaceTaskRunner({
       ...host,

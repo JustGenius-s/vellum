@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { CommandIcon, DownloadSimpleIcon, RobotIcon } from "@phosphor-icons/react";
 import { useCommandRegistration, useCommands } from "@/app/command-context";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,8 +10,12 @@ import { documentFormat, fileStem } from "@/domain/workspace";
 import { DocumentTabs } from "@/features/workspace/document-tabs";
 
 function CompactSurfaceSwitch() {
-  const { controller, state } = useWorkspace();
-  if (controller.activeIsData) return null;
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({ activePath: workspace.activePath, compactSurface: workspace.compactSurface }),
+    shallowEqual,
+  );
+  if (state.activePath && isDataFile(state.activePath)) return null;
 
   return (
     <div className="flex h-8 items-center rounded-lg bg-muted p-0.5 min-[1180px]:hidden">
@@ -34,7 +38,10 @@ function CompactSurfaceSwitch() {
 }
 
 export function WorkspaceTopbar() {
-  const { controller } = useWorkspace();
+  const controller = useWorkspaceController();
+  const active = useWorkspaceSelector(
+    (state) => state.tabs.find((tab) => tab.path === state.activePath) ?? null,
+  );
   const { openPalette } = useCommands();
   const { toggleSidebar } = useSidebar();
   const toggleSidebarCommand = useMemo(
@@ -50,7 +57,6 @@ export function WorkspaceTopbar() {
   );
   useCommandRegistration(toggleSidebarCommand);
 
-  const active = controller.activeTab;
   const canExport = Boolean(
     active && !isDataFile(active.path) && documentFormat(active.path) !== "bibliography",
   );

@@ -1,4 +1,4 @@
-import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { FilePort, PreviewPort } from "@/application/ports/workspace-gateway";
 import type { WorkspaceState } from "@/application/workspace-state";
 import {
   fileName,
@@ -10,7 +10,7 @@ import {
 } from "@/domain/workspace";
 
 interface WorkspaceFileHost {
-  gateway: WorkspaceGateway;
+  gateway: FilePort & PreviewPort;
   getState(): WorkspaceState;
   update(patch: Partial<WorkspaceState>): void;
   refreshTree(): Promise<void>;
@@ -19,6 +19,8 @@ interface WorkspaceFileHost {
   compileActive(): Promise<void>;
   revealLine(line: number): void;
   getActiveStem(): string;
+  renameBuffers(path: string, nextPath: string): void;
+  closeBuffers(paths: string[]): void;
 }
 
 function isSameOrDescendant(candidate: string, parent: string) {
@@ -79,6 +81,7 @@ export class WorkspaceFileService {
     const nextPath = joinPath(parentPath(path), `${name}${suffix}`);
     try {
       await this.host.gateway.renameEntry(path, nextPath, state.vaultPath);
+      this.host.renameBuffers(path, nextPath);
       const tabs = state.tabs.map((tab) => {
         const nextTabPath = replacePathPrefix(tab.path, path, nextPath);
         return nextTabPath === tab.path
@@ -105,6 +108,9 @@ export class WorkspaceFileService {
     try {
       await this.host.gateway.deleteEntry(path, state.vaultPath);
       const tabs = state.tabs.filter((tab) => !isSameOrDescendant(tab.path, path));
+      this.host.closeBuffers(
+        state.tabs.filter((tab) => isSameOrDescendant(tab.path, path)).map((tab) => tab.path),
+      );
       const activePath = isSameOrDescendant(state.activePath, path)
         ? (tabs[0]?.path ?? "")
         : state.activePath;

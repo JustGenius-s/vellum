@@ -3,10 +3,10 @@ import type { AiTask } from "@/domain/ai-task";
 import type {
   BacklinkIndex,
   CompileDiagnostic,
-  CompileProgress,
   DocumentTab,
   FontCatalog,
   PackageCatalog,
+  PreviewPage,
   RuntimeMode,
   SearchMatch,
   TreeNode,
@@ -24,11 +24,10 @@ export interface WorkspaceState {
   tree: TreeNode[];
   tabs: DocumentTab[];
   activePath: string;
-  previewPages: string[];
+  previewPages: PreviewPage[];
   diagnostics: CompileDiagnostic[];
   backlinks: BacklinkIndex["links"];
   compilePhase: CompilePhase;
-  compileProgress: CompileProgress | null;
   statusText: string;
   sidebarView: SidebarView;
   compactSurface: CompactSurface;
@@ -74,7 +73,6 @@ export function createWorkspaceState(mode: RuntimeMode): WorkspaceState {
     diagnostics: [],
     backlinks: {},
     compilePhase: "idle",
-    compileProgress: null,
     statusText: "Starting workspace",
     sidebarView: "files",
     compactSurface: "editor",

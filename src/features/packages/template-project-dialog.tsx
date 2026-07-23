@@ -6,7 +6,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,13 +32,13 @@ export function TemplateProjectDialog({
   target: PackageEntry;
   onClose(): void;
 }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const pending = useWorkspaceSelector((state) => state.packageMutationPending);
   const [parentPath, setParentPath] = useState("");
   const [projectName, setProjectName] = useState(target.name);
   const [plan, setPlan] = useState<TemplateProjectPlan | null>(null);
   const [error, setError] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const pending = state.packageMutationPending;
   const validProjectName =
     Boolean(projectName.trim()) &&
     projectName.trim() !== "." &&

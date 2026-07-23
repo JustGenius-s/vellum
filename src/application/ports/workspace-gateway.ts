@@ -1,5 +1,13 @@
+import type { AiTaskRepository } from "@/application/ports/ai-task-repository";
+import type {
+  DataCatalog,
+  DataPreview,
+  DataQuery,
+  PreparedDataFigure,
+} from "@/domain/data";
 import type {
   BacklinkIndex,
+  CompileIntent,
   CompileProgress,
   CompileSvgResult,
   FontCatalog,
@@ -14,22 +22,24 @@ import type {
   TemplateThumbnail,
   TreeNode,
 } from "@/domain/workspace";
-import type {
-  DataCatalog,
-  DataPreview,
-  DataQuery,
-  PreparedDataFigure,
-} from "@/domain/data";
-import type { AiTaskRepository } from "@/application/ports/ai-task-repository";
+
+export interface CompileOverlay {
+  path: string;
+  revision: number;
+  content: string;
+}
 
 export interface CompileRequest {
-  source: string;
+  requestId: string;
+  intent: CompileIntent;
   vaultPath: string;
   mainFile: string;
   latinFont: string;
   cjkFont: string;
   packageCachePath: string | null;
   packageDataPath: string | null;
+  cachedPageIds: string[];
+  overlays: CompileOverlay[];
 }
 
 export interface TemplateProjectRequest extends PackageDirectories {
@@ -55,9 +65,11 @@ export interface PrepareDataFigureRequest extends DataPreviewRequest {
   typstSource: string;
 }
 
-export interface WorkspaceGateway extends AiTaskRepository {
+export interface RuntimePort {
   readonly mode: RuntimeMode;
-  aiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
+
+export interface FilePort {
   chooseVault(): Promise<string | null>;
   listTree(vaultPath: string): Promise<TreeNode[]>;
   readFile(path: string, vaultPath: string): Promise<string>;
@@ -67,10 +79,24 @@ export interface WorkspaceGateway extends AiTaskRepository {
   deleteEntry(path: string, vaultPath: string): Promise<void>;
   search(vaultPath: string, query: string): Promise<SearchMatch[]>;
   indexBacklinks(vaultPath: string): Promise<BacklinkIndex>;
+}
+
+export interface CompilePort {
+  listFontFamilies(): Promise<FontCatalog>;
+  compileSvg(
+    request: CompileRequest,
+    onProgress: (progress: CompileProgress) => void,
+  ): Promise<CompileSvgResult>;
+  exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
+}
+
+export interface DataPort {
   inspectData(request: DataFileRequest): Promise<DataCatalog>;
   previewData(request: DataPreviewRequest): Promise<DataPreview>;
   prepareDataFigure(request: PrepareDataFigureRequest): Promise<PreparedDataFigure>;
-  listFontFamilies(): Promise<FontCatalog>;
+}
+
+export interface PackagePort {
   choosePackageDirectory(location: PackageLocation): Promise<string | null>;
   listPackages(directories: PackageDirectories): Promise<PackageCatalog>;
   installPackage(spec: string, directories: PackageDirectories): Promise<PackageCatalog>;
@@ -91,14 +117,28 @@ export interface WorkspaceGateway extends AiTaskRepository {
     location: PackageLocation,
     directories: PackageDirectories,
   ): Promise<TemplateThumbnail | null>;
-  compileSvg(
-    request: CompileRequest,
-    onProgress: (progress: CompileProgress) => void,
-  ): Promise<CompileSvgResult>;
-  openExternalUrl(url: string): Promise<void>;
-  copyPreviewImage(source: string): Promise<void>;
-  downloadPreviewImage(source: string, defaultStem: string): Promise<boolean>;
-  exportPdf(request: CompileRequest, defaultName: string): Promise<void>;
+}
+
+export interface SessionPort {
   loadSession(): Promise<SavedSession>;
   saveSession(session: SavedSession): Promise<void>;
 }
+
+export interface PreviewPort {
+  openExternalUrl(url: string): Promise<void>;
+  copyPreviewImage(source: string): Promise<void>;
+  downloadPreviewImage(source: string, defaultStem: string): Promise<boolean>;
+}
+
+export interface AiPort extends AiTaskRepository {
+  aiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
+
+export type WorkspaceGateway = RuntimePort &
+  FilePort &
+  CompilePort &
+  DataPort &
+  PackagePort &
+  SessionPort &
+  PreviewPort &
+  AiPort;

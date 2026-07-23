@@ -1,6 +1,10 @@
 import { lazy, Suspense } from "react";
 import { FolderOpenIcon } from "@phosphor-icons/react";
-import { useWorkspace } from "@/app/workspace-context";
+import {
+  shallowEqual,
+  useWorkspaceController,
+  useWorkspaceSelector,
+} from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { isDataFile } from "@/domain/data";
@@ -16,7 +20,8 @@ const DataInspector = lazy(() =>
 );
 
 function EmptyWorkspace() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const vaultPath = useWorkspaceSelector((state) => state.vaultPath);
   return (
     <div className="flex h-full min-h-0 items-center justify-center px-5 py-10 sm:px-10">
       <div className="w-full max-w-lg">
@@ -24,14 +29,14 @@ function EmptyWorkspace() {
           <FolderOpenIcon className="size-5" weight="duotone" />
         </div>
         <h1 className="max-w-md text-2xl font-semibold tracking-tight sm:text-3xl">
-          {state.vaultPath ? "Choose a document from your library." : "A quieter place to write and typeset."}
+          {vaultPath ? "Choose a document from your library." : "A quieter place to write and typeset."}
         </h1>
         <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-          {state.vaultPath
+          {vaultPath
             ? "Your documents and research data remain local and portable. Open one to edit or inspect it."
             : "Open a folder to create a workspace around plain documents and research data files."}
         </p>
-        {!state.vaultPath ? (
+        {!vaultPath ? (
           <Button className="mt-6" size="lg" onClick={() => void controller.openVault()}>
             <FolderOpenIcon data-icon="inline-start" /> Open workspace
           </Button>
@@ -42,15 +47,25 @@ function EmptyWorkspace() {
 }
 
 function EditorPane() {
-  const { controller, state } = useWorkspace();
-  const active = controller.activeTab;
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      active: workspace.tabs.find((tab) => tab.path === workspace.activePath) ?? null,
+      tree: workspace.tree,
+      diagnostics: workspace.diagnostics,
+      revealLine: workspace.revealLine,
+    }),
+    shallowEqual,
+  );
+  const active = state.active;
   const fileNames = flattenFiles(state.tree).filter((file) => !isDataFile(file.path)).map((file) => fileName(file.path));
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-card" aria-label="Document editor">
       <div className="min-h-0 flex-1">
         {active ? (
           <Suspense fallback={<div className="space-y-3 px-[clamp(2rem,6vw,5rem)] py-14"><div className="h-3 w-2/3 animate-pulse rounded bg-muted" /><div className="h-3 w-full animate-pulse rounded bg-muted" /><div className="h-3 w-5/6 animate-pulse rounded bg-muted" /></div>}>
-            <TypstEditor value={active.content} activePath={active.path} fileNames={fileNames} diagnostics={state.diagnostics} revealLine={state.revealLine} onChange={(value) => controller.updateSource(value)} onCursorChange={(path, offset) => controller.recordCursor(path, offset)} onRevealComplete={() => controller.clearRevealLine()} />
+            <TypstEditor document={controller.documentBuffers.getText(active.path)} revision={active.revision} activePath={active.path} fileNames={fileNames} diagnostics={state.diagnostics} revealLine={state.revealLine} onChange={(value) => controller.updateSource(value)} onCursorChange={(path, offset) => controller.recordCursor(path, offset)} onRevealComplete={() => controller.clearRevealLine()} />
           </Suspense>
         ) : <EmptyWorkspace />}
       </div>
@@ -74,9 +89,12 @@ function DataLoadingSurface() {
 }
 
 export function WorkspaceSurfaces() {
-  const { controller, state } = useWorkspace();
+  const state = useWorkspaceSelector(
+    (workspace) => ({ activePath: workspace.activePath, compactSurface: workspace.compactSurface }),
+    shallowEqual,
+  );
   const isWide = useMediaQuery("(min-width: 1180px)");
-  if (controller.activeIsData) return <Suspense fallback={<DataLoadingSurface />}><DataInspector /></Suspense>;
+  if (state.activePath && isDataFile(state.activePath)) return <Suspense fallback={<DataLoadingSurface />}><DataInspector /></Suspense>;
   if (isWide) return <WideWorkspaceSurfaces />;
   return state.compactSurface === "editor" ? <EditorPane /> : <PreviewPane />;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import { Input } from "@/components/ui/input";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -8,7 +8,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptySidebar } from "@/features/workspace/sidebar/empty-sidebar";
 
 export function SearchPanel() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      searchPending: workspace.searchPending,
+      searchQuery: workspace.searchQuery,
+      searchResults: workspace.searchResults,
+    }),
+    shallowEqual,
+  );
   const { setOpenMobile } = useSidebar();
   const [query, setQuery] = useState(state.searchQuery);
 
@@ -79,4 +87,3 @@ export function SearchPanel() {
     </div>
   );
 }
-

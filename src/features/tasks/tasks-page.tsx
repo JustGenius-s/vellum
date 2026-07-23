@@ -18,7 +18,7 @@ import {
   XCircleIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -82,8 +82,9 @@ function TaskStatus({ task }: { task: AiTask }) {
 }
 
 function TaskInspector({ task }: { task: AiTask }) {
-  const { controller, state } = useWorkspace();
-  const sameVault = state.vaultPath === task.source.vaultPath;
+  const controller = useWorkspaceController();
+  const vaultPath = useWorkspaceSelector((state) => state.vaultPath);
+  const sameVault = vaultPath === task.source.vaultPath;
   return (
     <div className="space-y-6 px-4 py-5">
       <section>
@@ -164,7 +165,15 @@ function TaskInspector({ task }: { task: AiTask }) {
 }
 
 export function TasksPage() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      aiTasks: workspace.aiTasks,
+      selectedAiTaskId: workspace.selectedAiTaskId,
+      vaultPath: workspace.vaultPath,
+    }),
+    shallowEqual,
+  );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [mobileDetail, setMobileDetail] = useState(Boolean(state.selectedAiTaskId));

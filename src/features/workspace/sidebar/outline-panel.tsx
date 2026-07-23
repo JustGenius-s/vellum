@@ -4,14 +4,23 @@ import {
   LinkSimpleIcon,
   ListBulletsIcon,
 } from "@phosphor-icons/react";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { useSidebar } from "@/components/ui/sidebar";
 import { isDataFile } from "@/domain/data";
 import { documentFormat } from "@/domain/workspace";
 import { EmptySidebar } from "@/features/workspace/sidebar/empty-sidebar";
 
 export function OutlinePanel() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      activeRevision:
+        workspace.tabs.find((tab) => tab.path === workspace.activePath)?.revision ?? 0,
+      backlinks: workspace.backlinks,
+    }),
+    shallowEqual,
+  );
   const { setOpenMobile } = useSidebar();
   const outline = controller.outline;
   const backlinks = controller.activeBacklinks;
@@ -105,4 +114,3 @@ export function OutlinePanel() {
     </div>
   );
 }
-

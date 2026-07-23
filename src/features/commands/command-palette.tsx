@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { evaluateWhen, displayKeybinding } from "@/application/commands/keybindings";
 import type { Command as CommandDescriptor, CommandGroup } from "@/application/commands/registry";
 import { useCommands } from "@/app/command-context";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import {
   Command,
   CommandDialog,
@@ -29,7 +29,16 @@ export function CommandPalette() {
     setPaletteQuery,
     execute,
   } = useCommands();
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      problemsOpen: workspace.problemsOpen,
+      tree: workspace.tree,
+      vaultPath: workspace.vaultPath,
+    }),
+    shallowEqual,
+  );
   const [commands, setCommands] = useState<CommandDescriptor[]>(() => registry.list());
 
   useEffect(() => registry.subscribe(() => setCommands(registry.list())), [registry]);

@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { CircleNotchIcon, ListChecksIcon } from "@phosphor-icons/react";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 
 const QuickTaskPopover = lazy(() =>
@@ -10,7 +10,16 @@ const QuickTaskPopover = lazy(() =>
 );
 
 export function WorkspaceAiTaskDock() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      aiTaskPopoverOpen: workspace.aiTaskPopoverOpen,
+      aiTasks: workspace.aiTasks,
+      selectedAiTaskId: workspace.selectedAiTaskId,
+      sidebarView: workspace.sidebarView,
+    }),
+    shallowEqual,
+  );
   const tasks = state.aiTasks.filter((task) => !task.archivedAt);
   if (state.sidebarView === "tasks" || !tasks.length || !state.selectedAiTaskId) return null;
   const activeCount = tasks.filter((task) => task.status === "running" || task.status === "queued").length;

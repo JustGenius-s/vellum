@@ -1,51 +1,32 @@
-import { useMemo, useState, type ComponentType } from "react";
-import {
-  BooksIcon,
-  FolderOpenIcon,
-  GearSixIcon,
-  ListChecksIcon,
-  ListBulletsIcon,
-  MagnifyingGlassIcon,
-  PackageIcon,
-} from "@phosphor-icons/react";
+import { Suspense, useMemo, useState } from "react";
+import { BooksIcon } from "@phosphor-icons/react";
 import type { SidebarView } from "@/application/workspace-state";
-import { useWorkspace } from "@/app/workspace-context";
+import { workspaceFeature, workspaceFeatures } from "@/application/workspace-features";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Sidebar, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName } from "@/domain/workspace";
 import { EntryDialog } from "@/features/workspace/sidebar/entry-dialog";
-import { FilesPanel } from "@/features/workspace/sidebar/files-panel";
-import { OutlinePanel } from "@/features/workspace/sidebar/outline-panel";
-import { SearchPanel } from "@/features/workspace/sidebar/search-panel";
 import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
-const sidebarViews: Array<{
-  id: SidebarView;
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-}> = [
-  { id: "files", label: "Files", icon: FolderOpenIcon },
-  { id: "search", label: "Search", icon: MagnifyingGlassIcon },
-  { id: "outline", label: "Structure", icon: ListBulletsIcon },
-  { id: "tasks", label: "AI tasks", icon: ListChecksIcon },
-  { id: "packages", label: "Packages", icon: PackageIcon },
-];
-
-const settingsView = { id: "settings", label: "Settings", icon: GearSixIcon } as const;
-
 export function AppSidebar() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({ sidebarView: workspace.sidebarView, vaultPath: workspace.vaultPath }),
+    shallowEqual,
+  );
   const { state: sidebarState, setOpen, setOpenMobile, isMobile } = useSidebar();
   const [dialog, setDialog] = useState<EntryDialogState>(null);
   const vaultName = useMemo(
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
     [state.vaultPath],
   );
-  const activeView =
-    state.sidebarView === settingsView.id
-      ? settingsView
-      : sidebarViews.find((view) => view.id === state.sidebarView)!;
+  const activeView = workspaceFeature(state.sidebarView);
+  const primaryViews = workspaceFeatures.filter((feature) => feature.placement === "primary");
+  const settingsView = workspaceFeatures.find((feature) => feature.placement === "footer")!;
+  const SettingsIcon = settingsView.icon;
+  const ActivePanel = activeView.component;
 
   function selectView(view: SidebarView) {
     if (view === "tasks" || view === "packages" || view === "settings") {
@@ -80,7 +61,7 @@ export function AppSidebar() {
             </Tooltip>
 
             <div className="mt-3 flex flex-col gap-1">
-              {sidebarViews.map(({ id, label, icon: Icon }) => (
+              {primaryViews.map(({ id, label, icon: Icon }) => (
                 <Tooltip key={id}>
                   <TooltipTrigger asChild>
                     <Button
@@ -109,14 +90,14 @@ export function AppSidebar() {
                   aria-label={settingsView.label}
                   aria-pressed={state.sidebarView === settingsView.id}
                 >
-                  <GearSixIcon />
+                  <SettingsIcon />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">{settingsView.label}</TooltipContent>
             </Tooltip>
           </nav>
 
-          {state.sidebarView !== "tasks" && state.sidebarView !== "packages" && state.sidebarView !== "settings" ? (
+          {activeView.location === "panel" ? (
             <div className="flex min-w-0 flex-1 flex-col bg-sidebar group-data-[collapsible=icon]:hidden">
               <header className="flex h-12 shrink-0 items-center px-3">
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
@@ -124,13 +105,9 @@ export function AppSidebar() {
                 </h2>
               </header>
               <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-                {state.sidebarView === "files" ? (
-                  <FilesPanel onDialog={setDialog} />
-                ) : state.sidebarView === "search" ? (
-                  <SearchPanel />
-                ) : (
-                  <OutlinePanel />
-                )}
+                <Suspense fallback={<div className="h-20 animate-pulse rounded-md bg-sidebar-accent/60" />}>
+                  <ActivePanel onDialog={setDialog} />
+                </Suspense>
               </div>
             </div>
           ) : null}

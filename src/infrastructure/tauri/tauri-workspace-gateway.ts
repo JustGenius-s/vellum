@@ -172,13 +172,7 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
   compileSvg(request: CompileRequest, onProgress: (progress: CompileProgress) => void) {
     const progress = new Channel<CompileProgress>(onProgress);
     return invoke<CompileSvgResult>("compile_typst_svg", {
-      source: request.source,
-      vaultPath: request.vaultPath,
-      mainFile: request.mainFile,
-      latinFont: request.latinFont,
-      cjkFont: request.cjkFont,
-      packageCachePath: request.packageCachePath,
-      packageDataPath: request.packageDataPath,
+      request,
       progress,
     });
   }
@@ -204,13 +198,7 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
 
   async exportPdf(request: CompileRequest, defaultName: string) {
     const pdfBytes = await invoke<number[]>("compile_typst_pdf", {
-      source: request.source,
-      vaultPath: request.vaultPath,
-      mainFile: request.mainFile,
-      latinFont: request.latinFont,
-      cjkFont: request.cjkFont,
-      packageCachePath: request.packageCachePath,
-      packageDataPath: request.packageDataPath,
+      request,
     });
     const target = await save({
       defaultPath: defaultName,

@@ -1,4 +1,12 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import {
   ArrowsOutSimpleIcon,
   BookOpenTextIcon,
@@ -8,7 +16,12 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import {
+  shallowEqual,
+  useWorkspaceController,
+  useWorkspaceSelector,
+} from "@/app/workspace-context";
+import { useCompileProgress } from "@/application/compile-progress-store";
 import {
   Dialog,
   DialogContent,
@@ -26,12 +39,13 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { documentFormat } from "@/domain/workspace";
+import { documentFormat, type PreviewPage } from "@/domain/workspace";
 import { cn } from "@/lib/utils";
 import {
   bindPreviewInteractions,
   type PreviewInteraction,
 } from "@/features/preview/preview-interactions";
+import { previewVirtualRange } from "@/features/preview/preview-virtualization";
 
 const pageStyles = `
   :host {
@@ -196,18 +210,19 @@ function InlineSvgPage({
 }
 
 function CompileStatus() {
-  const { state } = useWorkspace();
-  const progress = state.compileProgress;
+  const controller = useWorkspaceController();
+  const activePath = useWorkspaceSelector((state) => state.activePath);
+  const { phase, progress } = useCompileProgress(controller.compileProgress);
 
   if (
-    !state.activePath ||
-    documentFormat(state.activePath) === "bibliography" ||
-    state.compilePhase === "ready"
+    !activePath ||
+    documentFormat(activePath) === "bibliography" ||
+    phase === "ready"
   ) {
     return null;
   }
 
-  const failed = state.compilePhase === "failed";
+  const failed = phase === "failed";
   const value = progress?.value ?? (failed ? 100 : 0);
   const label = progress?.label ?? (failed ? "Compile failed" : "Waiting to compile");
   const detail = progress?.detail;
@@ -241,9 +256,106 @@ function CompileStatus() {
   );
 }
 
+function VirtualPreviewPages({
+  pages,
+  viewportRef,
+  onInteraction,
+  onCopyImage,
+  onDownloadImage,
+  onPreviewImage,
+}: {
+  pages: PreviewPage[];
+  viewportRef: RefObject<HTMLDivElement | null>;
+  onInteraction: (interaction: PreviewInteraction) => void;
+  onCopyImage: (source: string) => void;
+  onDownloadImage: (source: string) => void;
+  onPreviewImage: (source: string) => void;
+}) {
+  const slotsRef = useRef(new Map<number, HTMLDivElement>());
+  const [visible, setVisible] = useState<Set<number>>(() => new Set([0]));
+
+  useEffect(() => {
+    const root = viewportRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisible((current) => {
+          const next = new Set(current);
+          for (const entry of entries) {
+            const index = Number((entry.target as HTMLElement).dataset.pageIndex);
+            if (entry.isIntersecting) next.add(index);
+            else next.delete(index);
+          }
+          if (next.size === current.size && [...next].every((index) => current.has(index))) {
+            return current;
+          }
+          return next;
+        });
+      },
+      { root },
+    );
+    slotsRef.current.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [pages, viewportRef]);
+
+  const mountedRange = useMemo(() => {
+    return previewVirtualRange(visible, pages.length);
+  }, [pages.length, visible]);
+  const pageKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    return pages.map((page) => {
+      const occurrence = counts.get(page.id) ?? 0;
+      counts.set(page.id, occurrence + 1);
+      return `${page.id}:${occurrence}`;
+    });
+  }, [pages]);
+
+  return (
+    <div className="flex min-h-full flex-col items-center gap-2 p-2">
+      {pages.map((page, index) => {
+        const mounted = index >= mountedRange.from && index <= mountedRange.to;
+        return (
+          <div
+            key={pageKeys[index]}
+            ref={(node) => {
+              if (node) slotsRef.current.set(index, node);
+              else slotsRef.current.delete(index);
+            }}
+            data-page-index={index}
+            className="w-full shrink-0"
+            style={{ aspectRatio: `${page.width} / ${page.height}` }}
+          >
+            {mounted ? (
+              <InlineSvgPage
+                svg={page.svg}
+                index={index}
+                count={pages.length}
+                onInteraction={onInteraction}
+                onCopyImage={onCopyImage}
+                onDownloadImage={onDownloadImage}
+                onPreviewImage={onPreviewImage}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PreviewPane() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      previewPages: workspace.previewPages,
+      diagnostics: workspace.diagnostics,
+      compilePhase: workspace.compilePhase,
+    }),
+    shallowEqual,
+  );
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const hasPages = state.previewPages.length > 0;
   const isBibliography =
     Boolean(state.activePath) && documentFormat(state.activePath) === "bibliography";
@@ -279,7 +391,7 @@ export function PreviewPane() {
         aria-label="Compiled preview"
       >
         <CompileStatus />
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
           {isBibliography ? (
             <div className="mx-auto flex min-h-full max-w-sm flex-col items-start justify-center px-6 py-16">
               <BookOpenTextIcon className="mb-4 size-6 text-muted-foreground" weight="duotone" />
@@ -287,20 +399,14 @@ export function PreviewPane() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">No standalone preview.</p>
             </div>
           ) : hasPages ? (
-            <div className="flex min-h-full flex-col items-center gap-2 p-2">
-              {state.previewPages.map((svg, index) => (
-                <InlineSvgPage
-                  key={index}
-                  svg={svg}
-                  index={index}
-                  count={state.previewPages.length}
-                  onInteraction={handleInteraction}
-                  onCopyImage={handleCopyImage}
-                  onDownloadImage={handleDownloadImage}
-                  onPreviewImage={setPreviewImage}
-                />
-              ))}
-            </div>
+            <VirtualPreviewPages
+              pages={state.previewPages}
+              viewportRef={viewportRef}
+              onInteraction={handleInteraction}
+              onCopyImage={handleCopyImage}
+              onDownloadImage={handleDownloadImage}
+              onPreviewImage={setPreviewImage}
+            />
           ) : state.compilePhase === "compiling" || state.compilePhase === "queued" ? (
             <div className="p-2">
               <div className="aspect-[794/1123] w-full space-y-6 bg-background p-[11%] shadow-sm ring-1 ring-foreground/10">

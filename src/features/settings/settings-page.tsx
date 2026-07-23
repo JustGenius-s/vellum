@@ -9,7 +9,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,7 +102,17 @@ function FontSelect({
 }
 
 function EditorSettings() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      cjkFont: workspace.cjkFont,
+      fontCatalog: workspace.fontCatalog,
+      fontsPending: workspace.fontsPending,
+      latinFont: workspace.latinFont,
+      vaultPath: workspace.vaultPath,
+    }),
+    shallowEqual,
+  );
 
   return (
     <div className="divide-y">
@@ -177,7 +187,15 @@ function EditorSettings() {
 }
 
 function AiSettings() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      aiApiKey: workspace.aiApiKey,
+      aiBaseUrl: workspace.aiBaseUrl,
+      aiModel: workspace.aiModel,
+    }),
+    shallowEqual,
+  );
   const configured = Boolean(state.aiBaseUrl.trim() && state.aiModel.trim());
 
   return (

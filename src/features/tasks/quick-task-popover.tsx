@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { ArrowsOutSimpleIcon, ChartLineIcon, RobotIcon, XIcon } from "@phosphor-icons/react";
 
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -24,7 +24,11 @@ export function QuickTaskPopover({
   onOpenChange(open: boolean): void;
   children: ReactElement;
 }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({ aiTasks: workspace.aiTasks, selectedAiTaskId: workspace.selectedAiTaskId }),
+    shallowEqual,
+  );
   const task = state.aiTasks.find((candidate) => candidate.id === state.selectedAiTaskId) ?? null;
   const tasks = state.aiTasks.filter((candidate) => !candidate.archivedAt);
   const running = task?.status === "running" || task?.status === "queued";

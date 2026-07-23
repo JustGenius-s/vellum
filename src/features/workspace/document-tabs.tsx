@@ -1,11 +1,15 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import { fileStem } from "@/domain/workspace";
-import { useWorkspace } from "@/app/workspace-context";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { XIcon } from "@phosphor-icons/react";
 
 export function DocumentTabs() {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({ activePath: workspace.activePath, tabs: workspace.tabs }),
+    shallowEqual,
+  );
   if (!state.tabs.length) return null;
 
   return (

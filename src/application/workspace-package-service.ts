@@ -1,4 +1,4 @@
-import type { WorkspaceGateway } from "@/application/ports/workspace-gateway";
+import type { PackagePort } from "@/application/ports/workspace-gateway";
 import type { WorkspaceState } from "@/application/workspace-state";
 import type {
   PackageDirectories,
@@ -9,7 +9,7 @@ import type {
 } from "@/domain/workspace";
 
 interface WorkspacePackageHost {
-  gateway: WorkspaceGateway;
+  gateway: PackagePort;
   getState(): WorkspaceState;
   update(patch: Partial<WorkspaceState>): void;
   loadVault(vaultPath: string, openTabs: string[], activeTabPath: string | null): Promise<void>;

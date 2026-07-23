@@ -19,7 +19,8 @@ import {
   type KeybindingManager,
   type PrimaryModifier,
 } from "@/application/commands/keybindings";
-import { useWorkspace } from "@/app/workspace-context";
+import { workspaceFeatures } from "@/application/workspace-features";
+import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 
 export type PaletteMode = "commands" | "files";
 
@@ -44,7 +45,15 @@ function detectPrimaryModifier(): PrimaryModifier {
 }
 
 export function CommandProvider({ children }: { children: ReactNode }) {
-  const { controller, state } = useWorkspace();
+  const controller = useWorkspaceController();
+  const state = useWorkspaceSelector(
+    (workspace) => ({
+      activePath: workspace.activePath,
+      vaultPath: workspace.vaultPath,
+      problemsOpen: workspace.problemsOpen,
+    }),
+    shallowEqual,
+  );
   const primaryModifier = useMemo(detectPrimaryModifier, []);
   const registry = useMemo(createCommandRegistry, []);
   const keybindings = useMemo(() => createKeybindingManager(primaryModifier), [primaryModifier]);
@@ -100,71 +109,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         keybinding: "Mod+K",
         handler: () => openPalette("commands"),
       },
-      {
-        id: "file.quick-open",
-        title: "Quick open document",
-        description: "Jump to any Typst file in the vault",
-        group: "Navigate",
-        keybinding: "Mod+P",
-        when: "hasVault",
-        handler: () => openPalette("files"),
-      },
-      {
-        id: "workspace.open",
-        title: "Open vault",
-        description: "Choose a local folder as the active workspace",
-        group: "Workspace",
-        keybinding: "Mod+O",
-        handler: () => controller.openVault(),
-      },
-      {
-        id: "file.save",
-        title: "Save active document",
-        group: "Document",
-        keybinding: "Mod+S",
-        when: "hasActiveFile",
-        handler: () => controller.saveActive(),
-      },
-      {
-        id: "file.export-pdf",
-        title: "Export active document as PDF",
-        group: "Document",
-        keybinding: "Mod+Shift+P",
-        when: "hasActiveFile",
-        handler: () => controller.exportPdf(),
-      },
-      {
-        id: "document.compile",
-        title: "Compile preview now",
-        group: "Document",
-        keybinding: "Mod+Enter",
-        when: "hasActiveFile",
-        handler: () => controller.compileActive(),
-      },
-      {
-        id: "view.problems",
-        title: state.problemsOpen ? "Hide problems" : "Show problems",
-        group: "View",
-        keybinding: "Mod+J",
-        when: "hasActiveFile",
-        handler: () => controller.setProblemsOpen(!state.problemsOpen),
-      },
-      {
-        id: "view.editor",
-        title: "Focus editor",
-        group: "View",
-        keybinding: "Mod+1",
-        when: "hasActiveFile",
-        handler: () => controller.setCompactSurface("editor"),
-      },
-      {
-        id: "view.preview",
-        title: "Focus preview",
-        group: "View",
-        keybinding: "Mod+2",
-        when: "hasActiveFile",
-        handler: () => controller.setCompactSurface("preview"),
-      },
+      ...workspaceFeatures.flatMap((feature) =>
+        feature.commands({ controller, openPalette, problemsOpen: state.problemsOpen }),
+      ),
     ];
 
     const dispose = commands.map(register);
