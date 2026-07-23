@@ -1,7 +1,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { BooksIcon } from "@phosphor-icons/react";
+import { useWorkspacePluginRegistry, useWorkspacePlugins } from "@/app/plugins/plugin-context";
 import type { SidebarView } from "@/application/workspace-state";
-import { workspaceFeature, workspaceFeatures } from "@/application/workspace-features";
 import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Sidebar, useSidebar } from "@/components/ui/sidebar";
@@ -12,6 +12,8 @@ import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-si
 
 export function AppSidebar() {
   const controller = useWorkspaceController();
+  const pluginRegistry = useWorkspacePluginRegistry();
+  const { views } = useWorkspacePlugins();
   const state = useWorkspaceSelector(
     (workspace) => ({ sidebarView: workspace.sidebarView, vaultPath: workspace.vaultPath }),
     shallowEqual,
@@ -22,26 +24,28 @@ export function AppSidebar() {
     () => (state.vaultPath ? fileName(state.vaultPath) : "Local workspace"),
     [state.vaultPath],
   );
-  const activeView = workspaceFeature(state.sidebarView);
-  const primaryViews = workspaceFeatures.filter((feature) => feature.placement === "primary");
-  const settingsView = workspaceFeatures.find((feature) => feature.placement === "footer")!;
-  const SettingsIcon = settingsView.icon;
+  const activeView = pluginRegistry.view(state.sidebarView);
+  const primaryViews = views.filter((view) => view.placement === "primary");
+  const footerViews = views.filter((view) => view.placement === "footer");
   const ActivePanel = activeView.component;
 
-  function selectView(view: SidebarView) {
-    if (view === "tasks" || view === "packages" || view === "settings") {
-      if (state.sidebarView !== view) controller.setSidebarView(view);
+  function selectView(viewId: SidebarView) {
+    const view = pluginRegistry.view(viewId);
+    if (view.location === "page") {
+      if (state.sidebarView !== viewId) controller.setSidebarView(viewId);
+      view.onActivate?.(controller);
       if (isMobile) setOpenMobile(false);
       else setOpen(false);
       return;
     }
 
-    if (!isMobile && state.sidebarView === view) {
+    if (!isMobile && state.sidebarView === viewId) {
       setOpen(sidebarState === "collapsed");
       return;
     }
 
-    controller.setSidebarView(view);
+    controller.setSidebarView(viewId);
+    view.onActivate?.(controller);
     if (isMobile) setOpenMobile(false);
     else setOpen(true);
   }
@@ -80,21 +84,25 @@ export function AppSidebar() {
               ))}
             </div>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`mt-auto size-9 ${state.sidebarView === settingsView.id ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
-                  onClick={() => selectView(settingsView.id)}
-                  aria-label={settingsView.label}
-                  aria-pressed={state.sidebarView === settingsView.id}
-                >
-                  <SettingsIcon />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">{settingsView.label}</TooltipContent>
-            </Tooltip>
+            <div className="mt-auto flex flex-col gap-1">
+              {footerViews.map(({ id, label, icon: Icon }) => (
+                <Tooltip key={id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`size-9 ${state.sidebarView === id ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+                      onClick={() => selectView(id)}
+                      aria-label={label}
+                      aria-pressed={state.sidebarView === id}
+                    >
+                      <Icon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{label}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
           </nav>
 
           {activeView.location === "panel" ? (
@@ -106,7 +114,7 @@ export function AppSidebar() {
               </header>
               <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 <Suspense fallback={<div className="h-20 animate-pulse rounded-md bg-sidebar-accent/60" />}>
-                  <ActivePanel onDialog={setDialog} />
+                  <ActivePanel requestEntryDialog={setDialog} />
                 </Suspense>
               </div>
             </div>

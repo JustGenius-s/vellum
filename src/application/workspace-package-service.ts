@@ -1,5 +1,9 @@
 import type { PackagePort } from "@/application/ports/workspace-gateway";
-import type { WorkspaceState } from "@/application/workspace-state";
+import type {
+  PackageWorkspaceState,
+  WorkbenchState,
+  WorkspaceLifecycleState,
+} from "@/application/workspace-state";
 import type {
   PackageDirectories,
   PackageLocation,
@@ -8,10 +12,12 @@ import type {
   TemplateThumbnail,
 } from "@/domain/workspace";
 
+type WorkspacePackageState = WorkspaceLifecycleState & PackageWorkspaceState & WorkbenchState;
+
 interface WorkspacePackageHost {
   gateway: PackagePort;
-  getState(): WorkspaceState;
-  update(patch: Partial<WorkspaceState>): void;
+  getState(): WorkspacePackageState;
+  update(patch: Partial<WorkspacePackageState>): void;
   loadVault(vaultPath: string, openTabs: string[], activeTabPath: string | null): Promise<void>;
   scheduleSessionSave(): void;
   compileActive(): Promise<void>;

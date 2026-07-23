@@ -400,12 +400,7 @@ export class WorkspaceController {
     const closingTabs = this.state.tabs.filter((tab) => requested.has(tab.path));
     if (!closingTabs.length) return;
 
-    const confirmedTabs = closingTabs.filter(
-      (tab) => !tab.dirty || window.confirm(`Close “${tab.name}” without saving?`),
-    );
-    if (!confirmedTabs.length) return;
-
-    const confirmedPaths = new Set(confirmedTabs.map((tab) => tab.path));
+    const confirmedPaths = new Set(closingTabs.map((tab) => tab.path));
     const activeIndex = this.state.tabs.findIndex((tab) => tab.path === this.state.activePath);
     const activeWasClosed = confirmedPaths.has(this.state.activePath);
     const tabs = this.state.tabs.filter((tab) => !confirmedPaths.has(tab.path));
@@ -417,9 +412,9 @@ export class WorkspaceController {
       ? (previousTab?.path ?? tabs[0]?.path ?? "")
       : this.state.activePath;
     const statusText =
-      confirmedTabs.length === 1
-        ? `Closed ${confirmedTabs[0].name}`
-        : `Closed ${confirmedTabs.length} tabs`;
+      closingTabs.length === 1
+        ? `Closed ${closingTabs[0].name}`
+        : `Closed ${closingTabs.length} tabs`;
 
     this.update({
       tabs,
@@ -758,10 +753,11 @@ export class WorkspaceController {
   }
 
   setSidebarView(sidebarView: SidebarView) {
-    const shouldLoadPackages =
-      sidebarView === "packages" && !this.state.packagesLoaded && !this.state.packagesPending;
     this.update({ sidebarView });
-    if (shouldLoadPackages) void this.refreshPackages();
+  }
+
+  ensurePackagesLoaded() {
+    if (!this.state.packagesLoaded && !this.state.packagesPending) void this.refreshPackages();
   }
 
   setCompactSurface(compactSurface: CompactSurface) {

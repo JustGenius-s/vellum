@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from "react";
-
 import type { CompileProgress } from "@/domain/workspace";
 import type { CompilePhase } from "@/application/workspace-state";
 
@@ -54,8 +52,4 @@ export class CompileProgressStore {
     this.state = state;
     this.listeners.forEach((listener) => listener());
   }
-}
-
-export function useCompileProgress(store: CompileProgressStore) {
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }

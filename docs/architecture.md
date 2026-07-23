@@ -13,7 +13,9 @@ src/
 │   └── demo/           浏览器验收适配器
 ├── features/           editor、preview、commands、workspace
 ├── components/ui/      shadcn/ui 生成并按产品视觉定制的组件
-└── app/                React providers
+└── app/
+    ├── plugins/        插件契约、注册表、运行时与内置插件清单
+    └── *-context.tsx   React providers
 
 src-tauri/src/
 ├── compiler.rs         Typst SVG/PDF 与诊断
@@ -30,6 +32,28 @@ src-tauri/src/
 3. React 只订阅控制器快照，业务异步和防抖不散落在 UI 组件。
 4. Rust 文件路径在 canonicalize 后必须仍位于 Vault 内。
 5. 浏览器演示和桌面运行共用同一套 UI 与 application 层。
+
+## 前端插件边界
+
+工作区功能通过 `WorkspacePluginManifest` 注册，不再由壳层维护功能 ID 的条件分支。一个插件可贡献：
+
+- `panel` 或 `page` 视图，以及其导航位置、图标和懒加载组件；
+- 命令及稳定命令 ID；
+- 所需宿主能力；
+- 启动与停用生命周期。
+
+`createWorkspacePluginRegistry` 负责 API 版本、能力依赖、插件 ID、视图 ID 和命令 ID 冲突检查。
+运行中注册会立即激活，注销会执行清理函数；激活失败不会留下半注册插件，批量启动失败也会按逆序
+清理已激活插件。React 只通过 `WorkspacePluginProvider` 订阅不可变快照，因此后续注册视图或命令不需要
+修改侧栏、页面壳层和命令面板。
+
+内置 Files、Search、Outline、Tasks、Packages 与 Settings 也使用同一接口，以保证插件路径不是只为
+未来代码保留的旁路。新增内置插件时使用 `defineWorkspacePlugin`，在 `builtinWorkspacePlugins` 注册，
+功能实现继续放在 `src/features/<feature>`，UI 基础组件继续统一经过 `src/components/ui`。
+
+当前边界面向随应用构建和加载的可信进程内插件。`apiVersion` 与 `requires` 用于兼容性协商，不是安全
+沙箱；远程插件下载、签名、权限授权、隔离执行和持久化启停状态不在当前运行时中。引入第三方插件前，
+需要先把 `WorkspaceController` 收敛为按能力授权的宿主 API，并增加独立加载器，不能直接执行未知代码。
 
 ## 数据适配器
 

@@ -20,7 +20,7 @@ export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClo
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (state?.kind === "rename") setName(fileStem(state.target.name));
+    if (state?.kind === "rename") setName(fileStem(state.name));
     else setName("");
     setError("");
   }, [state]);
@@ -38,7 +38,7 @@ export function EntryDialog({ state, onClose }: { state: EntryDialogState; onClo
     setPending(true);
     setError("");
     try {
-      if (state.kind === "rename") await controller.renameEntry(state.target.path, name.trim());
+      if (state.kind === "rename") await controller.renameEntry(state.path, name.trim());
       else await controller.createEntry(state.parent, name.trim(), state.kind === "folder");
       onClose();
     } catch (reason) {

@@ -1,16 +1,36 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import { fileStem } from "@/domain/workspace";
+import { useConfirmation } from "@/app/confirmation-context";
 import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { XIcon } from "@phosphor-icons/react";
 
 export function DocumentTabs() {
   const controller = useWorkspaceController();
+  const confirm = useConfirmation();
   const state = useWorkspaceSelector(
     (workspace) => ({ activePath: workspace.activePath, tabs: workspace.tabs }),
     shallowEqual,
   );
   if (!state.tabs.length) return null;
+
+  async function requestClose(paths: string[]) {
+    const requested = new Set(paths);
+    const dirtyTabs = state.tabs.filter((tab) => requested.has(tab.path) && tab.dirty);
+    if (dirtyTabs.length) {
+      const confirmed = await confirm({
+        title: dirtyTabs.length === 1 ? `Close ${dirtyTabs[0].name}?` : "Close unsaved documents?",
+        description:
+          dirtyTabs.length === 1
+            ? "This document has unsaved changes. Closing it will discard those changes."
+            : `${dirtyTabs.length} documents have unsaved changes. Closing them will discard those changes.`,
+        confirmLabel: dirtyTabs.length === 1 ? "Close document" : "Close documents",
+        destructive: true,
+      });
+      if (!confirmed) return;
+    }
+    controller.closeTabs(paths);
+  }
 
   return (
     <div className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
@@ -52,7 +72,7 @@ export function DocumentTabs() {
                   className={`mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[opacity,background-color,color] hover:bg-muted hover:text-foreground focus:opacity-100 ${
                     active ? "opacity-65" : "opacity-0 group-hover/tab:opacity-65"
                   }`}
-                  onClick={() => controller.closeTab(tab.path)}
+                  onClick={() => void requestClose([tab.path])}
                   aria-label={`Close ${tab.name}`}
                 >
                   <XIcon className="size-3" />
@@ -60,22 +80,22 @@ export function DocumentTabs() {
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-52">
-              <ContextMenuItem onSelect={() => controller.closeTab(tab.path)}>Close</ContextMenuItem>
+              <ContextMenuItem onSelect={() => void requestClose([tab.path])}>Close</ContextMenuItem>
               <ContextMenuItem
                 disabled={!hasOtherTabs}
-                onSelect={() => controller.closeTabs(closeOthers)}
+                onSelect={() => void requestClose(closeOthers)}
               >
                 Close Others
               </ContextMenuItem>
               <ContextMenuItem
                 disabled={!hasTabsToRight}
-                onSelect={() => controller.closeTabs(closeToRight)}
+                onSelect={() => void requestClose(closeToRight)}
               >
                 Close to the Right
               </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem
-                onSelect={() => controller.closeTabs(state.tabs.map((item) => item.path))}
+                onSelect={() => void requestClose(state.tabs.map((item) => item.path))}
               >
                 Close All Tabs
               </ContextMenuItem>

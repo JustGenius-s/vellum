@@ -6,7 +6,14 @@ import type {
   CompileRequest,
   DataPort,
 } from "@/application/ports/workspace-gateway";
-import type { WorkspaceState } from "@/application/workspace-state";
+import type {
+  DataWorkspaceState,
+  DocumentWorkspaceState,
+  PackageWorkspaceState,
+  PreviewWorkspaceState,
+  SettingsWorkspaceState,
+  WorkspaceLifecycleState,
+} from "@/application/workspace-state";
 import { emptyDataQuery, isDataFile, type DataQuery, type DatasetDescriptor } from "@/domain/data";
 import {
   documentFormat,
@@ -17,15 +24,22 @@ import {
   type PreviewPage,
 } from "@/domain/workspace";
 
+type WorkspaceContentState = WorkspaceLifecycleState &
+  DocumentWorkspaceState &
+  PreviewWorkspaceState &
+  DataWorkspaceState &
+  PackageWorkspaceState &
+  Pick<SettingsWorkspaceState, "latinFont" | "cjkFont">;
+
 interface WorkspaceContentHost {
   gateway: CompilePort & DataPort;
-  getState(): WorkspaceState;
+  getState(): WorkspaceContentState;
   getActiveTab(): DocumentTab | null;
   getCompileOverlays(mainPath: string): CompileOverlay[];
   getCachedPageIds(): string[];
   mergePreviewPages(result: CompileSvgResult): PreviewPage[];
   compileProgress: CompileProgressStore;
-  update(patch: Partial<WorkspaceState>): void;
+  update(patch: Partial<WorkspaceContentState>): void;
 }
 
 export class WorkspaceContentService {

@@ -1,5 +1,9 @@
 import type { FilePort, PreviewPort } from "@/application/ports/workspace-gateway";
-import type { WorkspaceState } from "@/application/workspace-state";
+import type {
+  DocumentWorkspaceState,
+  SearchWorkspaceState,
+  WorkspaceLifecycleState,
+} from "@/application/workspace-state";
 import {
   fileName,
   fileStem,
@@ -9,10 +13,12 @@ import {
   type TreeNode,
 } from "@/domain/workspace";
 
+type WorkspaceFileState = WorkspaceLifecycleState & DocumentWorkspaceState & SearchWorkspaceState;
+
 interface WorkspaceFileHost {
   gateway: FilePort & PreviewPort;
-  getState(): WorkspaceState;
-  update(patch: Partial<WorkspaceState>): void;
+  getState(): WorkspaceFileState;
+  update(patch: Partial<WorkspaceFileState>): void;
   refreshTree(): Promise<void>;
   openFile(path: string, line?: number): Promise<void>;
   scheduleSessionSave(): void;
@@ -103,7 +109,6 @@ export class WorkspaceFileService {
   }
 
   async deleteEntry(path: string) {
-    if (!window.confirm(`Delete “${fileName(path)}”? This cannot be undone.`)) return;
     const state = this.host.getState();
     try {
       await this.host.gateway.deleteEntry(path, state.vaultPath);

@@ -21,7 +21,7 @@ import {
   useWorkspaceController,
   useWorkspaceSelector,
 } from "@/app/workspace-context";
-import { useCompileProgress } from "@/application/compile-progress-store";
+import { useCompileProgress } from "@/features/preview/use-compile-progress";
 import {
   Dialog,
   DialogContent,

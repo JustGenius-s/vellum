@@ -7,6 +7,8 @@ import {
   FolderOpenIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
+import type { WorkspaceViewProps } from "@/app/plugins/plugin-api";
+import { useConfirmation } from "@/app/confirmation-context";
 import { shallowEqual, useWorkspaceController, useWorkspaceSelector } from "@/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,18 +27,19 @@ import {
 } from "@/components/ui/sidebar";
 import { fileStem, type TreeNode } from "@/domain/workspace";
 import { EmptySidebar } from "@/features/workspace/sidebar/empty-sidebar";
-import type { EntryDialogState } from "@/features/workspace/sidebar/workspace-sidebar-types";
 
 function TreeRow({
   node,
   depth,
   onCreate,
   onRename,
+  onDelete,
 }: {
   node: TreeNode;
   depth: number;
   onCreate(parent: string, kind: "file" | "folder"): void;
   onRename(target: TreeNode): void;
+  onDelete(target: TreeNode): void;
 }) {
   const controller = useWorkspaceController();
   const activePath = useWorkspaceSelector((state) => state.activePath);
@@ -116,10 +119,7 @@ function TreeRow({
             </>
           ) : null}
           <ContextMenuItem onSelect={() => onRename(node)}>Rename</ContextMenuItem>
-          <ContextMenuItem
-            variant="destructive"
-            onSelect={() => void controller.deleteEntry(node.path)}
-          >
+          <ContextMenuItem variant="destructive" onSelect={() => onDelete(node)}>
             Delete
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -139,6 +139,7 @@ function TreeRow({
               depth={depth + 1}
               onCreate={onCreate}
               onRename={onRename}
+              onDelete={onDelete}
             />
           ))}
           {node.children.length === 0 ? (
@@ -150,8 +151,9 @@ function TreeRow({
   );
 }
 
-export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): void }) {
+export function FilesPanel({ requestEntryDialog }: WorkspaceViewProps) {
   const controller = useWorkspaceController();
+  const confirm = useConfirmation();
   const state = useWorkspaceSelector(
     (workspace) => ({
       phase: workspace.phase,
@@ -160,6 +162,18 @@ export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): vo
     }),
     shallowEqual,
   );
+
+  async function requestDelete(target: TreeNode) {
+    const confirmed = await confirm({
+      title: `Delete ${target.name}?`,
+      description: target.isDir
+        ? "This folder and everything inside it will be permanently deleted from the local vault."
+        : "This file will be permanently deleted from the local vault.",
+      confirmLabel: target.isDir ? "Delete folder" : "Delete file",
+      destructive: true,
+    });
+    if (confirmed) await controller.deleteEntry(target.path);
+  }
 
   if (state.phase === "booting") {
     return (
@@ -200,7 +214,7 @@ export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): vo
               action={
                 <Button
                   size="sm"
-                  onClick={() => onDialog({ kind: "file", parent: state.vaultPath })}
+                  onClick={() => requestEntryDialog({ kind: "file", parent: state.vaultPath })}
                 >
                   <PlusIcon data-icon="inline-start" /> New document
                 </Button>
@@ -213,8 +227,11 @@ export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): vo
                   key={node.path}
                   node={node}
                   depth={0}
-                  onCreate={(parent, kind) => onDialog({ kind, parent })}
-                  onRename={(target) => onDialog({ kind: "rename", target })}
+                  onCreate={(parent, kind) => requestEntryDialog({ kind, parent })}
+                  onRename={(target) =>
+                    requestEntryDialog({ kind: "rename", path: target.path, name: target.name })
+                  }
+                  onDelete={(target) => void requestDelete(target)}
                 />
               ))}
             </div>
@@ -222,10 +239,14 @@ export function FilesPanel({ onDialog }: { onDialog(state: EntryDialogState): vo
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-40">
-        <ContextMenuItem onSelect={() => onDialog({ kind: "file", parent: state.vaultPath })}>
+        <ContextMenuItem
+          onSelect={() => requestEntryDialog({ kind: "file", parent: state.vaultPath })}
+        >
           New document
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onDialog({ kind: "folder", parent: state.vaultPath })}>
+        <ContextMenuItem
+          onSelect={() => requestEntryDialog({ kind: "folder", parent: state.vaultPath })}
+        >
           New folder
         </ContextMenuItem>
         <ContextMenuSeparator />

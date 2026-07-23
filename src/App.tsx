@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 
 import { CommandProvider, useCommands } from "@/app/command-context";
+import { ConfirmationProvider } from "@/app/confirmation-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkspaceShell } from "@/features/workspace/workspace-shell";
@@ -25,10 +26,12 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={320}>
       <SidebarProvider defaultOpen>
-        <CommandProvider>
-          <WorkspaceShell />
-          <DeferredCommandPalette />
-        </CommandProvider>
+        <ConfirmationProvider>
+          <CommandProvider>
+            <WorkspaceShell />
+            <DeferredCommandPalette />
+          </CommandProvider>
+        </ConfirmationProvider>
       </SidebarProvider>
     </TooltipProvider>
   );

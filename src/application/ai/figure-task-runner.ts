@@ -1,4 +1,3 @@
-import { runWorkspaceAgent } from "@/application/ai/agent-runtime";
 import type { AiTaskExecutionContext } from "@/application/ai/ai-task-manager";
 import { extractTypstSource, validateTypstChartSource } from "@/application/ai/typst-figure-source";
 import type { WorkspaceTaskHost } from "@/application/ai/workspace-task-host";
@@ -27,6 +26,7 @@ export async function runFigureTask(
   let preparedFigure: PreparedDataFigure | null = task.result;
   let figureInserted = false;
   const common = runtime.commonHandlers();
+  const { runWorkspaceAgent } = await import("@/application/ai/agent-runtime");
   const result = await runWorkspaceAgent({
     config: {
       baseUrl: state.aiBaseUrl,

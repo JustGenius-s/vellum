@@ -1,4 +1,3 @@
-import { runWorkspaceAgent } from "@/application/ai/agent-runtime";
 import type { AiTaskExecutionContext } from "@/application/ai/ai-task-manager";
 import type { WorkspaceTaskHost } from "@/application/ai/workspace-task-host";
 import {
@@ -16,6 +15,7 @@ export async function runEditingTask(
   if (task.source.kind !== "workspace") throw new Error("Expected a workspace task");
   const runtime = new WorkspaceToolRuntime(host, task, taskId, signal);
   const state = host.getState();
+  const { runWorkspaceAgent } = await import("@/application/ai/agent-runtime");
   const result = await runWorkspaceAgent({
     config: {
       baseUrl: state.aiBaseUrl,

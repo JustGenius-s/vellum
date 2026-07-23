@@ -12,33 +12,56 @@ import type {
   TreeNode,
 } from "@/domain/workspace";
 
-export type SidebarView = "files" | "search" | "outline" | "tasks" | "packages" | "settings";
+export type SidebarView = string;
 export type CompactSurface = "editor" | "preview";
 export type CompilePhase = "idle" | "queued" | "compiling" | "ready" | "failed";
 export type WorkspacePhase = "booting" | "ready" | "error";
 
-export interface WorkspaceState {
+export interface WorkspaceLifecycleState {
   mode: RuntimeMode;
   phase: WorkspacePhase;
   vaultPath: string;
+  statusText: string;
+  revision: number;
+}
+
+export interface DocumentWorkspaceState {
   tree: TreeNode[];
   tabs: DocumentTab[];
   activePath: string;
+  backlinks: BacklinkIndex["links"];
+  revealLine: number | null;
+}
+
+export interface PreviewWorkspaceState {
   previewPages: PreviewPage[];
   diagnostics: CompileDiagnostic[];
-  backlinks: BacklinkIndex["links"];
   compilePhase: CompilePhase;
-  statusText: string;
+  problemsOpen: boolean;
+}
+
+export interface WorkbenchState {
   sidebarView: SidebarView;
   compactSurface: CompactSurface;
-  problemsOpen: boolean;
+}
+
+export interface SearchWorkspaceState {
   searchQuery: string;
   searchResults: SearchMatch[];
   searchPending: boolean;
+}
+
+export interface SettingsWorkspaceState {
   fontCatalog: FontCatalog;
   latinFont: string;
   cjkFont: string;
   fontsPending: boolean;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKey: string;
+}
+
+export interface PackageWorkspaceState {
   packageCatalog: PackageCatalog;
   packagesLoaded: boolean;
   packagesPending: boolean;
@@ -46,20 +69,31 @@ export interface WorkspaceState {
   packageError: string;
   packageCachePath: string | null;
   packageDataPath: string | null;
+}
+
+export interface DataWorkspaceState {
   dataCatalog: DataCatalog | null;
   dataPreview: DataPreview | null;
   dataQuery: DataQuery;
   dataPending: boolean;
   dataError: string;
+}
+
+export interface AiWorkspaceState {
   aiTaskPopoverOpen: boolean;
   aiTasks: AiTask[];
   selectedAiTaskId: string | null;
-  aiBaseUrl: string;
-  aiModel: string;
-  aiApiKey: string;
-  revealLine: number | null;
-  revision: number;
 }
+
+export type WorkspaceState = WorkspaceLifecycleState &
+  DocumentWorkspaceState &
+  PreviewWorkspaceState &
+  WorkbenchState &
+  SearchWorkspaceState &
+  SettingsWorkspaceState &
+  PackageWorkspaceState &
+  DataWorkspaceState &
+  AiWorkspaceState;
 
 export function createWorkspaceState(mode: RuntimeMode): WorkspaceState {
   return {

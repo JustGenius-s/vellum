@@ -1,6 +1,3 @@
-import type { TreeNode } from "@/domain/workspace";
+import type { WorkspaceEntryDialogRequest } from "@/app/plugins/plugin-api";
 
-export type EntryDialogState =
-  | { kind: "file" | "folder"; parent: string }
-  | { kind: "rename"; target: TreeNode }
-  | null;
+export type EntryDialogState = WorkspaceEntryDialogRequest | null;
