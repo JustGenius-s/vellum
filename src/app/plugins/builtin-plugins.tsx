@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import {
+  BookOpenTextIcon,
   FolderOpenIcon,
   GearSixIcon,
   ListChecksIcon,
@@ -25,6 +26,10 @@ import {
   WORKSPACE_PLUGIN_API_VERSION,
   type WorkspacePluginManifest,
 } from "@/app/plugins/plugin-api";
+import {
+  activateReferenceLibraryService,
+  REFERENCE_LIBRARY_SERVICE,
+} from "@/features/references/reference-library-service";
 
 const documentsPlugin = defineWorkspacePlugin({
   id: "vellum.documents",
@@ -155,6 +160,32 @@ const documentsPlugin = defineWorkspacePlugin({
   },
 });
 
+const referencesPlugin = defineWorkspacePlugin({
+  id: "vellum.references",
+  name: "References",
+  version: "1.0.0",
+  apiVersion: WORKSPACE_PLUGIN_API_VERSION,
+  requires: [FILES_CAPABILITY, DOCUMENTS_CAPABILITY],
+  activate: activateReferenceLibraryService,
+  contributes: {
+    views: [
+      {
+        id: "references",
+        label: "References",
+        icon: BookOpenTextIcon,
+        location: "panel",
+        placement: "primary",
+        onActivate: ({ getService }) => void getService(REFERENCE_LIBRARY_SERVICE).refresh(),
+        component: lazy(() =>
+          import("@/features/references/references-panel").then((module) => ({
+            default: module.ReferencesPanel,
+          })),
+        ),
+      },
+    ],
+  },
+});
+
 const tasksPlugin = defineWorkspacePlugin({
   id: "vellum.tasks",
   name: "AI tasks",
@@ -238,6 +269,7 @@ const settingsPlugin = defineWorkspacePlugin({
 
 export const builtinWorkspacePlugins: readonly WorkspacePluginManifest[] = [
   documentsPlugin,
+  referencesPlugin,
   tasksPlugin,
   packagesPlugin,
   settingsPlugin,

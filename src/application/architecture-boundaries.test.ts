@@ -15,6 +15,7 @@ const pluginManifestSources = import.meta.glob("../app/plugins/*-plugins.{ts,tsx
 const scopedPluginFeatureSources = import.meta.glob(
   [
     "../features/settings/settings-page.tsx",
+    "../features/references/**/*.{ts,tsx}",
     "../features/workspace/sidebar/files-panel.tsx",
     "../features/workspace/sidebar/entry-dialog.tsx",
   ],

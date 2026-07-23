@@ -59,7 +59,7 @@ src-tauri/src/
 selection、激活和焦点请求。宿主负责更新 `DocumentBufferStore`、dirty/revision、编译调度和 CodeMirror
 焦点；插件不能直接操作编辑器实例。
 
-内置 Files、Search、Outline、Tasks、Packages 与 Settings 也使用同一接口，以保证插件路径不是只为
+内置 Files、Search、Outline、References、Tasks、Packages 与 Settings 也使用同一接口，以保证插件路径不是只为
 未来代码保留的旁路。新增内置插件时使用 `defineWorkspacePlugin`，在 `builtinWorkspacePlugins` 注册，
 功能实现继续放在 `src/features/<feature>`，UI 基础组件继续统一经过 `src/components/ui`。
 
