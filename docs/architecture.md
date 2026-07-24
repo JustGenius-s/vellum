@@ -33,6 +33,17 @@ src-tauri/src/
 4. Rust 文件路径在 canonicalize 后必须仍位于 Vault 内。
 5. 浏览器演示和桌面运行共用同一套 UI 与 application 层。
 
+## 文件系统同步
+
+文件树与已打开文档的磁盘同步由 `WorkspaceFileSyncService` 负责，不散落在 Files UI 或
+`WorkspaceController` 中。桌面适配器通过细分的 `FilePort.watchWorkspace` 递归监听当前 Vault；
+浏览器演示适配器提供无副作用的空实现。切换 Vault 时必须先释放旧监听，异步创建完成的过期监听也必须
+立即释放，连续文件事件通过单一队列串行处理。
+
+外部文件发生变化后，目录树、双链索引和当前预览会重新计算。已打开且 `dirty: false` 的文本缓冲区从
+磁盘重载并推进 revision；`dirty: true` 的缓冲区始终保留本地未保存内容，并通过状态栏提示冲突，不能被
+文件监听覆盖。文件树右键的手动刷新复用同一同步链路，因此也会重新读取 clean buffer，而不只是更新目录结构。
+
 ## 前端插件边界
 
 工作区功能通过 `WorkspacePluginManifest` 注册，不再由壳层维护功能 ID 的条件分支。一个插件可贡献：

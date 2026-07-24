@@ -12,6 +12,7 @@ import {
 import { PreviewPageCache } from "@/application/preview-page-cache";
 import { WorkspaceContentService } from "@/application/workspace-content-service";
 import { WorkspaceFileService } from "@/application/workspace-file-service";
+import { WorkspaceFileSyncService } from "@/application/workspace-file-sync-service";
 import { WorkspacePackageService } from "@/application/workspace-package-service";
 import { WorkspaceAiCoordinator } from "@/application/ai/workspace-ai-coordinator";
 import { WorkspaceMutationCoordinator } from "@/application/ai/workspace-mutation-coordinator";
@@ -67,6 +68,7 @@ export class WorkspaceController {
   private readonly mutations: WorkspaceMutationCoordinator;
   private readonly content: WorkspaceContentService;
   private readonly files: WorkspaceFileService;
+  private readonly fileSync: WorkspaceFileSyncService;
   private readonly packages: WorkspacePackageService;
   private sessionTimer: number | null = null;
   private readonly cursorOffsets = new Map<string, number>();
@@ -169,6 +171,14 @@ export class WorkspaceController {
       getActiveStem: () => this.activeStem,
       renameBuffers: (path, nextPath) => this.renameBuffers(path, nextPath),
       closeBuffers: (paths) => paths.forEach((path) => this.documentBuffers.close(path)),
+    });
+    this.fileSync = new WorkspaceFileSyncService({
+      gateway: this.gateway,
+      buffers: this.documentBuffers,
+      getState: () => this.state,
+      update: (patch) => this.update(patch),
+      refreshBacklinks: () => this.refreshBacklinks(),
+      compileActive: () => this.compileActive(),
     });
     this.aiTasks.subscribe(() => this.syncAiTaskState());
   }
@@ -289,6 +299,7 @@ export class WorkspaceController {
   }
 
   private async loadVault(vaultPath: string, openTabs: string[], activeTabPath: string | null) {
+    this.fileSync.stop();
     this.documentBuffers.clear();
     this.compileProgress.reset();
     this.update({
@@ -334,6 +345,7 @@ export class WorkspaceController {
         statusText: opened.length ? "Workspace restored" : "Workspace ready",
       });
       this.scheduleSessionSave();
+      this.fileSync.watch(vaultPath);
       if (activePath) await this.compileActive();
     } catch (error) {
       this.update({ phase: "error", statusText: `Could not open workspace: ${String(error)}` });
@@ -341,16 +353,7 @@ export class WorkspaceController {
   }
 
   async refreshTree() {
-    if (!this.state.vaultPath) return;
-    try {
-      const [tree, backlinkIndex] = await Promise.all([
-        this.gateway.listTree(this.state.vaultPath),
-        this.gateway.indexBacklinks(this.state.vaultPath),
-      ]);
-      this.update({ tree, backlinks: backlinkIndex.links });
-    } catch (error) {
-      this.setStatus(`Refresh failed: ${String(error)}`);
-    }
+    await this.fileSync.refresh();
   }
 
   async openFile(path: string, line?: number) {
@@ -898,9 +901,11 @@ export class WorkspaceController {
   }
 
   private async refreshBacklinks() {
-    if (!this.state.vaultPath) return;
+    const vaultPath = this.state.vaultPath;
+    if (!vaultPath) return;
     try {
-      const result = await this.gateway.indexBacklinks(this.state.vaultPath);
+      const result = await this.gateway.indexBacklinks(vaultPath);
+      if (this.state.vaultPath !== vaultPath) return;
       this.update({ backlinks: result.links });
     } catch {
       // Saving should remain successful even if the backlink refresh fails.

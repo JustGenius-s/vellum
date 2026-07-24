@@ -4,6 +4,7 @@ import type {
   DataPreviewRequest,
   PrepareDataFigureRequest,
   TemplateProjectRequest,
+  WorkspaceFileChange,
   WorkspaceGateway,
 } from "@/application/ports/workspace-gateway";
 import { dataFormat, type DataColumn, type DataPreview } from "@/domain/data";
@@ -259,6 +260,13 @@ export class DemoWorkspaceGateway implements WorkspaceGateway {
 
   async chooseVault() {
     return ROOT;
+  }
+
+  async watchWorkspace(
+    _vaultPath: string,
+    _onChange: (change: WorkspaceFileChange) => void,
+  ) {
+    return () => {};
   }
 
   async listTree() {

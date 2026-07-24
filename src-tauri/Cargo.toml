@@ -30,7 +30,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-dialog = "2.7.2"
-tauri-plugin-fs = "2.5.1"
+tauri-plugin-fs = { version = "2.5.1", features = ["watch"] }
 typst = "0.15"
 typst-assets = { version = "0.15", features = ["fonts"] }
 typst-kit = { version = "0.15.0", features = ["datetime", "system-packages", "system-downloader"] }

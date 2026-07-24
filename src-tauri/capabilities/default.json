@@ -9,6 +9,8 @@
     "core:default",
     "dialog:default",
     "fs:default",
+    "fs:allow-watch",
+    "fs:allow-unwatch",
     "fs:write-files",
     "opener:allow-open-url",
     "opener:allow-default-urls",

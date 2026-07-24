@@ -58,6 +58,10 @@ export interface DataPreviewRequest extends DataFileRequest {
   query: DataQuery;
 }
 
+export interface WorkspaceFileChange {
+  paths: string[];
+}
+
 export interface PrepareDataFigureRequest extends DataPreviewRequest {
   title: string | null;
   model: string;
@@ -71,6 +75,10 @@ export interface RuntimePort {
 
 export interface FilePort {
   chooseVault(): Promise<string | null>;
+  watchWorkspace(
+    vaultPath: string,
+    onChange: (change: WorkspaceFileChange) => void,
+  ): Promise<() => void>;
   listTree(vaultPath: string): Promise<TreeNode[]>;
   readFile(path: string, vaultPath: string): Promise<string>;
   writeFile(path: string, content: string, vaultPath: string): Promise<void>;

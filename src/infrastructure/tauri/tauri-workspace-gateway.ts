@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { watch, writeFile } from "@tauri-apps/plugin-fs";
 import { fetch } from "@tauri-apps/plugin-http";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -57,6 +57,13 @@ export class TauriWorkspaceGateway implements WorkspaceGateway {
   async chooseVault() {
     const selected = await open({ directory: true, multiple: false });
     return typeof selected === "string" ? selected : null;
+  }
+
+  watchWorkspace(vaultPath: string, onChange: (change: { paths: string[] }) => void) {
+    return watch(vaultPath, (event) => onChange({ paths: event.paths }), {
+      delayMs: 300,
+      recursive: true,
+    });
   }
 
   async listTree(vaultPath: string) {
